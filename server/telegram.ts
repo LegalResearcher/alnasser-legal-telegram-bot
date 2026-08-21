@@ -458,6 +458,20 @@ function hasadAccessMenu(): TelegramInlineKeyboard {
   };
 }
 
+function hasadProtectedSectionName(data: string): "القواعد القضائية" | "الصيغ والعقود القانونية" {
+  if (
+    data === "judicial" || data.startsWith("index:") || data.startsWith("jsearch")
+    || data.startsWith("jq:") || data.startsWith("jresult:") || data.startsWith("jfile:") || data.startsWith("jresultfile:")
+  ) {
+    return "القواعد القضائية";
+  }
+  return "الصيغ والعقود القانونية";
+}
+
+function hasadAccessGateText(data: string): string {
+  return `🔐 للوصول المجاني إلى ${hasadProtectedSectionName(data)}، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`;
+}
+
 const REQUIRED_CHANNELS: TelegramRequiredChannel[] = [
   { title: "منصة الناصر القانونية", handle: "@muen2025", url: "https://t.me/muen2025" },
   { title: "حصاد اليوم الإخباري", handle: "@hasadalyoum", url: "https://t.me/hasadalyoum" },
@@ -2426,14 +2440,14 @@ export async function handleTelegramUpdate(
     }
     if (data === "hasad:verify") {
       if (await store.hasConfirmedHasadAccess(telegramUserId)) {
-        await sender.sendMessage(chatId, "✅ تم توثيق زيارة حصاد اليوم بنجاح. القواعد القضائية والصيغ والعقود متاحة لك مجانًا الآن.", mainMenu());
+        await sender.sendMessage(chatId, "✅ تم توثيق زيارة حصاد اليوم بنجاح. يمكنك الآن استخدام القسم الذي فتحته مجانًا.", mainMenu());
       } else {
         await sender.sendMessage(chatId, "لم يكتمل توثيق الزيارة بعد. افتح حصاد اليوم من زر التحقق داخل البوت، ثم ارجع واضغط «تحقّق من زيارة حصاد اليوم».", hasadAccessMenu());
       }
       return;
     }
     if (isHasadProtectedCallback(data) && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
-      await sender.sendMessage(chatId, "🔐 للوصول المجاني إلى القواعد القضائية والصيغ والعقود القانونية، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.", hasadAccessMenu());
+      await sender.sendMessage(chatId, hasadAccessGateText(data), hasadAccessMenu());
       return;
     }
     if (isReferralProtectedCallback(data) && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {

@@ -683,10 +683,14 @@ describe("Telegram library conversation", () => {
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: false });
     await handleTelegramUpdate({ callback_query: { id: "judicial-blocked", data: "judicial", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("https://hasad-alyoum.com/bot-visit");
+    expect(messages.at(-1)?.text).toContain("القواعد القضائية");
+    expect(messages.at(-1)?.text).not.toContain("الصيغ والعقود القانونية");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("https://hasad-alyoum.com/");
 
     await handleTelegramUpdate({ callback_query: { id: "contracts-blocked", data: "contract-templates", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
+    expect(messages.at(-1)?.text).toContain("الصيغ والعقود القانونية");
+    expect(messages.at(-1)?.text).not.toContain("القواعد القضائية");
   });
 
   it("يفتح القواعد القضائية مجانًا للمستخدم الذي سبق توثيق زيارته لحصاد اليوم", async () => {
