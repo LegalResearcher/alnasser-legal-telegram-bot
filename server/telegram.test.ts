@@ -231,7 +231,7 @@ const laborContractTemplate: TelegramContractTemplate = {
 function createStore(
   platformConfirmed = true,
   initialImportantLawsAccess = false,
-  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message"; actionValue: string; rowIndex: number; sortOrder: number }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }> } = {}
+  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }> } = {}
 ): TelegramLibraryStore {
   let confirmed = platformConfirmed;
   const hasadConfirmed = options.hasadConfirmed ?? true;
@@ -377,6 +377,7 @@ function createStore(
     }),
     hasImportantYemeniLawsAccess: async () => importantLawsAccess,
     hasReferralPremiumAccess: async () => options.referralPremiumAccess ?? true,
+    hasManagedMenuItemPremiumAccess: async () => options.managedMenuPremiumAccess ?? false,
     createReferral: async (referrerTelegramUserId, refereeTelegramUserId, refereeChatId) => { options.onReferralCreated?.(referrerTelegramUserId, refereeTelegramUserId, refereeChatId); return "created"; },
     qualifyReferral: async () => ({ qualified: false }),
     getReferralProgress: async () => options.referralProgress ?? ({ qualifiedCount: 0, pendingCount: 0, remainingCount: 5, activeAccessExpiresAt: null }),
@@ -808,6 +809,28 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ callback_query: { id: "managed-item", data: "managed:91", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     expect(messages.at(-1)?.text).toContain("هذه رسالة مخصصة تُدار من لوحة منصة الناصر.");
+  });
+
+  it("يطبق الوصول المجاني أو المدفوع/الإحالة على الزر المخصص", async () => {
+    const premiumItem = {
+      id: 92,
+      label: "📚 قسم مخصص",
+      actionType: "message" as const,
+      actionValue: "محتوى القسم المخصص.",
+      rowIndex: 100,
+      sortOrder: 1,
+      accessMode: "premium" as const,
+    };
+    const blocked = createStore(true, false, { managedMenuItems: [premiumItem], referralPremiumAccess: false, managedMenuPremiumAccess: false });
+    const blockedSender = createSender();
+    await handleTelegramUpdate({ callback_query: { id: "custom-premium-blocked", data: "managed:92", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, blocked, blockedSender.sender);
+    expect(blockedSender.messages.at(-1)?.text).toContain("الدعم الاختياري أو الإحالة");
+    expect(JSON.stringify(blockedSender.messages.at(-1)?.replyMarkup)).toContain("managed-premium:request:92");
+
+    const allowed = createStore(true, false, { managedMenuItems: [premiumItem], managedMenuPremiumAccess: true });
+    const allowedSender = createSender();
+    await handleTelegramUpdate({ callback_query: { id: "custom-premium-open", data: "managed:92", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, allowed, allowedSender.sender);
+    expect(allowedSender.messages.at(-1)?.text).toContain("محتوى القسم المخصص.");
   });
 
   it("يطبق إخفاء وتسمية وترتيب الأقسام المدارة في القائمة الرئيسية", async () => {

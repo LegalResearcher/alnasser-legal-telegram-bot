@@ -13,6 +13,7 @@ import { listManagedTelegramReferralRewards, revokeManagedTelegramReferralReward
 import { getTelegramUsageAnalytics } from "./db";
 import { getTelegramVisitAnalytics, type TelegramVisitPeriod } from "./db";
 import { hasTelegramPremiumAccess } from "./db";
+import { hasManagedTelegramMenuItemPremiumAccess } from "./db";
 import { beginScheduledTelegramBroadcast, getScheduledTelegramBroadcast, scheduleTelegramBroadcast } from "./db";
 import { createHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { sdk } from "./_core/sdk";
@@ -700,19 +701,22 @@ export function registerTelegramWebhook(app: Express) {
       return;
     }
     const token = process.env.TELEGRAM_BOT_TOKEN;
+    const managedItemLabel = result.managedMenuItemId
+      ? (await listManagedTelegramMenuItems(true)).find(item => item.id === result.managedMenuItemId)?.label || "الزر المخصص"
+      : "أهم القوانين اليمنية التفاعلي";
     let notified = false;
     const chatId = Number(result.chatId);
     if (token && Number.isSafeInteger(chatId)) {
       try {
         await createTelegramSender(token).sendMessage(chatId, decision === "approve"
-          ? "تم اعتماد اشتراكك في قسم أهم القوانين اليمنية التفاعلي. يمكنك فتح القسم الآن من القائمة الرئيسة."
-          : "لم يُعتمد طلب الاشتراك في قسم أهم القوانين اليمنية التفاعلي. راجع بيانات التحويل ثم أرسل طلبًا جديدًا عند الحاجة.");
+          ? `تم اعتماد اشتراكك في قسم ${managedItemLabel}. يمكنك فتح القسم الآن من القائمة الرئيسة.`
+          : `لم يُعتمد طلب الاشتراك في قسم ${managedItemLabel}. راجع بيانات التحويل ثم أرسل طلبًا جديدًا عند الحاجة.`);
         notified = true;
       } catch {
         notified = false;
       }
     }
-    await recordManagedTelegramAdminAudit(adminUserId, decision, "important_laws_subscription", String(requestId), { notified });
+    await recordManagedTelegramAdminAudit(adminUserId, decision, result.managedMenuItemId ? "managed_menu_subscription" : "important_laws_subscription", String(requestId), { notified, managedMenuItemId: result.managedMenuItemId });
     res.status(200).json({ ok: true, decision, notified, telegramUserId: result.telegramUserId });
   });
 
@@ -840,6 +844,7 @@ export function registerTelegramWebhook(app: Express) {
           getFeaturedReferencesFolderContents,
           getImportantYemeniLawsFolderContents,
           hasImportantYemeniLawsAccess,
+          hasManagedMenuItemPremiumAccess: hasManagedTelegramMenuItemPremiumAccess,
           hasReferralPremiumAccess: hasTelegramPremiumAccess,
           createReferral: createTelegramReferral,
           qualifyReferral: qualifyTelegramReferral,

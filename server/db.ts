@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gte, gt, inArray, isNotNull, isNull, like, lt, ne, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { AllYemeniLawsSearchSession, InsertLegalSource, InsertUser, JudicialSearchSession, LegislationSearchSession, LibrarySearchSession, LegalFolder, LegalSource, TelegramBroadcast, TelegramContractTemplate, TelegramContractTemplateSearchSession, TelegramContractTemplateType, TelegramDocumentFavorite, TelegramManagedMenuItem, TelegramManagedMessageTemplate, TelegramManagedSection, TelegramPlatformAccess, allYemeniLawsSearchSessions, legalCategoryValues, legalCollectionValues, legislationDocumentTypeValues, judicialSearchSessions, legislationSearchSessions, legalFolders, legalSources, librarySearchSessions, telegramAdminAuditLogs, telegramBroadcasts, telegramContractTemplateSearchSessions, telegramContractTemplates, telegramDocumentFavorites, telegramImportantYemeniLawsAccess, telegramImportantYemeniLawsSubscriptionRequests, telegramManagedMenuItems, telegramManagedMessageTemplates, telegramManagedSections, telegramPlatformAccess, telegramScheduledTasks, telegramSubscribers, telegramSupportRequests, telegramUsageEvents, users } from "../drizzle/schema";
+import { AllYemeniLawsSearchSession, InsertLegalSource, InsertUser, JudicialSearchSession, LegislationSearchSession, LibrarySearchSession, LegalFolder, LegalSource, TelegramBroadcast, TelegramContractTemplate, TelegramContractTemplateSearchSession, TelegramContractTemplateType, TelegramDocumentFavorite, TelegramManagedMenuItem, TelegramManagedMessageTemplate, TelegramManagedSection, TelegramPlatformAccess, allYemeniLawsSearchSessions, legalCategoryValues, legalCollectionValues, legislationDocumentTypeValues, judicialSearchSessions, legislationSearchSessions, legalFolders, legalSources, librarySearchSessions, telegramAdminAuditLogs, telegramBroadcasts, telegramContractTemplateSearchSessions, telegramContractTemplates, telegramDocumentFavorites, telegramImportantYemeniLawsAccess, telegramImportantYemeniLawsSubscriptionRequests, telegramManagedMenuItemPremiumAccess, telegramManagedMenuItems, telegramManagedMessageTemplates, telegramManagedSections, telegramPlatformAccess, telegramScheduledTasks, telegramSubscribers, telegramSupportRequests, telegramUsageEvents, users } from "../drizzle/schema";
 import type { LegalCollection } from "../drizzle/schema";
 import { telegramReferralRewards, telegramReferrals } from "../drizzle/schema";
 import { telegramHasadAccess, telegramManualPremiumAccess } from "../drizzle/schema";
@@ -30,6 +30,7 @@ export type ManagedMenuItemInput = {
   rowIndex: number;
   sortOrder: number;
   enabled: boolean;
+  accessMode: "free" | "premium";
 };
 
 function normalizeManagedMenuItem(input: Partial<ManagedMenuItemInput>): ManagedMenuItemInput | undefined {
@@ -52,6 +53,7 @@ function normalizeManagedMenuItem(input: Partial<ManagedMenuItemInput>): Managed
     rowIndex: Math.min(999, Math.max(0, Math.trunc(Number(input.rowIndex) || 100))),
     sortOrder: Math.min(9999, Math.max(0, Math.trunc(Number(input.sortOrder) || 0))),
     enabled: input.enabled !== false,
+    accessMode: input.accessMode === "premium" ? "premium" : "free",
   };
 }
 
@@ -426,6 +428,22 @@ export async function hasTelegramPremiumAccess(telegramUserId: string, scope: Te
   return scope === "sharia_exams" ? Boolean(manualAccess[0]?.shariaExamsAccess) : Boolean(manualAccess[0]?.secondaryExamsAccess);
 }
 
+export async function hasManagedTelegramMenuItemPremiumAccess(telegramUserId: string, menuItemId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db || !Number.isInteger(menuItemId) || menuItemId < 1) return false;
+  const [referralAccess, manualAccess] = await Promise.all([
+    db.select({ id: telegramReferralRewards.id })
+      .from(telegramReferralRewards)
+      .where(and(eq(telegramReferralRewards.referrerTelegramUserId, telegramUserId), eq(telegramReferralRewards.status, "active"), gt(telegramReferralRewards.accessExpiresAt, new Date())))
+      .limit(1),
+    db.select({ id: telegramManagedMenuItemPremiumAccess.id })
+      .from(telegramManagedMenuItemPremiumAccess)
+      .where(and(eq(telegramManagedMenuItemPremiumAccess.telegramUserId, telegramUserId), eq(telegramManagedMenuItemPremiumAccess.menuItemId, menuItemId)))
+      .limit(1),
+  ]);
+  return referralAccess.length > 0 || manualAccess.length > 0;
+}
+
 export const TELEGRAM_REFERRAL_REQUIRED_COUNT = 5;
 const TELEGRAM_REFERRAL_QUALIFICATION_DELAY_MS = 24 * 60 * 60 * 1000;
 
@@ -597,14 +615,18 @@ export async function revokeManagedTelegramReferralReward(rewardId: number, admi
 export async function createImportantYemeniLawsSubscriptionRequest(
   telegramUserId: string,
   chatId: string,
-  profile: { username?: string; firstName?: string; lastName?: string; paymentMethod?: string; accessScope?: TelegramSubscriptionAccessScope } = {}
+  profile: { username?: string; firstName?: string; lastName?: string; paymentMethod?: string; accessScope?: TelegramSubscriptionAccessScope; managedMenuItemId?: number } = {}
 ): Promise<{ id: number; created: boolean } | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const accessScope = profile.accessScope ?? "important_laws";
+  const managedMenuItemId = Number.isInteger(profile.managedMenuItemId) && Number(profile.managedMenuItemId) > 0 ? Number(profile.managedMenuItemId) : null;
+  const managedMenuCondition = managedMenuItemId === null
+    ? isNull(telegramImportantYemeniLawsSubscriptionRequests.managedMenuItemId)
+    : eq(telegramImportantYemeniLawsSubscriptionRequests.managedMenuItemId, managedMenuItemId);
   const existing = await db.select({ id: telegramImportantYemeniLawsSubscriptionRequests.id })
     .from(telegramImportantYemeniLawsSubscriptionRequests)
-    .where(and(eq(telegramImportantYemeniLawsSubscriptionRequests.telegramUserId, telegramUserId), eq(telegramImportantYemeniLawsSubscriptionRequests.accessScope, accessScope), eq(telegramImportantYemeniLawsSubscriptionRequests.status, "pending")))
+    .where(and(eq(telegramImportantYemeniLawsSubscriptionRequests.telegramUserId, telegramUserId), eq(telegramImportantYemeniLawsSubscriptionRequests.accessScope, accessScope), managedMenuCondition, eq(telegramImportantYemeniLawsSubscriptionRequests.status, "pending")))
     .limit(1);
   if (existing[0]) return { id: existing[0].id, created: false };
 
@@ -612,6 +634,7 @@ export async function createImportantYemeniLawsSubscriptionRequest(
     telegramUserId,
     chatId,
     accessScope,
+    managedMenuItemId,
     telegramUsername: profile.username?.trim().replace(/^@/, "").slice(0, 64) || null,
     telegramFirstName: profile.firstName?.trim().slice(0, 128) || null,
     telegramLastName: profile.lastName?.trim().slice(0, 128) || null,
@@ -621,7 +644,7 @@ export async function createImportantYemeniLawsSubscriptionRequest(
   return id > 0 ? { id, created: true } : undefined;
 }
 
-export async function approveImportantYemeniLawsSubscriptionRequest(requestId: number, ownerTelegramUserId: string): Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope } | undefined> {
+export async function approveImportantYemeniLawsSubscriptionRequest(requestId: number, ownerTelegramUserId: string): Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId: number | null } | undefined> {
   const db = await getDb();
   if (!db || !Number.isInteger(requestId) || requestId < 1) return undefined;
   const request = await db.select()
@@ -636,7 +659,10 @@ export async function approveImportantYemeniLawsSubscriptionRequest(requestId: n
     .where(and(eq(telegramImportantYemeniLawsSubscriptionRequests.id, requestId), eq(telegramImportantYemeniLawsSubscriptionRequests.status, "pending")));
   if (Number((result as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0) < 1) return undefined;
 
-  if (pendingRequest.accessScope === "important_laws") {
+  if (pendingRequest.managedMenuItemId) {
+    await db.insert(telegramManagedMenuItemPremiumAccess).values({ telegramUserId: pendingRequest.telegramUserId, menuItemId: pendingRequest.managedMenuItemId, approvedByTelegramUserId: ownerTelegramUserId })
+      .onDuplicateKeyUpdate({ set: { approvedByTelegramUserId: ownerTelegramUserId, approvedAt: new Date() } });
+  } else if (pendingRequest.accessScope === "important_laws") {
     await db.insert(telegramImportantYemeniLawsAccess).values({ telegramUserId: pendingRequest.telegramUserId, approvedByTelegramUserId: ownerTelegramUserId })
       .onDuplicateKeyUpdate({ set: { approvedByTelegramUserId: ownerTelegramUserId, approvedAt: new Date() } });
   } else {
@@ -644,10 +670,10 @@ export async function approveImportantYemeniLawsSubscriptionRequest(requestId: n
     await db.insert(telegramManualPremiumAccess).values({ telegramUserId: pendingRequest.telegramUserId, approvedByTelegramUserId: ownerTelegramUserId, ...accessPatch })
       .onDuplicateKeyUpdate({ set: { ...accessPatch, approvedByTelegramUserId: ownerTelegramUserId, approvedAt: new Date() } });
   }
-  return { telegramUserId: pendingRequest.telegramUserId, chatId: pendingRequest.chatId, accessScope: pendingRequest.accessScope };
+  return { telegramUserId: pendingRequest.telegramUserId, chatId: pendingRequest.chatId, accessScope: pendingRequest.accessScope, managedMenuItemId: pendingRequest.managedMenuItemId };
 }
 
-export async function rejectImportantYemeniLawsSubscriptionRequest(requestId: number, ownerTelegramUserId: string): Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope } | undefined> {
+export async function rejectImportantYemeniLawsSubscriptionRequest(requestId: number, ownerTelegramUserId: string): Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId: number | null } | undefined> {
   const db = await getDb();
   if (!db || !Number.isInteger(requestId) || requestId < 1) return undefined;
   const request = await db.select()
@@ -661,10 +687,10 @@ export async function rejectImportantYemeniLawsSubscriptionRequest(requestId: nu
     .set({ status: "rejected", reviewedByTelegramUserId: ownerTelegramUserId, reviewedAt: new Date() })
     .where(and(eq(telegramImportantYemeniLawsSubscriptionRequests.id, requestId), eq(telegramImportantYemeniLawsSubscriptionRequests.status, "pending")));
   if (Number((result as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0) < 1) return undefined;
-  return { telegramUserId: pendingRequest.telegramUserId, chatId: pendingRequest.chatId, accessScope: pendingRequest.accessScope };
+  return { telegramUserId: pendingRequest.telegramUserId, chatId: pendingRequest.chatId, accessScope: pendingRequest.accessScope, managedMenuItemId: pendingRequest.managedMenuItemId };
 }
 
-export async function listPendingImportantYemeniLawsSubscriptionRequests(limit = 10): Promise<Array<{ id: number; telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; telegramUsername: string | null; telegramFirstName: string | null; telegramLastName: string | null; paymentMethod: string | null; createdAt: Date }>> {
+export async function listPendingImportantYemeniLawsSubscriptionRequests(limit = 10): Promise<Array<{ id: number; telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId: number | null; telegramUsername: string | null; telegramFirstName: string | null; telegramLastName: string | null; paymentMethod: string | null; createdAt: Date }>> {
   const db = await getDb();
   if (!db) return [];
   return db.select({
@@ -672,6 +698,7 @@ export async function listPendingImportantYemeniLawsSubscriptionRequests(limit =
     telegramUserId: telegramImportantYemeniLawsSubscriptionRequests.telegramUserId,
     chatId: telegramImportantYemeniLawsSubscriptionRequests.chatId,
     accessScope: telegramImportantYemeniLawsSubscriptionRequests.accessScope,
+    managedMenuItemId: telegramImportantYemeniLawsSubscriptionRequests.managedMenuItemId,
     telegramUsername: telegramImportantYemeniLawsSubscriptionRequests.telegramUsername,
     telegramFirstName: telegramImportantYemeniLawsSubscriptionRequests.telegramFirstName,
     telegramLastName: telegramImportantYemeniLawsSubscriptionRequests.telegramLastName,

@@ -72,6 +72,7 @@ export type TelegramManagedMenuItemRecord = {
   actionValue: string;
   rowIndex: number;
   sortOrder: number;
+  accessMode: "free" | "premium";
 };
 
 export type TelegramManagedSectionRecord = {
@@ -252,14 +253,15 @@ export type TelegramLibraryStore = {
   }>;
   hasImportantYemeniLawsAccess: (telegramUserId: string) => Promise<boolean>;
   hasReferralPremiumAccess: (telegramUserId: string, scope: TelegramPaidAccessScope) => Promise<boolean>;
+  hasManagedMenuItemPremiumAccess: (telegramUserId: string, menuItemId: number) => Promise<boolean>;
   createReferral: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => Promise<TelegramReferralRegistrationResult>;
   qualifyReferral: (refereeTelegramUserId: string) => Promise<{ qualified: boolean; event?: { referrerChatId: string; qualifiedCount: number; remainingCount: number; rewardExpiresAt?: Date } }>;
   getReferralProgress: (telegramUserId: string) => Promise<{ qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }>;
   listReferralHistory: (telegramUserId: string) => Promise<Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }>>;
-  createImportantYemeniLawsSubscriptionRequest: (telegramUserId: string, chatId: string, profile?: { username?: string; firstName?: string; lastName?: string; paymentMethod?: ImportantYemeniLawsPaymentMethod; accessScope?: TelegramSubscriptionAccessScope }) => Promise<{ id: number; created: boolean } | undefined>;
-  approveImportantYemeniLawsSubscriptionRequest: (requestId: number, ownerTelegramUserId: string) => Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope } | undefined>;
-  rejectImportantYemeniLawsSubscriptionRequest: (requestId: number, ownerTelegramUserId: string) => Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope } | undefined>;
-  listPendingImportantYemeniLawsSubscriptionRequests: () => Promise<Array<{ id: number; telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; telegramUsername: string | null; telegramFirstName: string | null; telegramLastName: string | null; paymentMethod: string | null; createdAt: Date }>>;
+  createImportantYemeniLawsSubscriptionRequest: (telegramUserId: string, chatId: string, profile?: { username?: string; firstName?: string; lastName?: string; paymentMethod?: ImportantYemeniLawsPaymentMethod; accessScope?: TelegramSubscriptionAccessScope; managedMenuItemId?: number }) => Promise<{ id: number; created: boolean } | undefined>;
+  approveImportantYemeniLawsSubscriptionRequest: (requestId: number, ownerTelegramUserId: string) => Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId: number | null } | undefined>;
+  rejectImportantYemeniLawsSubscriptionRequest: (requestId: number, ownerTelegramUserId: string) => Promise<{ telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId: number | null } | undefined>;
+  listPendingImportantYemeniLawsSubscriptionRequests: () => Promise<Array<{ id: number; telegramUserId: string; chatId: string; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId: number | null; telegramUsername: string | null; telegramFirstName: string | null; telegramLastName: string | null; paymentMethod: string | null; createdAt: Date }>>;
   beginLegislationSearch: (chatId: string) => Promise<void>;
   consumeLegislationSearchQuery: (chatId: string, query: string) => Promise<{ id: number } | undefined>;
   searchLegislationSources: (sessionId: number, page: number) => Promise<{ query: string; sources: LegalSource[]; total: number; matchType: "exact" | "approximate" } | undefined>;
@@ -352,7 +354,7 @@ type TelegramBroadcastDraft = {
 const pendingBroadcastFileUploads = new Set<string>();
 const pendingImportantLawsPaymentProofs = new Map<string, {
   expiresAt: number;
-  identity: ImportantYemeniLawsSubscriberIdentity & { paymentMethod: ImportantYemeniLawsPaymentMethod; accessScope: TelegramSubscriptionAccessScope };
+  identity: ImportantYemeniLawsSubscriberIdentity & { paymentMethod: ImportantYemeniLawsPaymentMethod; accessScope: TelegramSubscriptionAccessScope; managedMenuItemId?: number };
 }>();
 const IMPORTANT_LAWS_PAYMENT_PROOF_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -383,7 +385,7 @@ function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSec
     .map(section => [{ text: section.override?.displayLabel?.trim() || section.text, callback_data: section.callbackData }]);
   const managedRows = [...managedItems]
     .sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id)
-    .map(item => [{ text: item.label, ...(item.actionType === "url" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` }) }]);
+    .map(item => [{ text: item.label, ...(item.actionType === "url" && item.accessMode !== "premium" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` }) }]);
   return {
     inline_keyboard: [
       ...sectionRows,
@@ -1247,6 +1249,16 @@ function paidExamPaymentMethodMenu(scope: TelegramPaidAccessScope): TelegramInli
       [{ text: "تحويل عبر كريمي — 3007145477", callback_data: `premium:payment:${scope}:karimi` }],
       [{ text: "تحويل عبر محفظة جيب — 488281", callback_data: `premium:payment:${scope}:jeeb` }],
       [{ text: "رجوع", callback_data: scope === "sharia_exams" ? "exams" : "secondary-exams" }],
+    ],
+  };
+}
+
+function managedMenuItemPaymentMethodMenu(itemId: number): TelegramInlineKeyboard {
+  return {
+    inline_keyboard: [
+      [{ text: "تحويل عبر كريمي — 3007145477", callback_data: `managed-premium:payment:${itemId}:karimi` }],
+      [{ text: "تحويل عبر محفظة جيب — 488281", callback_data: `managed-premium:payment:${itemId}:jeeb` }],
+      [{ text: "رجوع", callback_data: `managed:${itemId}` }],
     ],
   };
 }
@@ -2385,6 +2397,18 @@ export async function handleTelegramUpdate(
     store.listManagedMessages?.() ?? [],
   ]);
   const messageContent = (messageKey: TelegramManagedMessageRecord["messageKey"]) => managedMessages.find(message => message.messageKey === messageKey)?.content;
+  const subscriptionRequestLabel = (accessScope: TelegramSubscriptionAccessScope, managedMenuItemId?: number | null) => managedMenuItemId
+    ? managedMenuItems.find(item => item.id === managedMenuItemId)?.label || "الزر المخصص"
+    : subscriptionScopeLabel(accessScope);
+  const sendManagedMenuItemContent = async (chatId: number, item: TelegramManagedMenuItemRecord) => {
+    if (item.actionType === "url") {
+      await sender.sendMessage(chatId, `🔗 ${item.label}\n\nاضغط الزر التالي لفتح المحتوى.`, {
+        inline_keyboard: [[{ text: `فتح ${item.label}`, url: item.actionValue }], ...mainMenu(managedMenuItems, managedSections).inline_keyboard],
+      });
+      return;
+    }
+    await sender.sendMessage(chatId, item.actionValue, mainMenu(managedMenuItems, managedSections));
+  };
 
   const callback = update.callback_query;
   if (callback) {
@@ -2632,8 +2656,8 @@ export async function handleTelegramUpdate(
           await sender.sendMessage(
             requesterChatId,
             isApproval
-              ? `تم اعتماد اشتراكك في قسم ${subscriptionScopeLabel(request.accessScope)}. يمكنك فتح القسم الآن من القائمة الرئيسة.`
-              : `لم يُعتمد طلب الاشتراك في قسم ${subscriptionScopeLabel(request.accessScope)}. راجع بيانات التحويل ثم أرسل طلبًا جديدًا عند الحاجة.`,
+              ? `تم اعتماد اشتراكك في قسم ${subscriptionRequestLabel(request.accessScope, request.managedMenuItemId)}. يمكنك فتح القسم الآن من القائمة الرئيسة.`
+              : `لم يُعتمد طلب الاشتراك في قسم ${subscriptionRequestLabel(request.accessScope, request.managedMenuItemId)}. راجع بيانات التحويل ثم أرسل طلبًا جديدًا عند الحاجة.`,
             mainMenu()
           );
           requesterWasNotified = true;
@@ -2661,10 +2685,61 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
       return;
     }
+    if (data.startsWith("managed-premium:request:")) {
+      if (!isPrivateChat(chat?.type)) {
+        await sender.sendMessage(chatId, "يمكن إرسال طلب الاشتراك من المحادثة الخاصة مع البوت فقط.", mainMenu());
+        return;
+      }
+      const itemId = Number(data.slice("managed-premium:request:".length));
+      const item = managedMenuItems.find(candidate => candidate.id === itemId && candidate.accessMode === "premium");
+      if (!item) return;
+      if (await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId)) {
+        await sender.sendMessage(chatId, `لديك وصول مفعل إلى ${item.label}.`, { inline_keyboard: [[{ text: `فتح ${item.label}`, callback_data: `managed:${itemId}` }]] });
+        return;
+      }
+      await sender.sendMessage(chatId, `اختر طريقة التحويل التي استخدمتها ليُرفق نوع التحويل وبياناته مع طلبك المرسل إلى الإدارة للوصول إلى ${item.label}.\n\nيمكنك كذلك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, managedMenuItemPaymentMethodMenu(itemId));
+      return;
+    }
+    if (data.startsWith("managed-premium:payment:")) {
+      if (!isPrivateChat(chat?.type)) {
+        await sender.sendMessage(chatId, "يمكن إرسال طلب الاشتراك من المحادثة الخاصة مع البوت فقط.", mainMenu());
+        return;
+      }
+      const [, , rawItemId, rawPaymentMethod] = data.split(":");
+      const itemId = Number(rawItemId);
+      const paymentMethod = rawPaymentMethod as ImportantYemeniLawsPaymentMethod;
+      const item = managedMenuItems.find(candidate => candidate.id === itemId && candidate.accessMode === "premium");
+      if (!item || !Number.isInteger(itemId) || !(paymentMethod in importantYemeniLawsPaymentMethods)) return;
+      pendingImportantLawsPaymentProofs.set(telegramUserId, {
+        expiresAt: Date.now() + IMPORTANT_LAWS_PAYMENT_PROOF_TIMEOUT_MS,
+        identity: {
+          telegramUserId,
+          telegramUsername: callback.from?.username,
+          telegramFirstName: callback.from?.first_name,
+          telegramLastName: callback.from?.last_name,
+          paymentMethod,
+          accessScope: "important_laws",
+          managedMenuItemId: itemId,
+        },
+      });
+      await sender.sendMessage(chatId, `أرسل الآن صورة واضحة لإثبات الإيداع. ستُرسل الصورة إلى إدارة البوت فقط مع طلب الوصول إلى ${item.label}، وتنتهي مهلة الإرسال بعد 15 دقيقة.`);
+      return;
+    }
     if (data.startsWith("managed:")) {
       const itemId = Number(data.slice("managed:".length));
-      const item = managedMenuItems.find(candidate => candidate.id === itemId && candidate.actionType === "message");
-      if (item) await sender.sendMessage(chatId, item.actionValue, mainMenu(managedMenuItems, managedSections));
+      const item = managedMenuItems.find(candidate => candidate.id === itemId);
+      if (!item) return;
+      if (item.accessMode === "premium" && !(await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId))) {
+        await sender.sendMessage(chatId, `🔐 الوصول إلى ${item.label} يتاح عبر الدعم الاختياري أو الإحالة. يمكنك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, {
+          inline_keyboard: [
+            [{ text: "وصول مجاني بالإحالة", callback_data: "premium:referral" }],
+            [{ text: "الاشتراك المدفوع", callback_data: `managed-premium:request:${itemId}` }],
+            [{ text: "رجوع", callback_data: "start" }],
+          ],
+        });
+        return;
+      }
+      await sendManagedMenuItemContent(chatId, item);
       return;
     }
     if (data === "favorites") {
@@ -3474,7 +3549,7 @@ export async function handleTelegramUpdate(
     }
     if (pendingPaymentProof.expiresAt <= Date.now()) {
       pendingImportantLawsPaymentProofs.delete(telegramUserId);
-      await sender.sendMessage(chatId, `انتهت مهلة إرفاق إثبات الإيداع. افتح قسم ${subscriptionScopeLabel(pendingPaymentProof.identity.accessScope)} وابدأ طلبًا جديدًا.`, mainMenu());
+      await sender.sendMessage(chatId, `انتهت مهلة إرفاق إثبات الإيداع. افتح قسم ${subscriptionRequestLabel(pendingPaymentProof.identity.accessScope, pendingPaymentProof.identity.managedMenuItemId)} وابدأ طلبًا جديدًا.`, mainMenu());
       return;
     }
     const photo = update.message?.photo?.at(-1);
@@ -3489,6 +3564,7 @@ export async function handleTelegramUpdate(
       lastName: requesterIdentity.telegramLastName ?? undefined,
       paymentMethod: requesterIdentity.paymentMethod,
       accessScope: requesterIdentity.accessScope,
+      managedMenuItemId: requesterIdentity.managedMenuItemId,
     });
     if (!request) {
       await sender.sendMessage(chatId, "تعذر حفظ طلب الاشتراك حاليًا. أعد إرسال صورة الإثبات بعد قليل.");
@@ -3499,12 +3575,12 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, "طلب اشتراكك قيد المراجعة بالفعل. ستصلك رسالة عند اعتماد الإدارة للطلب.", mainMenu());
       return;
     }
-    await sender.sendMessage(chatId, `تم إرسال طلب الاشتراك وصورة إثبات الإيداع إلى إدارة البوت. طلبك خاص بقسم ${subscriptionScopeLabel(requesterIdentity.accessScope)}، وبعد التحقق من التحويل المحلي ستصلك رسالة عند اعتماد الوصول إلى القسم.`, mainMenu());
+    await sender.sendMessage(chatId, `تم إرسال طلب الاشتراك وصورة إثبات الإيداع إلى إدارة البوت. طلبك خاص بقسم ${subscriptionRequestLabel(requesterIdentity.accessScope, requesterIdentity.managedMenuItemId)}، وبعد التحقق من التحويل المحلي ستصلك رسالة عند اعتماد الوصول إلى القسم.`, mainMenu());
     const ownerChatId = Number(process.env.TELEGRAM_OWNER_ID ?? "");
     if (Number.isSafeInteger(ownerChatId)) {
       await sender.sendMessage(
         ownerChatId,
-        `🔐 طلب اشتراك جديد في ${subscriptionScopeLabel(requesterIdentity.accessScope)}\nرقم الطلب: #${request.id}\n${importantYemeniLawsSubscriberText(requesterIdentity)}\n${importantYemeniLawsPaymentMethodText(requesterIdentity.paymentMethod)}\nمعرّف المحادثة: ${chatId}\n\nأُرفقت صورة إثبات الإيداع التالية. تحقق من التحويل المحلي قبل اعتماد الطلب.`,
+          `🔐 طلب اشتراك جديد في ${subscriptionRequestLabel(requesterIdentity.accessScope, requesterIdentity.managedMenuItemId)}\nرقم الطلب: #${request.id}\n${importantYemeniLawsSubscriberText(requesterIdentity)}\n${importantYemeniLawsPaymentMethodText(requesterIdentity.paymentMethod)}\nمعرّف المحادثة: ${chatId}\n\nأُرفقت صورة إثبات الإيداع التالية. تحقق من التحويل المحلي قبل اعتماد الطلب.`,
         importantYemeniLawsApprovalMenu(request.id, requesterIdentity)
       ).catch(() => undefined);
       await sender.sendPhotoByFileId(ownerChatId, photo.file_id, `إثبات إيداع الطلب #${request.id}`).catch(() => undefined);

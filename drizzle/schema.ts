@@ -78,6 +78,7 @@ export const telegramManagedMenuItems = mysqlTable("telegram_managed_menu_items"
   rowIndex: int("rowIndex").notNull().default(100),
   sortOrder: int("sortOrder").notNull().default(0),
   enabled: boolean("enabled").notNull().default(true),
+  accessMode: mysqlEnum("accessMode", ["free", "premium"]).notNull().default("free"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -295,6 +296,7 @@ export const telegramImportantYemeniLawsSubscriptionRequests = mysqlTable("teleg
   telegramUserId: varchar("telegramUserId", { length: 32 }).notNull(),
   chatId: varchar("chatId", { length: 32 }).notNull(),
   accessScope: mysqlEnum("accessScope", ["important_laws", "sharia_exams", "secondary_exams"]).notNull().default("important_laws"),
+  managedMenuItemId: int("managedMenuItemId"),
   telegramUsername: varchar("telegramUsername", { length: 64 }),
   telegramFirstName: varchar("telegramFirstName", { length: 128 }),
   telegramLastName: varchar("telegramLastName", { length: 128 }),
@@ -319,6 +321,20 @@ export const telegramManualPremiumAccess = mysqlTable("telegram_manual_premium_a
 });
 
 export type TelegramManualPremiumAccess = typeof telegramManualPremiumAccess.$inferSelect;
+
+/** وصول يدوي لزر مخصص مدفوع، منفصل لكل زر حتى لا يمنح اعتماد زر حقًا في زر آخر. */
+export const telegramManagedMenuItemPremiumAccess = mysqlTable("telegram_managed_menu_item_premium_access", {
+  id: int("id").autoincrement().primaryKey(),
+  telegramUserId: varchar("telegramUserId", { length: 32 }).notNull(),
+  menuItemId: int("menuItemId").notNull(),
+  approvedByTelegramUserId: varchar("approvedByTelegramUserId", { length: 64 }).notNull(),
+  approvedAt: timestamp("approvedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({
+  uniqueUserMenuItem: uniqueIndex("telegram_managed_menu_item_premium_access_unique").on(table.telegramUserId, table.menuItemId),
+}));
+
+export type TelegramManagedMenuItemPremiumAccess = typeof telegramManagedMenuItemPremiumAccess.$inferSelect;
 
 /** إحالة واحدة فقط لكل مستخدم جديد، ولا تصبح مؤهلة إلا بعد استكمال متطلبات الدخول ومرور مدة الحماية. */
 export const telegramReferrals = mysqlTable("telegram_referrals", {
