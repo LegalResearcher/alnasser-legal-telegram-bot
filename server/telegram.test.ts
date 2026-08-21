@@ -231,7 +231,7 @@ const laborContractTemplate: TelegramContractTemplate = {
 function createStore(
   platformConfirmed = true,
   initialImportantLawsAccess = false,
-  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message"; actionValue: string; rowIndex: number; sortOrder: number }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }> } = {}
+  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message"; actionValue: string; rowIndex: number; sortOrder: number }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }> } = {}
 ): TelegramLibraryStore {
   let confirmed = platformConfirmed;
   const hasadConfirmed = options.hasadConfirmed ?? true;
@@ -729,6 +729,30 @@ describe("Telegram library conversation", () => {
     expect(response?.text).toContain("اختبارات الثانوية العامة");
     expect(response?.text).not.toContain("اختبارات الشريعة والقانون");
     expect(JSON.stringify(response?.replyMarkup)).toContain("premium:request:secondary_exams");
+  });
+
+  it("يفتح قسم الاختبارات مباشرة عند تحويله إداريًا إلى الوصول المجاني", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, {
+      referralPremiumAccess: false,
+      hasadConfirmed: true,
+      managedSections: [{ sectionKey: "exams", displayLabel: "📝 اختبارات الشريعة والقانون", enabled: true, accessMode: "free", sortOrder: 90 }],
+    });
+    await handleTelegramUpdate({ callback_query: { id: "exam-free", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    const response = messages.at(-1);
+    expect(response?.text).toContain("اختر المادة من القائمة");
+    expect(response?.text).not.toContain("دعم اختياري");
+    expect(JSON.stringify(response?.replyMarkup)).not.toContain("premium:request:sharia_exams");
+  });
+
+  it("يفتح أهم القوانين مباشرة عند تحويله إداريًا إلى الوصول المجاني من دون حذف حالة الاشتراك", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, {
+      managedSections: [{ sectionKey: "important-laws", displayLabel: "🔐 أهم القوانين اليمنية التفاعلي", enabled: true, accessMode: "free", sortOrder: 50 }],
+    });
+    await handleTelegramUpdate({ callback_query: { id: "important-free", data: "important-laws", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.some(message => message.text.includes("قسم خاص"))).toBe(false);
+    expect(messages.some(message => message.text.includes("يمكنك مشاركة رابط"))).toBe(false);
   });
 
   it("يعرض سجل الإحالات مع العداد الفوري من دون كشف هوية الأشخاص المُحالين", async () => {

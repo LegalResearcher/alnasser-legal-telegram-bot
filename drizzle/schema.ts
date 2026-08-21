@@ -90,6 +90,8 @@ export const telegramManagedSections = mysqlTable("telegram_managed_sections", {
   sectionKey: varchar("sectionKey", { length: 64 }).notNull().unique(),
   displayLabel: varchar("displayLabel", { length: 128 }),
   enabled: boolean("enabled").notNull().default(true),
+  /** يطبق فقط على الأقسام التي تدعم بوابة الاشتراك؛ ويبقى الاشتراك هو الوضع الافتراضي الآمن. */
+  accessMode: mysqlEnum("accessMode", ["subscription", "free"]).notNull().default("subscription"),
   sortOrder: int("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

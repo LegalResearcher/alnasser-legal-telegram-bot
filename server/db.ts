@@ -112,10 +112,16 @@ export const managedTelegramSectionDefaults = [
   { sectionKey: "support", displayLabel: "💬 تواصل ودعم", sortOrder: 150 },
 ] as const;
 
+/** الأقسام الوحيدة التي يجوز للإدارة تبديل وصولها بين المجاني والاشتراك. */
+export const subscriptionManagedTelegramSectionKeys = ["important-laws", "exams", "secondary-exams"] as const;
+export type SubscriptionManagedTelegramSectionKey = typeof subscriptionManagedTelegramSectionKeys[number];
+export type TelegramSectionAccessMode = "subscription" | "free";
+
 export type ManagedTelegramSectionConfig = {
   sectionKey: typeof managedTelegramSectionDefaults[number]["sectionKey"];
   displayLabel: string;
   enabled: boolean;
+  accessMode: TelegramSectionAccessMode;
   sortOrder: number;
 };
 
@@ -134,6 +140,7 @@ export async function listManagedTelegramSectionConfigs(): Promise<ManagedTelegr
       sectionKey: defaults.sectionKey,
       displayLabel: override?.displayLabel?.trim() || defaults.displayLabel,
       enabled: override?.enabled ?? true,
+      accessMode: (override?.accessMode === "free" ? "free" : "subscription") as TelegramSectionAccessMode,
       sortOrder: override?.sortOrder ?? defaults.sortOrder,
     };
   }).sort((left, right) => left.sortOrder - right.sortOrder || left.sectionKey.localeCompare(right.sectionKey));
@@ -141,7 +148,7 @@ export async function listManagedTelegramSectionConfigs(): Promise<ManagedTelegr
 
 export async function updateManagedTelegramSection(
   sectionKey: string,
-  input: Partial<Pick<ManagedTelegramSectionConfig, "displayLabel" | "enabled" | "sortOrder">>,
+  input: Partial<Pick<ManagedTelegramSectionConfig, "displayLabel" | "enabled" | "accessMode" | "sortOrder">>,
   adminUserId: string,
 ): Promise<ManagedTelegramSectionConfig | undefined> {
   const defaults = managedTelegramSectionDefaults.find(section => section.sectionKey === sectionKey);
@@ -149,10 +156,12 @@ export async function updateManagedTelegramSection(
   if (!db || !defaults || !adminUserId) return undefined;
   const displayLabel = input.displayLabel?.trim().slice(0, 128) || defaults.displayLabel;
   const enabled = input.enabled !== false;
+  const canManageAccess = (subscriptionManagedTelegramSectionKeys as readonly string[]).includes(sectionKey);
+  const accessMode: TelegramSectionAccessMode = canManageAccess && input.accessMode === "free" ? "free" : "subscription";
   const sortOrder = Math.min(9999, Math.max(0, Math.trunc(Number(input.sortOrder) || defaults.sortOrder)));
-  await db.insert(telegramManagedSections).values({ sectionKey, displayLabel, enabled, sortOrder }).onDuplicateKeyUpdate({ set: { displayLabel, enabled, sortOrder } });
-  await db.insert(telegramAdminAuditLogs).values({ adminUserId, action: "update", entityType: "section", entityId: sectionKey, details: { displayLabel, enabled, sortOrder } });
-  return { sectionKey: defaults.sectionKey, displayLabel, enabled, sortOrder };
+  await db.insert(telegramManagedSections).values({ sectionKey, displayLabel, enabled, accessMode, sortOrder }).onDuplicateKeyUpdate({ set: { displayLabel, enabled, accessMode, sortOrder } });
+  await db.insert(telegramAdminAuditLogs).values({ adminUserId, action: "update", entityType: "section", entityId: sectionKey, details: { displayLabel, enabled, accessMode, sortOrder } });
+  return { sectionKey: defaults.sectionKey, displayLabel, enabled, accessMode, sortOrder };
 }
 
 export async function listTelegramAdminAuditLogs(limit = 50) {

@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_managed_sections` ADD `accessMode` enum('subscription','free') DEFAULT 'subscription' NOT NULL;

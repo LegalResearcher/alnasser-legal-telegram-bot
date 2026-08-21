@@ -78,6 +78,8 @@ export type TelegramManagedSectionRecord = {
   sectionKey: string;
   displayLabel: string;
   enabled: boolean;
+  /** غياب القيمة يبقي منطق الاشتراك القديم عند استخدام مخازن متوافقة سابقة. */
+  accessMode?: "subscription" | "free";
   sortOrder: number;
 };
 
@@ -1176,6 +1178,10 @@ function optionalExamSupportMenu(scope: TelegramPaidAccessScope): TelegramInline
 
 function isReferralProtectedCallback(data: string) {
   return data === "exams" || data === "secondary-exams" || data.startsWith("exam:");
+}
+
+function hasFreeManagedSectionAccess(managedSections: TelegramManagedSectionRecord[], sectionKey: string) {
+  return managedSections.some(section => section.sectionKey === sectionKey && section.accessMode === "free");
 }
 
 function isHasadProtectedCallback(data: string) {
@@ -2450,7 +2456,10 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, hasadAccessGateText(data), hasadAccessMenu());
       return;
     }
-    if (isReferralProtectedCallback(data) && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
+    const examSectionKey = data === "secondary-exams" ? "secondary-exams" : "exams";
+    const isFreeExamSection = hasFreeManagedSectionAccess(managedSections, examSectionKey);
+    const hasImportantLawsSectionAccess = async () => hasFreeManagedSectionAccess(managedSections, "important-laws") || store.hasImportantYemeniLawsAccess(telegramUserId);
+    if (isReferralProtectedCallback(data) && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
       const scope = examAccessScope(data);
       await sender.sendMessage(chatId, optionalExamSupportText(scope), optionalExamSupportMenu(scope));
       return;
@@ -3053,7 +3062,7 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "يتاح قسم أهم القوانين اليمنية التفاعلي داخل المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      if (!(await store.hasImportantYemeniLawsAccess(telegramUserId))) {
+      if (!(await hasImportantLawsSectionAccess())) {
         await sender.sendMessage(chatId, importantYemeniLawsIntroText(), importantYemeniLawsSubscriptionMenu());
         return;
       }
@@ -3066,8 +3075,8 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "يمكن إرسال طلب الاشتراك من المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      if (await store.hasImportantYemeniLawsAccess(telegramUserId)) {
-        await sender.sendMessage(chatId, "اشتراكك معتمد بالفعل. يمكنك فتح القسم الآن.", mainMenu());
+      if (await hasImportantLawsSectionAccess()) {
+        await sender.sendMessage(chatId, hasFreeManagedSectionAccess(managedSections, "important-laws") ? "القسم متاح مجانًا حاليًا. يمكنك فتحه من القائمة الرئيسة." : "اشتراكك معتمد بالفعل. يمكنك فتح القسم الآن.", mainMenu());
         return;
       }
       await sender.sendMessage(chatId, "اختر طريقة التحويل التي استخدمتها ليُرفق نوع التحويل وبياناته مع طلبك المرسل إلى الإدارة.", importantYemeniLawsPaymentMethodMenu());
@@ -3080,6 +3089,11 @@ export async function handleTelegramUpdate(
       }
       const scope = data.slice("premium:request:".length) as TelegramPaidAccessScope;
       if (scope !== "sharia_exams" && scope !== "secondary_exams") return;
+      const sectionKey = scope === "secondary_exams" ? "secondary-exams" : "exams";
+      if (hasFreeManagedSectionAccess(managedSections, sectionKey)) {
+        await sender.sendMessage(chatId, "هذا القسم متاح مجانًا حاليًا. افتحه مباشرة من القائمة الرئيسة.", mainMenu());
+        return;
+      }
       if (await store.hasReferralPremiumAccess(telegramUserId, scope)) {
         await sender.sendMessage(chatId, "لديك وصول فعّال بالفعل. يمكنك فتح الاختبارات الآن من القائمة الرئيسة.", mainMenu());
         return;
@@ -3092,8 +3106,8 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "يمكن إرسال طلب الاشتراك من المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      if (await store.hasImportantYemeniLawsAccess(telegramUserId)) {
-        await sender.sendMessage(chatId, "اشتراكك معتمد بالفعل. يمكنك فتح القسم الآن.", mainMenu());
+      if (await hasImportantLawsSectionAccess()) {
+        await sender.sendMessage(chatId, hasFreeManagedSectionAccess(managedSections, "important-laws") ? "القسم متاح مجانًا حاليًا. يمكنك فتحه من القائمة الرئيسة." : "اشتراكك معتمد بالفعل. يمكنك فتح القسم الآن.", mainMenu());
         return;
       }
       const paymentMethod = data.slice("important-laws:payment:".length) as ImportantYemeniLawsPaymentMethod;
@@ -3182,7 +3196,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data.startsWith("ylindex:")) {
-      if (!(await store.hasImportantYemeniLawsAccess(telegramUserId))) {
+      if (!(await hasImportantLawsSectionAccess())) {
         await sender.sendMessage(chatId, importantYemeniLawsIntroText(), importantYemeniLawsSubscriptionMenu());
         return;
       }
@@ -3218,7 +3232,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data.startsWith("iindex:")) {
-      if (!(await store.hasImportantYemeniLawsAccess(telegramUserId))) {
+      if (!(await hasImportantLawsSectionAccess())) {
         await sender.sendMessage(chatId, importantYemeniLawsIntroText(), importantYemeniLawsSubscriptionMenu());
         return;
       }
@@ -3277,7 +3291,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data.startsWith("ylfile:")) {
-      if (!(await store.hasImportantYemeniLawsAccess(telegramUserId))) {
+      if (!(await hasImportantLawsSectionAccess())) {
         await sender.sendMessage(chatId, importantYemeniLawsIntroText(), importantYemeniLawsSubscriptionMenu());
         return;
       }
@@ -3319,7 +3333,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data.startsWith("ifile:")) {
-      if (!(await store.hasImportantYemeniLawsAccess(telegramUserId))) {
+      if (!(await hasImportantLawsSectionAccess())) {
         await sender.sendMessage(chatId, importantYemeniLawsIntroText(), importantYemeniLawsSubscriptionMenu());
         return;
       }
@@ -3397,7 +3411,7 @@ export async function handleTelegramUpdate(
       const sourceId = Number(data.slice("source:".length));
       if (!Number.isInteger(sourceId) || sourceId < 1) return;
       const source = await store.getSource(sourceId);
-      if (source?.collection === "important_yemeni_laws" && !(await store.hasImportantYemeniLawsAccess(telegramUserId))) {
+      if (source?.collection === "important_yemeni_laws" && !(await hasImportantLawsSectionAccess())) {
         await sender.sendMessage(chatId, importantYemeniLawsIntroText(), importantYemeniLawsSubscriptionMenu());
         return;
       }
