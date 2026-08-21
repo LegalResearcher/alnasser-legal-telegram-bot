@@ -701,6 +701,25 @@ describe("Telegram library conversation", () => {
     expect(messages.some(message => message.text.includes("متاح باشتراك نشط أو بمكافأة الإحالة"))).toBe(false);
   });
 
+  it("يتجاوز بوابة حصاد اليوم للأقسام الحالية التي حولتها الإدارة إلى مجاني", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, {
+      hasadConfirmed: false,
+      managedSections: [
+        { sectionKey: "judicial", displayLabel: "⚖️ قواعد قضائية", enabled: true, accessMode: "free", sortOrder: 30 },
+        { sectionKey: "contract-templates", displayLabel: "📄 صيغ وعقود قانونية", enabled: true, accessMode: "free", sortOrder: 80 },
+      ],
+    });
+
+    await handleTelegramUpdate({ callback_query: { id: "judicial-admin-free", data: "judicial", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.some(message => message.text.includes("المبادئ والقواعد القضائية"))).toBe(true);
+    expect(messages.some(message => message.text.includes("توثيق زيارة واحدة لموقع حصاد اليوم"))).toBe(false);
+
+    messages.length = 0;
+    await handleTelegramUpdate({ callback_query: { id: "contracts-admin-free", data: "contract-templates", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.some(message => message.text.includes("توثيق زيارة واحدة لموقع حصاد اليوم"))).toBe(false);
+  });
+
   it("يعرض لاختبارات الشريعة والقانون رسالة مستقلة مع الإحالة والاشتراك المدفوع", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });

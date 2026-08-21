@@ -470,6 +470,10 @@ function hasadProtectedSectionName(data: string): "القواعد القضائي
   return "الصيغ والعقود القانونية";
 }
 
+function hasadProtectedSectionKey(data: string): "judicial" | "contract-templates" {
+  return hasadProtectedSectionName(data) === "القواعد القضائية" ? "judicial" : "contract-templates";
+}
+
 function hasadAccessGateText(data: string): string {
   return `🔐 للوصول المجاني إلى ${hasadProtectedSectionName(data)}، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`;
 }
@@ -2452,7 +2456,8 @@ export async function handleTelegramUpdate(
       }
       return;
     }
-    if (isHasadProtectedCallback(data) && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
+    const isFreeHasadSection = isHasadProtectedCallback(data) && hasFreeManagedSectionAccess(managedSections, hasadProtectedSectionKey(data));
+    if (isHasadProtectedCallback(data) && !isFreeHasadSection && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
       await sender.sendMessage(chatId, hasadAccessGateText(data), hasadAccessMenu());
       return;
     }

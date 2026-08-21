@@ -112,8 +112,8 @@ export const managedTelegramSectionDefaults = [
   { sectionKey: "support", displayLabel: "💬 تواصل ودعم", sortOrder: 150 },
 ] as const;
 
-/** الأقسام الوحيدة التي يجوز للإدارة تبديل وصولها بين المجاني والاشتراك. */
-export const subscriptionManagedTelegramSectionKeys = ["important-laws", "exams", "secondary-exams"] as const;
+/** الأقسام ذات بوابة وصول قائمة التي يجوز للإدارة تبديلها إلى الوصول المجاني. */
+export const subscriptionManagedTelegramSectionKeys = ["important-laws", "exams", "secondary-exams", "judicial", "contract-templates"] as const;
 export type SubscriptionManagedTelegramSectionKey = typeof subscriptionManagedTelegramSectionKeys[number];
 export type TelegramSectionAccessMode = "subscription" | "free";
 
