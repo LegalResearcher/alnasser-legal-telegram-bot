@@ -202,6 +202,77 @@ export function registerTelegramWebhook(app: Express) {
     res.status(201).json({ ok: true, item });
   });
 
+  app.post("/api/telegram/admin/menu-items/upload", async (req, res) => {
+    setPlatformAdminCors(req, res);
+    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    if (!adminUserId) {
+      res.status(403).json({ ok: false });
+      return;
+    }
+    const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.replace(/[\\/\u0000]/g, "_").slice(0, 180) : "";
+    const contentBase64 = typeof req.body?.contentBase64 === "string" ? req.body.contentBase64.replace(/^data:[^;]+;base64,/, "") : "";
+    const contentType = resolveTelegramLibraryUploadContentType(fileName, req.body?.contentType);
+    if (!fileName || !contentBase64 || !contentType) {
+      res.status(400).json({ ok: false, error: !fileName ? "file_name_required" : !contentBase64 ? "file_content_required" : "unsupported_file_type" });
+      return;
+    }
+    if (contentBase64.length > 40 * 1024 * 1024) {
+      res.status(400).json({ ok: false, error: "file_too_large" });
+      return;
+    }
+    try {
+      const data = Buffer.from(contentBase64, "base64");
+      if (data.byteLength === 0 || data.byteLength > 30 * 1024 * 1024) {
+        res.status(400).json({ ok: false, error: data.byteLength === 0 ? "empty_file" : "file_too_large" });
+        return;
+      }
+      const stored = await storagePut(createTelegramLibraryStorageKey(fileName), data, contentType);
+      const item = await createManagedTelegramMenuItem({ ...req.body, actionType: "file", actionValue: stored.url }, adminUserId);
+      if (!item) {
+        res.status(400).json({ ok: false, error: "invalid_menu_item" });
+        return;
+      }
+      res.status(201).json({ ok: true, item });
+    } catch (error) {
+      console.error("[Telegram] Admin menu item file upload failed:", error instanceof Error ? error.message : "unknown error");
+      res.status(500).json({ ok: false, error: "storage_upload_failed" });
+    }
+  });
+
+  app.put("/api/telegram/admin/menu-items/:id/upload", async (req, res) => {
+    setPlatformAdminCors(req, res);
+    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const itemId = Number(req.params.id);
+    if (!adminUserId || !Number.isInteger(itemId) || itemId < 1) {
+      res.status(403).json({ ok: false });
+      return;
+    }
+    const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.replace(/[\\/\u0000]/g, "_").slice(0, 180) : "";
+    const contentBase64 = typeof req.body?.contentBase64 === "string" ? req.body.contentBase64.replace(/^data:[^;]+;base64,/, "") : "";
+    const contentType = resolveTelegramLibraryUploadContentType(fileName, req.body?.contentType);
+    if (!fileName || !contentBase64 || !contentType) {
+      res.status(400).json({ ok: false, error: !fileName ? "file_name_required" : !contentBase64 ? "file_content_required" : "unsupported_file_type" });
+      return;
+    }
+    try {
+      const data = Buffer.from(contentBase64, "base64");
+      if (data.byteLength === 0 || data.byteLength > 30 * 1024 * 1024) {
+        res.status(400).json({ ok: false, error: data.byteLength === 0 ? "empty_file" : "file_too_large" });
+        return;
+      }
+      const stored = await storagePut(createTelegramLibraryStorageKey(fileName), data, contentType);
+      const item = await updateManagedTelegramMenuItem(itemId, { ...req.body, actionType: "file", actionValue: stored.url }, adminUserId);
+      if (!item) {
+        res.status(400).json({ ok: false, error: "invalid_menu_item" });
+        return;
+      }
+      res.status(200).json({ ok: true, item });
+    } catch (error) {
+      console.error("[Telegram] Admin menu item file update failed:", error instanceof Error ? error.message : "unknown error");
+      res.status(500).json({ ok: false, error: "storage_upload_failed" });
+    }
+  });
+
   app.put("/api/telegram/admin/menu-items/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
     const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;

@@ -68,7 +68,7 @@ export type TelegramChannelMembershipChecker = {
 export type TelegramManagedMenuItemRecord = {
   id: number;
   label: string;
-  actionType: "url" | "message";
+  actionType: "url" | "message" | "file";
   actionValue: string;
   rowIndex: number;
   sortOrder: number;
@@ -1545,6 +1545,27 @@ export async function downloadDriveDocument(source: LegalSource): Promise<Telegr
   };
 }
 
+async function downloadManagedMenuItemDocument(item: TelegramManagedMenuItemRecord): Promise<TelegramDocument> {
+  if (!item.actionValue.startsWith("/manus-storage/")) throw new FileDeliveryError("UNAVAILABLE");
+  const key = item.actionValue.slice("/manus-storage/".length);
+  if (!key) throw new FileDeliveryError("UNAVAILABLE");
+  let signedUrl: string;
+  try {
+    signedUrl = await storageGetSignedUrl(key);
+  } catch {
+    throw new FileDeliveryError("UNAVAILABLE");
+  }
+  const response = await fetch(signedUrl, { redirect: "follow" });
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  const contentType = response.headers.get("content-type")?.split(";")[0] ?? "application/octet-stream";
+  if (!response.ok || contentType.includes("text/html")) throw new FileDeliveryError("UNAVAILABLE");
+  if (contentLength > MAX_DOCUMENT_BYTES) throw new FileDeliveryError("TOO_LARGE");
+  const data = new Uint8Array(await response.arrayBuffer());
+  if (data.byteLength === 0) throw new FileDeliveryError("UNAVAILABLE");
+  if (data.byteLength > MAX_DOCUMENT_BYTES) throw new FileDeliveryError("TOO_LARGE");
+  return { filename: documentFilename({ title: item.label, url: item.actionValue }, contentType), contentType, data, caption: `مستورد من مكتبة أ. معين الناصر\n${item.label}` };
+}
+
 function isPrivateChat(chatType: string | undefined) {
   return chatType === undefined || chatType === "private";
 }
@@ -2405,6 +2426,16 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, `🔗 ${item.label}\n\nاضغط الزر التالي لفتح المحتوى.`, {
         inline_keyboard: [[{ text: `فتح ${item.label}`, url: item.actionValue }], ...mainMenu(managedMenuItems, managedSections).inline_keyboard],
       });
+      return;
+    }
+    if (item.actionType === "file") {
+      await sender.sendMessage(chatId, TELEGRAM_USER_MESSAGES.filePreparing);
+      try {
+        await sender.sendDocument(chatId, await downloadManagedMenuItemDocument(item));
+      } catch (error) {
+        const code = error instanceof FileDeliveryError ? error.code : "UNAVAILABLE";
+        await sender.sendMessage(chatId, code === "TOO_LARGE" ? TELEGRAM_USER_MESSAGES.fileTooLarge : TELEGRAM_USER_MESSAGES.fileDownloadFailed);
+      }
       return;
     }
     await sender.sendMessage(chatId, item.actionValue, mainMenu(managedMenuItems, managedSections));

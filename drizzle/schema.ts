@@ -73,7 +73,7 @@ export type LegalFolder = typeof legalFolders.$inferSelect;
 export const telegramManagedMenuItems = mysqlTable("telegram_managed_menu_items", {
   id: int("id").autoincrement().primaryKey(),
   label: varchar("label", { length: 128 }).notNull(),
-  actionType: mysqlEnum("actionType", ["url", "message"]).notNull(),
+  actionType: mysqlEnum("actionType", ["url", "message", "file"]).notNull(),
   actionValue: text("actionValue").notNull(),
   rowIndex: int("rowIndex").notNull().default(100),
   sortOrder: int("sortOrder").notNull().default(0),

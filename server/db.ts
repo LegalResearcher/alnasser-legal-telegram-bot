@@ -25,7 +25,7 @@ export async function getDb() {
 
 export type ManagedMenuItemInput = {
   label: string;
-  actionType: "url" | "message";
+  actionType: "url" | "message" | "file";
   actionValue: string;
   rowIndex: number;
   sortOrder: number;
@@ -37,7 +37,7 @@ function normalizeManagedMenuItem(input: Partial<ManagedMenuItemInput>): Managed
   const label = input.label?.trim().slice(0, 128);
   const actionValue = input.actionValue?.trim().slice(0, 4000);
   const actionType = input.actionType;
-  if (!label || !actionValue || (actionType !== "url" && actionType !== "message")) return undefined;
+  if (!label || !actionValue || (actionType !== "url" && actionType !== "message" && actionType !== "file")) return undefined;
   if (actionType === "url") {
     try {
       const parsed = new URL(actionValue);
@@ -46,6 +46,7 @@ function normalizeManagedMenuItem(input: Partial<ManagedMenuItemInput>): Managed
       return undefined;
     }
   }
+  if (actionType === "file" && !actionValue.startsWith("/manus-storage/")) return undefined;
   return {
     label,
     actionType,

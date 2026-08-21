@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_managed_menu_items` MODIFY COLUMN `actionType` enum('url','message','file') NOT NULL;

@@ -833,6 +833,24 @@ describe("Telegram library conversation", () => {
     expect(allowedSender.messages.at(-1)?.text).toContain("محتوى القسم المخصص.");
   });
 
+  it("يعرض زر الملف المخصص كزر تفاعلي دون كشف رابط التخزين", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, { managedMenuItems: [{
+      id: 93,
+      label: "📄 ملف خاص",
+      actionType: "file",
+      actionValue: "/manus-storage/telegram-library/private-file.pdf",
+      rowIndex: 100,
+      sortOrder: 1,
+      accessMode: "premium",
+    }] });
+
+    await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
+    const keyboard = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(keyboard).toContain("managed:93");
+    expect(keyboard).not.toContain("/manus-storage/");
+  });
+
   it("يطبق إخفاء وتسمية وترتيب الأقسام المدارة في القائمة الرئيسية", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { managedSections: [
