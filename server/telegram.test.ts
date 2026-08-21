@@ -231,7 +231,7 @@ const laborContractTemplate: TelegramContractTemplate = {
 function createStore(
   platformConfirmed = true,
   initialImportantLawsAccess = false,
-  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }> } = {}
+  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message" | "file"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" | "hasad" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free" | "premium" | "hasad"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectedAt: Date | null; rejectionReason: string | null }> } = {}
 ): TelegramLibraryStore {
   let confirmed = platformConfirmed;
   const hasadConfirmed = options.hasadConfirmed ?? true;
@@ -721,6 +721,16 @@ describe("Telegram library conversation", () => {
     expect(messages.some(message => message.text.includes("توثيق زيارة واحدة لموقع حصاد اليوم"))).toBe(false);
   });
 
+  it("يفرض توثيق حصاد اليوم عند اختياره كنمط وصول لقسم الاختبارات", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, {
+      hasadConfirmed: false,
+      managedSections: [{ sectionKey: "exams", displayLabel: "📝 اختبارات الشريعة والقانون", enabled: true, accessMode: "hasad", sortOrder: 90 }],
+    });
+    await handleTelegramUpdate({ callback_query: { id: "exam-hasad", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
+  });
+
   it("يعرض لاختبارات الشريعة والقانون رسالة مستقلة مع الإحالة والاشتراك المدفوع", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
@@ -849,6 +859,16 @@ describe("Telegram library conversation", () => {
     const keyboard = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(keyboard).toContain("managed:93");
     expect(keyboard).not.toContain("/manus-storage/");
+  });
+
+  it("يفرض زيارة حصاد اليوم على الزر المخصص عند اختيار هذا النمط", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, {
+      hasadConfirmed: false,
+      managedMenuItems: [{ id: 94, label: "محتوى خاص", actionType: "message", actionValue: "محتوى الزر", rowIndex: 100, sortOrder: 1, accessMode: "hasad" }],
+    });
+    await handleTelegramUpdate({ callback_query: { id: "custom-hasad", data: "managed:94", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
   });
 
   it("يطبق إخفاء وتسمية وترتيب الأقسام المدارة في القائمة الرئيسية", async () => {

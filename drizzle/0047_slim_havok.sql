@@ -1,0 +1,2 @@
+ALTER TABLE `telegram_managed_menu_items` MODIFY COLUMN `accessMode` enum('free','premium','hasad') NOT NULL DEFAULT 'free';--> statement-breakpoint
+ALTER TABLE `telegram_managed_sections` MODIFY COLUMN `accessMode` enum('subscription','free','premium','hasad') NOT NULL DEFAULT 'subscription';

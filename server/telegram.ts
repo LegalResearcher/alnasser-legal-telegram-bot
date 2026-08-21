@@ -72,7 +72,7 @@ export type TelegramManagedMenuItemRecord = {
   actionValue: string;
   rowIndex: number;
   sortOrder: number;
-  accessMode: "free" | "premium";
+  accessMode: "free" | "premium" | "hasad";
 };
 
 export type TelegramManagedSectionRecord = {
@@ -80,7 +80,7 @@ export type TelegramManagedSectionRecord = {
   displayLabel: string;
   enabled: boolean;
   /** غياب القيمة يبقي منطق الاشتراك القديم عند استخدام مخازن متوافقة سابقة. */
-  accessMode?: "subscription" | "free";
+  accessMode?: "subscription" | "free" | "premium" | "hasad";
   sortOrder: number;
 };
 
@@ -385,7 +385,7 @@ function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSec
     .map(section => [{ text: section.override?.displayLabel?.trim() || section.text, callback_data: section.callbackData }]);
   const managedRows = [...managedItems]
     .sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id)
-    .map(item => [{ text: item.label, ...(item.actionType === "url" && item.accessMode !== "premium" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` }) }]);
+    .map(item => [{ text: item.label, ...(item.actionType === "url" && item.accessMode === "free" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` }) }]);
   return {
     inline_keyboard: [
       ...sectionRows,
@@ -1186,8 +1186,21 @@ function isReferralProtectedCallback(data: string) {
   return data === "exams" || data === "secondary-exams" || data.startsWith("exam:");
 }
 
+function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "hasad" {
+  const configured = managedSections.find(section => section.sectionKey === sectionKey)?.accessMode;
+  if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
+  return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
+}
+
 function hasFreeManagedSectionAccess(managedSections: TelegramManagedSectionRecord[], sectionKey: string) {
-  return managedSections.some(section => section.sectionKey === sectionKey && section.accessMode === "free");
+  return managedSectionAccessMode(managedSections, sectionKey) === "free";
+}
+
+function managedSectionForCallback(data: string): "important-laws" | "exams" | "secondary-exams" | "judicial" | "contract-templates" | undefined {
+  if (isHasadProtectedCallback(data)) return hasadProtectedSectionKey(data);
+  if (isReferralProtectedCallback(data)) return data === "secondary-exams" ? "secondary-exams" : "exams";
+  if (data === "important-laws" || data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
+  return undefined;
 }
 
 function isHasadProtectedCallback(data: string) {
@@ -2511,15 +2524,28 @@ export async function handleTelegramUpdate(
       }
       return;
     }
-    const isFreeHasadSection = isHasadProtectedCallback(data) && hasFreeManagedSectionAccess(managedSections, hasadProtectedSectionKey(data));
-    if (isHasadProtectedCallback(data) && !isFreeHasadSection && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
-      await sender.sendMessage(chatId, hasadAccessGateText(data), hasadAccessMenu());
+    const callbackSectionKey = managedSectionForCallback(data);
+    const callbackSectionMode = callbackSectionKey ? managedSectionAccessMode(managedSections, callbackSectionKey) : undefined;
+    if (callbackSectionMode === "hasad" && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
+      const gateText = isHasadProtectedCallback(data)
+        ? hasadAccessGateText(data)
+        : `🔐 للوصول إلى القسم المطلوب، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`;
+      await sender.sendMessage(chatId, gateText, hasadAccessMenu());
+      return;
+    }
+    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && callbackSectionMode === "premium" && !(await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
+      await sender.sendMessage(chatId, `🔐 الوصول إلى ${callbackSectionKey === "judicial" ? "القواعد القضائية" : "الصيغ والعقود القانونية"} يتاح بعد اكتمال 5 إحالات مؤهلة.`, referralMenu());
       return;
     }
     const examSectionKey = data === "secondary-exams" ? "secondary-exams" : "exams";
-    const isFreeExamSection = hasFreeManagedSectionAccess(managedSections, examSectionKey);
-    const hasImportantLawsSectionAccess = async () => hasFreeManagedSectionAccess(managedSections, "important-laws") || store.hasImportantYemeniLawsAccess(telegramUserId);
-    if (isReferralProtectedCallback(data) && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
+    const isFreeExamSection = callbackSectionMode === "free";
+    const hasImportantLawsSectionAccess = async () => {
+      const mode = managedSectionAccessMode(managedSections, "important-laws");
+      if (mode === "free") return true;
+      if (mode === "hasad") return store.hasConfirmedHasadAccess(telegramUserId);
+      return store.hasImportantYemeniLawsAccess(telegramUserId);
+    };
+    if (isReferralProtectedCallback(data) && callbackSectionMode === "premium" && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
       const scope = examAccessScope(data);
       await sender.sendMessage(chatId, optionalExamSupportText(scope), optionalExamSupportMenu(scope));
       return;
@@ -2760,6 +2786,10 @@ export async function handleTelegramUpdate(
       const itemId = Number(data.slice("managed:".length));
       const item = managedMenuItems.find(candidate => candidate.id === itemId);
       if (!item) return;
+      if (item.accessMode === "hasad" && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
+        await sender.sendMessage(chatId, `🔐 للوصول إلى ${item.label}، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`, hasadAccessMenu());
+        return;
+      }
       if (item.accessMode === "premium" && !(await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId))) {
         await sender.sendMessage(chatId, `🔐 الوصول إلى ${item.label} يتاح عبر الدعم الاختياري أو الإحالة. يمكنك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, {
           inline_keyboard: [

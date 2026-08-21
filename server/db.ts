@@ -30,7 +30,7 @@ export type ManagedMenuItemInput = {
   rowIndex: number;
   sortOrder: number;
   enabled: boolean;
-  accessMode: "free" | "premium";
+  accessMode: "free" | "premium" | "hasad";
 };
 
 function normalizeManagedMenuItem(input: Partial<ManagedMenuItemInput>): ManagedMenuItemInput | undefined {
@@ -54,7 +54,7 @@ function normalizeManagedMenuItem(input: Partial<ManagedMenuItemInput>): Managed
     rowIndex: Math.min(999, Math.max(0, Math.trunc(Number(input.rowIndex) || 100))),
     sortOrder: Math.min(9999, Math.max(0, Math.trunc(Number(input.sortOrder) || 0))),
     enabled: input.enabled !== false,
-    accessMode: input.accessMode === "premium" ? "premium" : "free",
+    accessMode: input.accessMode === "premium" ? "premium" : input.accessMode === "hasad" ? "hasad" : "free",
   };
 }
 
@@ -118,7 +118,7 @@ export const managedTelegramSectionDefaults = [
 /** الأقسام ذات بوابة وصول قائمة التي يجوز للإدارة تبديلها إلى الوصول المجاني. */
 export const subscriptionManagedTelegramSectionKeys = ["important-laws", "exams", "secondary-exams", "judicial", "contract-templates"] as const;
 export type SubscriptionManagedTelegramSectionKey = typeof subscriptionManagedTelegramSectionKeys[number];
-export type TelegramSectionAccessMode = "subscription" | "free";
+export type TelegramSectionAccessMode = "premium" | "hasad" | "free";
 
 export type ManagedTelegramSectionConfig = {
   sectionKey: typeof managedTelegramSectionDefaults[number]["sectionKey"];
@@ -143,7 +143,9 @@ export async function listManagedTelegramSectionConfigs(): Promise<ManagedTelegr
       sectionKey: defaults.sectionKey,
       displayLabel: override?.displayLabel?.trim() || defaults.displayLabel,
       enabled: override?.enabled ?? true,
-      accessMode: (override?.accessMode === "free" ? "free" : "subscription") as TelegramSectionAccessMode,
+      accessMode: (override?.accessMode === "free" || override?.accessMode === "premium" || override?.accessMode === "hasad"
+        ? override.accessMode
+        : (defaults.sectionKey === "judicial" || defaults.sectionKey === "contract-templates" ? "hasad" : "premium")) as TelegramSectionAccessMode,
       sortOrder: override?.sortOrder ?? defaults.sortOrder,
     };
   }).sort((left, right) => left.sortOrder - right.sortOrder || left.sectionKey.localeCompare(right.sectionKey));
@@ -160,7 +162,9 @@ export async function updateManagedTelegramSection(
   const displayLabel = input.displayLabel?.trim().slice(0, 128) || defaults.displayLabel;
   const enabled = input.enabled !== false;
   const canManageAccess = (subscriptionManagedTelegramSectionKeys as readonly string[]).includes(sectionKey);
-  const accessMode: TelegramSectionAccessMode = canManageAccess && input.accessMode === "free" ? "free" : "subscription";
+  const accessMode: TelegramSectionAccessMode = canManageAccess && (input.accessMode === "free" || input.accessMode === "premium" || input.accessMode === "hasad")
+    ? input.accessMode
+    : (sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium");
   const sortOrder = Math.min(9999, Math.max(0, Math.trunc(Number(input.sortOrder) || defaults.sortOrder)));
   await db.insert(telegramManagedSections).values({ sectionKey, displayLabel, enabled, accessMode, sortOrder }).onDuplicateKeyUpdate({ set: { displayLabel, enabled, accessMode, sortOrder } });
   await db.insert(telegramAdminAuditLogs).values({ adminUserId, action: "update", entityType: "section", entityId: sectionKey, details: { displayLabel, enabled, accessMode, sortOrder } });
