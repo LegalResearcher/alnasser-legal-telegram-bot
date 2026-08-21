@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_group_exam_rounds` ADD `creatorTelegramUserId` varchar(32);

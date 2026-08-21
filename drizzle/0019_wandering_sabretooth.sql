@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_exam_sessions` ADD `activePollId` varchar(128);

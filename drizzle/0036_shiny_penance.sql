@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_usage_events` ADD `sectionKey` varchar(64);

@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_important_yemeni_laws_subscription_requests` ADD `paymentMethod` varchar(32);

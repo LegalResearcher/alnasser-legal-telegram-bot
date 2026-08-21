@@ -1,0 +1,3 @@
+ALTER TABLE `telegram_important_yemeni_laws_access` MODIFY COLUMN `approvedByTelegramUserId` varchar(64) NOT NULL;--> statement-breakpoint
+ALTER TABLE `telegram_important_yemeni_laws_subscription_requests` MODIFY COLUMN `reviewedByTelegramUserId` varchar(64);--> statement-breakpoint
+ALTER TABLE `telegram_referral_rewards` ADD CONSTRAINT `telegram_referral_rewards_unique_milestone` UNIQUE(`referrerTelegramUserId`,`qualifiedReferralCount`);

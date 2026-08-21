@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_platform_access` ADD `webAppVerifiedAt` timestamp;

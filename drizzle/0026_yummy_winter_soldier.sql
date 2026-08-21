@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_contract_templates` ADD `contractType` enum('civil','commercial','labor','personal','judicial','general') DEFAULT 'general' NOT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_broadcasts` MODIFY COLUMN `ownerTelegramUserId` varchar(64) NOT NULL;

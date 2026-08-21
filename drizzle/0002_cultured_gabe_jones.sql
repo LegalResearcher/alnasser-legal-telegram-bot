@@ -1,0 +1,1 @@
+ALTER TABLE `legal_sources` ADD `sortOrder` int DEFAULT 0 NOT NULL;
