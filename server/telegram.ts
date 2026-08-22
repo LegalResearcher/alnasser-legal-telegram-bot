@@ -2948,7 +2948,7 @@ export async function handleTelegramUpdate(
           ? `📕 ${subject.name} — ${form.formName}\n\nيتضمن النموذج ${questions.length} سؤالًا. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
           : "لا تتوافر أسئلة هذا النموذج حاليًا. حاول مرة أخرى لاحقًا.",
         questions.length > 0
-          ? examTimeMenu(importedSubjectKey, form.formKey, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
+          ? examTimeMenu(levelKey, subjectKey, form.sortOrder, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
           : examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1)
       );
       return;
@@ -2986,7 +2986,7 @@ export async function handleTelegramUpdate(
       }
       const session = await store.startExamSession(telegramUserId, String(chatId), subjectKey, form.formKey, timeLimitSeconds as 15 | 30 | 60 | 300);
       if (!session) {
-        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.formKey, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
+        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(location.levelKey, location.catalogSubjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
         return;
       }
       const questions = await store.listExamQuestions(subjectKey, form.formKey);
