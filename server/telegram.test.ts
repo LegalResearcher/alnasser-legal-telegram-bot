@@ -998,7 +998,7 @@ describe("Telegram library conversation", () => {
     expect(TELEGRAM_EXAM_CATALOG.flatMap(level => level.subjects)).toHaveLength(60);
     expect(TELEGRAM_EXAM_CATALOG[0]?.subjects.slice(0, 3).map(subject => subject.name)).toEqual(["اصول الفقه", "علم الاجرام والعقاب", "النظم السياسية"]);
     expect(TELEGRAM_EXAM_CATALOG[3]?.subjects[10]).toMatchObject({ name: "القانون المدني", hasQuestions: true });
-    expect(TELEGRAM_EXAM_CATALOG[4]).toMatchObject({ name: "اختبارات الثانوية العامة", subjects: [{ name: "الرياضيات", hasQuestions: true }, { name: "التاريخ", hasQuestions: true }, { name: "اللغة العربية", hasQuestions: true }, { name: "الجغرافيا", hasQuestions: true }, { name: "القرآن الكريم", hasQuestions: true }, { name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true }, { name: "التربية الإسلامية", hasQuestions: true }, { name: "اللغة الإنجليزية", hasQuestions: true }] });
+    expect(TELEGRAM_EXAM_CATALOG[4]).toMatchObject({ name: "اختبارات الثانوية العامة", subjects: [{ name: "الرياضيات", hasQuestions: true }, { name: "التاريخ", hasQuestions: true }, { name: "اللغة العربية", hasQuestions: true }, { name: "الجغرافيا", hasQuestions: true }, { name: "القرآن الكريم", hasQuestions: true }, { name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true }, { name: "التربية الإسلامية", hasQuestions: true }, { name: "اللغة الإنجليزية", hasQuestions: true }, { name: "الكيمياء", hasQuestions: true }] });
     expect(TELEGRAM_EXAM_CATALOG[5]).toMatchObject({ name: "بوابة التأهيل القضائي والأكاديمي", subjects: [], comingSoon: true });
 
     const { sender, messages } = createSender();
@@ -1097,6 +1097,9 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السادس - الفلسفة والمنطق وعلم النفس أدبي");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السابع - الفلسفة والمنطق وعلم النفس أدبي");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:form:secondary:philosophy:1:1");
+
+    await callback("secondary-chemistry", "exam:subject:secondary:chemistry:1");
+    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الكيمياء للعام الدراسي 2025—2026م");
 
     await callback("secondary-islamic", "exam:subject:secondary:islamic:1");
     expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة التربية الإسلامية للعام الدراسي 2025—2026م");

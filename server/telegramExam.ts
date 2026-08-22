@@ -23,6 +23,7 @@ const importedSubjectKeys: Record<string, string> = {
   "secondary:philosophy": "exam_secondary_philosophy",
   "secondary:islamic": "exam_secondary_islamic",
   "secondary:english": "exam_secondary_english",
+  "secondary:chemistry": "exam_secondary_chemistry",
 };
 
 export function getImportedExamSubjectKey(levelKey: string, catalogSubjectKey: string): string | undefined {
@@ -146,6 +147,7 @@ export const TELEGRAM_EXAM_CATALOG: TelegramExamCatalogLevel[] = [
       { key: "philosophy", name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true },
       { key: "islamic", name: "التربية الإسلامية", hasQuestions: true },
       { key: "english", name: "اللغة الإنجليزية", hasQuestions: true },
+      { key: "chemistry", name: "الكيمياء", hasQuestions: true },
     ],
   },
   {
