@@ -17,6 +17,12 @@ const importedSubjectKeys: Record<string, string> = {
   "l4:l4-civil-law": CIVIL_LAW_EXAM_SUBJECT_KEY,
   "secondary:math": "exam_secondary_math",
   "secondary:history": "exam_secondary_history",
+  "secondary:arabic": "exam_secondary_arabic",
+  "secondary:geography": "exam_secondary_geography",
+  "secondary:quran": "exam_secondary_quran",
+  "secondary:philosophy": "exam_secondary_philosophy",
+  "secondary:islamic": "exam_secondary_islamic",
+  "secondary:english": "exam_secondary_english",
 };
 
 export function getImportedExamSubjectKey(levelKey: string, catalogSubjectKey: string): string | undefined {
@@ -134,6 +140,12 @@ export const TELEGRAM_EXAM_CATALOG: TelegramExamCatalogLevel[] = [
     subjects: [
       { key: "math", name: "الرياضيات", hasQuestions: true },
       { key: "history", name: "التاريخ", hasQuestions: true },
+      { key: "arabic", name: "اللغة العربية", hasQuestions: true },
+      { key: "geography", name: "الجغرافيا", hasQuestions: true },
+      { key: "quran", name: "القرآن الكريم", hasQuestions: true },
+      { key: "philosophy", name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true },
+      { key: "islamic", name: "التربية الإسلامية", hasQuestions: true },
+      { key: "english", name: "اللغة الإنجليزية", hasQuestions: true },
     ],
   },
   {
@@ -150,6 +162,12 @@ export function getTelegramExamCatalogLevel(levelKey: string): TelegramExamCatal
 
 export function getTelegramExamCatalogSubject(levelKey: string, subjectKey: string): TelegramExamCatalogSubject | undefined {
   return getTelegramExamCatalogLevel(levelKey)?.subjects.find(subject => subject.key === subjectKey);
+}
+
+export function examSubjectHeading(levelKey: string, subject: TelegramExamCatalogSubject): string {
+  if (levelKey !== "secondary") return subject.name;
+  const academicYear = subject.key === "math" || subject.key === "history" ? "2023م" : "2025—2026م";
+  return `نماذج أوائل الجمهورية اليمنية مادة ${subject.name} للعام الدراسي ${academicYear}`;
 }
 
 export function civilLawExamMenu(): TelegramInlineKeyboard {
@@ -235,7 +253,7 @@ function pagedFormsMenu(
   const rows: TelegramInlineKeyboard["inline_keyboard"] = pageForms.map(form => [
     {
       text: `${isAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " ⏳" : ""}`,
-      callback_data: `exam:form:${levelKey}:${subjectKey}:${form.formKey}:${page}`,
+      callback_data: `exam:form:${levelKey}:${subjectKey}:${form.sortOrder}:${page}`,
     },
   ]);
   if (totalPages > 1) {
@@ -290,16 +308,16 @@ export function civilLawExamTimeMenu(): TelegramInlineKeyboard {
   };
 }
 
-export function examTimeMenu(subjectKey: string, sectionKey: string, backCallback: string): TelegramInlineKeyboard {
+export function examTimeMenu(levelKey: string, subjectKey: string, formSortOrder: number, backCallback: string): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
       [
-        { text: "15 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${sectionKey}:15` },
-        { text: "30 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${sectionKey}:30` },
+        { text: "15 ثانية لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:15` },
+        { text: "30 ثانية لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:30` },
       ],
       [
-        { text: "دقيقة لكل سؤال", callback_data: `exam:time:${subjectKey}:${sectionKey}:60` },
-        { text: "5 دقائق لكل سؤال", callback_data: `exam:time:${subjectKey}:${sectionKey}:300` },
+        { text: "دقيقة لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:60` },
+        { text: "5 دقائق لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:300` },
       ],
       [{ text: "رجوع إلى النماذج", callback_data: backCallback }],
     ],
@@ -326,8 +344,28 @@ export function optionText(question: TelegramExamQuestionForSession, option: "A"
   return option === "A" ? question.optionA : option === "B" ? question.optionB : option === "C" ? question.optionC : question.optionD;
 }
 
+export function examPollOptionText(subjectKey: string, option: "A" | "B" | "C" | "D", text: string): string {
+  if (!isSecondaryExamSubjectKey(subjectKey)) return text;
+  if (option === "A" && text.trim() === "ص") return "الإجابة صحيحة";
+  if (option === "B" && text.trim() === "خ") return "الإجابة خاطئة";
+  return text;
+}
+
 export function optionLabel(option: "A" | "B" | "C" | "D"): string {
   return option === "A" ? "أ" : option === "B" ? "ب" : option === "C" ? "ج" : "د";
+}
+
+function isWrittenExamQuestion(question: TelegramExamQuestionForSession): boolean {
+  return [question.optionA, question.optionB, question.optionC, question.optionD].every(option => !option.trim());
+}
+
+function writtenQuestionMenu(sessionId: number): TelegramInlineKeyboard {
+  return {
+    inline_keyboard: [
+      [{ text: "إنهاء الاختبار", callback_data: `exam:written-next:${sessionId}` }],
+      [{ text: "إيقاف الاختبار", callback_data: `exam:stop:${sessionId}` }],
+    ],
+  };
 }
 
 export async function sendExamQuestion(chatId: number, sessionId: number, telegramUserId: string, store: TelegramLibraryStore, sender: TelegramSender): Promise<void> {
@@ -342,14 +380,22 @@ export async function sendExamQuestion(chatId: number, sessionId: number, telegr
     await sender.sendMessage(chatId, "تعذر تحميل سؤال الاختبار الحالي. حاول بدء اختبار جديد.", civilLawExamTimeMenu());
     return;
   }
+  if (isWrittenExamQuestion(question)) {
+    await sender.sendMessage(
+      chatId,
+      `[${session.questionIndex + 1}/${questions.length}] ${question.questionText}`,
+      writtenQuestionMenu(sessionId)
+    );
+    return;
+  }
   const openPeriodSeconds = [15, 30, 60, 300].includes(session.timeLimitSeconds)
     ? session.timeLimitSeconds as 15 | 30 | 60 | 300
     : 30;
   const pollOptions = [
-    { key: "A" as const, text: question.optionA },
-    { key: "B" as const, text: question.optionB },
-    { key: "C" as const, text: question.optionC },
-    { key: "D" as const, text: question.optionD },
+    { key: "A" as const, text: examPollOptionText(session.subjectKey, "A", question.optionA) },
+    { key: "B" as const, text: examPollOptionText(session.subjectKey, "B", question.optionB) },
+    { key: "C" as const, text: examPollOptionText(session.subjectKey, "C", question.optionC) },
+    { key: "D" as const, text: examPollOptionText(session.subjectKey, "D", question.optionD) },
   ].filter(option => option.text.trim().length > 0);
   const correctOptionIndex = pollOptions.findIndex(option => option.key === question.correctOption);
   if (pollOptions.length < 2 || correctOptionIndex < 0) {
