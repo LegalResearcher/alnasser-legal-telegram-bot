@@ -521,12 +521,30 @@ function groupExamReadyMenu(roundId: number, participantCount: number): Telegram
   };
 }
 
-function individualExamResultMenu(): TelegramInlineKeyboard {
-  const sharedText = `جرّب ${CIVIL_LAW_GENERAL_2025_TITLE} عبر بوت الناصر القانوني.`;
+type IndividualExamResultMenuOptions = {
+  examTitle?: string;
+  subjectKey?: string;
+  formKey?: string;
+  levelKey?: string;
+  catalogSubjectKey?: string;
+};
+
+function individualExamResultMenu(options: IndividualExamResultMenuOptions = {}): TelegramInlineKeyboard {
+  const isImportedExam = Boolean(options.subjectKey && options.formKey && options.levelKey && options.catalogSubjectKey);
+  const sharedText = `جرّب ${options.examTitle ?? CIVIL_LAW_GENERAL_2025_TITLE} عبر بوت الناصر القانوني.`;
+  const retryCallback = isImportedExam
+    ? `exam:retry:${encodeURIComponent(options.subjectKey!)}:${encodeURIComponent(options.formKey!)}`
+    : "exam:retry";
+  const modelCallback = isImportedExam
+    ? `exam:forms:${options.levelKey}:${options.catalogSubjectKey}:1`
+    : "exam:civil";
+  const subjectCallback = isImportedExam ? `exam:level:${options.levelKey}` : "exam:levels";
   return {
     inline_keyboard: [
-      [{ text: "حاول مجددًا", callback_data: "exam:retry" }],
-      [{ text: "بدء الاختبار في مجموعة ➕", url: "https://t.me/Moieen2025Bot?startgroup=groupquiz" }],
+      [{ text: "🔁 إعادة الاختبار", callback_data: retryCallback }],
+      [{ text: "📄 اختيار نموذج آخر", callback_data: modelCallback }],
+      [{ text: "📚 اختيار مادة أخرى", callback_data: subjectCallback }],
+      [{ text: "🏠 القائمة الرئيسة", callback_data: "menu" }],
       [{ text: "مشاركة الاختبار ↪️", url: `https://t.me/share/url?url=${encodeURIComponent("https://t.me/Moieen2025Bot")}&text=${encodeURIComponent(sharedText)}` }],
     ],
   };
@@ -2393,6 +2411,45 @@ async function resolveNativeExamTimeout(pollId: string, store: TelegramLibrarySt
   if (outcome) await continueNativeExamRound(session, outcome, store, sender);
 }
 
+function examResultSnapshotText(snapshot: { score: number; incorrectCount: number; missedCount: number; elapsedSeconds: number }): string {
+  const total = snapshot.score + snapshot.incorrectCount + snapshot.missedCount;
+  const percentage = total > 0 ? Math.round((snapshot.score / total) * 100) : 0;
+  return total > 0
+    ? `✅ ${snapshot.score}/${total} صحيحة (${percentage}%)  •  ❌ ${snapshot.incorrectCount}  •  ⏳ ${snapshot.missedCount}  •  ⏱ ${formatExamTime(snapshot.elapsedSeconds)}`
+    : `✅ ${snapshot.score} صحيحة  •  ❌ ${snapshot.incorrectCount}  •  ⏳ ${snapshot.missedCount}  •  ⏱ ${formatExamTime(snapshot.elapsedSeconds)}`;
+}
+
+function examSetupText(subjectName: string, formName: string, questionCount: number): string {
+  return [
+    "⚙️ تجهيز الاختبار",
+    "",
+    `📚 المادة: ${subjectName}`,
+    `📄 النموذج: ${formName}`,
+    `📝 عدد الأسئلة: ${questionCount}`,
+    "",
+    "⏱ اختر الزمن المخصص لكل سؤال:",
+    "سيبدأ الاختبار بعد اختيار المدة، ولن يُرسل السؤال الأول قبل تأكيدك.",
+  ].join("\n");
+}
+
+function examReadyText(subjectName: string, formName: string, questionCount: number, timeLimitSeconds: number): string {
+  return [
+    "✅ تم إعداد الاختبار",
+    "",
+    `📚 المادة: ${subjectName}`,
+    `📄 النموذج: ${formName}`,
+    `📝 عدد الأسئلة: ${questionCount}`,
+    `⏱ الزمن: ${formatExamTime(timeLimitSeconds)} لكل سؤال`,
+    "",
+    "📌 طريقة الاختبار:",
+    "• سيظهر كل سؤال في استطلاع مستقل، ويبدأ الوقت عند ظهوره.",
+    "• ستظهر الإجابة الصحيحة تلقائيًا بعد كل إجابة، ويظهر الشرح عند توفره.",
+    "• لإيقاف المحاولة في أي وقت أرسل /stop.",
+    "",
+    "عندما تكون مستعدًا اضغط «▶️ ابدأ الآن».",
+  ].join("\n");
+}
+
 async function sendNativeExamCompletionResult(
   chatId: number,
   session: TelegramExamSessionRecord,
@@ -2403,38 +2460,46 @@ async function sendNativeExamCompletionResult(
   const summary = await store.getExamResultSummary(session.id, session.telegramUserId);
   const location = getImportedExamCatalogLocation(session.subjectKey);
   const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
-  const formName = subject
-    ? (await store.listExamForms(session.subjectKey)).find(form => form.formKey === session.sectionKey)?.formName
-    : undefined;
-  const examTitle = subject
-    ? `اختبار ${subject.name} (${formName ?? "النموذج"})`
-    : CIVIL_LAW_GENERAL_2025_TITLE;
+  const form = subject ? (await store.listExamForms(session.subjectKey)).find(item => item.formKey === session.sectionKey) : undefined;
+  const subjectName = subject?.name ?? "القانون المدني";
+  const formName = form?.formName ?? "القسم العام 2025";
+  const totalQuestions = result.score + result.incorrectCount + result.missedCount;
+  const percentage = totalQuestions > 0 ? Math.round((result.score / totalQuestions) * 100) : 0;
+  const examTitle = subject ? `اختبار ${subject.name} — ${formName}` : CIVIL_LAW_GENERAL_2025_TITLE;
   const resultLines = [
-    `🎲 اسم الاختبار: ${examTitle}`,
+    "🏁 انتهى الاختبار",
     "",
-    "📝 نتيجة هذه المحاولة:",
-    `✅ الصحيحة: ${result.score} | ❌ الخاطئة: ${result.incorrectCount} | ⏳ الفائتة: ${result.missedCount} | ⏱ الوقت: ${formatExamTime(result.elapsedSeconds)}`,
+    `📚 المادة: ${subjectName}`,
+    `📄 النموذج: ${formName}`,
+    "",
+    "📊 ملخص المحاولة",
+    `✅ الصحيحة: ${result.score}`,
+    `❌ الخاطئة: ${result.incorrectCount}`,
+    `⏳ الفائتة: ${result.missedCount}`,
+    `🎯 النتيجة: ${totalQuestions > 0 ? `${result.score}/${totalQuestions} (${percentage}%)` : `${result.score} صحيحة`}`,
+    `⏱ الوقت: ${formatExamTime(result.elapsedSeconds)}`,
   ];
-  const best = summary?.previousBest ?? result;
-  resultLines.push(
-    "",
-    "🏅 أفضل نتيجة:",
-    `✅ الصحيحة: ${best.score} | ❌ الخاطئة: ${best.incorrectCount} | ⏳ الفائتة: ${best.missedCount} | ⏱ الوقت: ${formatExamTime(best.elapsedSeconds)}`
-  );
-  const leaderboard = summary?.leaderboardResult ?? result;
-  resultLines.push(
-    "",
-    "🏆 نتيجة لائحة المتصدرين:",
-    `✅ الصحيحة: ${leaderboard.score} | ❌ الخاطئة: ${leaderboard.incorrectCount} | ⏳ الفائتة: ${leaderboard.missedCount} | ⏱ الوقت: ${formatExamTime(leaderboard.elapsedSeconds)}`
-  );
-  if (summary) {
-    resultLines.push(
-      "",
-      `📊 الترتيب: المركز ${summary.rank} من أصل ${summary.totalParticipants} (أعلى من ${summary.percentile}% من المشاركين).`
-    );
+  if (summary?.previousBest) {
+    resultLines.push("", "🏅 أفضل نتيجة سابقة لك", examResultSnapshotText(summary.previousBest));
   }
-  resultLines.push("", "يمكنك إعادة الاختبار، لكن لن يتغير ترتيبك في لائحة المتصدرين إلا إذا حسّنت أفضل نتيجة لك.");
-  await sender.sendMessage(chatId, resultLines.join("\n"), individualExamResultMenu());
+  if (summary?.leaderboardResult) {
+    resultLines.push("", "🏆 أفضل نتيجة محتسبة للترتيب", examResultSnapshotText(summary.leaderboardResult));
+  }
+  if (summary && summary.totalParticipants > 0) {
+    resultLines.push("", `📈 ترتيبك: المركز ${summary.rank} من أصل ${summary.totalParticipants} مشارك.`);
+  }
+  resultLines.push("", "يمكنك إعادة المحاولة أو اختيار نموذج ومادة أخرى من الأزرار أدناه.");
+  await sender.sendMessage(
+    chatId,
+    resultLines.join("\n"),
+    individualExamResultMenu({
+      examTitle,
+      subjectKey: subject ? session.subjectKey : undefined,
+      formKey: subject ? session.sectionKey : undefined,
+      levelKey: location?.levelKey,
+      catalogSubjectKey: location?.catalogSubjectKey,
+    })
+  );
 }
 
 async function continueNativeExamRound(
@@ -2754,12 +2819,29 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, cancelled ? "⏹ تم إنهاء الجولة الجماعية. لا تُحتسب أي إجابات لاحقة." : "لا توجد جولة قابلة للإنهاء حاليًا.");
       return;
     }
-    if (data === "exam:retry") {
+    if (data === "exam:retry" || data.startsWith("exam:retry:")) {
       if (!isPrivateChat(chat?.type)) {
         await sender.sendMessage(chatId, "يمكن إعادة الاختبار من المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      await sender.sendMessage(chatId, `${CIVIL_LAW_GENERAL_2025_TITLE}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`, civilLawExamTimeMenu());
+      if (data.startsWith("exam:retry:")) {
+        const [, , encodedSubjectKey, encodedFormKey] = data.split(":");
+        const subjectKey = encodedSubjectKey ? decodeURIComponent(encodedSubjectKey) : "";
+        const formKey = encodedFormKey ? decodeURIComponent(encodedFormKey) : "";
+        const location = getImportedExamCatalogLocation(subjectKey);
+        const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
+        if (!location || !subject || !formKey) return;
+        const forms = await store.listExamForms(subjectKey);
+        const form = forms.find(item => item.formKey === formKey);
+        if (!form) return;
+        await pageSender.sendMessage(
+          chatId,
+          `🔁 إعادة اختبار ${subject.name} — ${form.formName}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`,
+          examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`)
+        );
+        return;
+      }
+      await pageSender.sendMessage(chatId, `🔁 إعادة اختبار ${CIVIL_LAW_GENERAL_2025_TITLE}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`, civilLawExamTimeMenu());
       return;
     }
     if (data.startsWith("broadcast:confirm:")) {
@@ -3024,7 +3106,7 @@ export async function handleTelegramUpdate(
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       if (importedSubjectKey) {
         const forms = await store.listExamForms(importedSubjectKey);
-        await sender.sendMessage(
+        await pageSender.sendMessage(
           chatId,
           forms.length > 0
             ? `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`
@@ -3034,7 +3116,7 @@ export async function handleTelegramUpdate(
         return;
       }
       const page = Number(requestedPage);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         `📚 ${getTelegramExamCatalogLevel(levelKey)?.name ?? "المستوى"} ← ${subject.name}\n\nلا توجد أسئلة مضافة لهذه المادة في البوت حاليًا.`,
         examSubjectsMenu(levelKey, Number.isInteger(page) && page > 0 ? page : 1)
@@ -3047,14 +3129,14 @@ export async function handleTelegramUpdate(
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject) return;
       const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId, `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+      await pageSender.sendMessage(chatId, `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
       return;
     }
     if (data.startsWith("exam:training:")) {
       const [, , levelKey, subjectKey] = data.split(":");
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!subject) return;
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         `🧪 ${subject.name}\n\nالأسئلة التجريبية ستكون متاحة قريبًا.`,
         {
@@ -3074,14 +3156,14 @@ export async function handleTelegramUpdate(
       const forms = await store.listExamForms(importedSubjectKey);
       const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
-        await sender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+        await pageSender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
         return;
       }
       const questions = await store.listExamQuestions(importedSubjectKey, form.formKey);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         questions.length > 0
-          ? `📕 ${examSubjectHeading(levelKey, subject)} — ${form.formName}\n\nيتضمن النموذج ${questions.length} سؤالًا. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
+          ? examSetupText(subject.name, form.formName, questions.length)
           : "لا تتوافر أسئلة هذا النموذج حاليًا. حاول مرة أخرى لاحقًا.",
         questions.length > 0
           ? examTimeMenu(importedSubjectKey, form.sortOrder, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
@@ -3090,15 +3172,15 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "exam:civil") {
-      await sender.sendMessage(chatId, "📙 القانون المدني\n\nاختر القسم المطلوب.", civilLawExamSectionMenu());
+      await pageSender.sendMessage(chatId, "📙 القانون المدني\n\nاختر القسم المطلوب.", civilLawExamSectionMenu());
       return;
     }
     if (data === "exam:civil:general2025") {
       const questions = await store.listExamQuestions(CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         questions.length > 0
-          ? `${CIVIL_LAW_GENERAL_2025_TITLE}\n\nيتضمن الاختبار ${questions.length} أسئلة. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
+          ? examSetupText("القانون المدني", "القسم العام 2025", questions.length)
           : "لا تتوافر أسئلة هذا القسم حاليًا. حاول مرة أخرى لاحقًا.",
         questions.length > 0 ? civilLawExamTimeMenu() : civilLawExamSectionMenu()
       );
@@ -3117,24 +3199,18 @@ export async function handleTelegramUpdate(
       const forms = await store.listExamForms(subjectKey);
       const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
-        await sender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
+        await pageSender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
         return;
       }
       const session = await store.startExamSession(telegramUserId, String(chatId), subjectKey, form.formKey, timeLimitSeconds as 15 | 30 | 60 | 300);
       if (!session) {
-        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
+        await pageSender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
         return;
       }
       const questions = await store.listExamQuestions(subjectKey, form.formKey);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
-        [
-          `🎲 استعد جيدًا لـ 'اختبار ${subject.name} — ${form.formName}'`,
-          `🖊 ${questions.length} أسئلة`,
-          `⏱ ${formatExamTime(timeLimitSeconds)} لكل سؤال`,
-          "📖 ستظهر الإجابة الصحيحة والشرح المفصل بعد كل سؤال، ويظهر التلميح عند الإجابة الخاطئة.",
-          "🏁 اضغط على الزر أدناه عندما تكون مستعدًا. لإيقاف الاختبار أرسل /stop.",
-        ].join("\n"),
+        examReadyText(subject.name, form.formName, questions.length, timeLimitSeconds),
         civilLawExamReadyMenu(session.id)
       );
       return;
@@ -3148,19 +3224,13 @@ export async function handleTelegramUpdate(
       if (![15, 30, 60, 300].includes(timeLimitSeconds)) return;
       const session = await store.startExamSession(telegramUserId, String(chatId), CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, timeLimitSeconds as 15 | 30 | 60 | 300);
       if (!session) {
-        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", civilLawExamTimeMenu());
+        await pageSender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", civilLawExamTimeMenu());
         return;
       }
       const questions = await store.listExamQuestions(CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
-        [
-          `🎲 استعد جيدًا لـ '${CIVIL_LAW_GENERAL_2025_TITLE}'`,
-          `🖊 ${questions.length} أسئلة`,
-          `⏱ ${formatExamTime(timeLimitSeconds)} لكل سؤال`,
-          "📖 ستظهر الإجابة الصحيحة والشرح المفصل بعد كل سؤال.",
-          "🏁 اضغط على الزر أدناه عندما تكون مستعدًا. لإيقاف الاختبار أرسل /stop.",
-        ].join("\n"),
+        examReadyText("القانون المدني", "القسم العام 2025", questions.length, timeLimitSeconds),
         civilLawExamReadyMenu(session.id)
       );
       return;

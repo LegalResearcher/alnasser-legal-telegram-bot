@@ -3063,38 +3063,30 @@ function civilLawExamSectionMenu() {
 function civilLawExamTimeMenu() {
   return {
     inline_keyboard: [
-      [
-        { text: "15 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:15" },
-        { text: "30 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:30" }
-      ],
-      [
-        { text: "\u062F\u0642\u064A\u0642\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:60" },
-        { text: "5 \u062F\u0642\u0627\u0626\u0642 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:300" }
-      ],
-      [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A", callback_data: "exam:civil" }]
+      [{ text: "\u23F1\uFE0F 15 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:15" }],
+      [{ text: "\u23F1\uFE0F 30 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:30" }],
+      [{ text: "\u23F1\uFE0F \u062F\u0642\u064A\u0642\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:60" }],
+      [{ text: "\u23F1\uFE0F 5 \u062F\u0642\u0627\u0626\u0642 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: "exam:time:300" }],
+      [{ text: "\u21A9\uFE0F \u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A", callback_data: "exam:civil" }]
     ]
   };
 }
 function examTimeMenu(subjectKey, formKeyOrSortOrder, backCallback) {
   return {
     inline_keyboard: [
-      [
-        { text: "15 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:15` },
-        { text: "30 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:30` }
-      ],
-      [
-        { text: "\u062F\u0642\u064A\u0642\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:60` },
-        { text: "5 \u062F\u0642\u0627\u0626\u0642 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:300` }
-      ],
-      [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0646\u0645\u0627\u0630\u062C", callback_data: backCallback }]
+      [{ text: "\u23F1\uFE0F 15 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:15` }],
+      [{ text: "\u23F1\uFE0F 30 \u062B\u0627\u0646\u064A\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:30` }],
+      [{ text: "\u23F1\uFE0F \u062F\u0642\u064A\u0642\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:60` }],
+      [{ text: "\u23F1\uFE0F 5 \u062F\u0642\u0627\u0626\u0642 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:300` }],
+      [{ text: "\u21A9\uFE0F \u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0646\u0645\u0627\u0630\u062C", callback_data: backCallback }]
     ]
   };
 }
 function civilLawExamReadyMenu(sessionId) {
   return {
     inline_keyboard: [
-      [{ text: "\u0623\u0646\u0627 \u0645\u0633\u062A\u0639\u062F!", callback_data: `exam:ready:${sessionId}` }],
-      [{ text: "\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631", callback_data: `exam:stop:${sessionId}` }]
+      [{ text: "\u25B6\uFE0F \u0627\u0628\u062F\u0623 \u0627\u0644\u0622\u0646", callback_data: `exam:ready:${sessionId}` }],
+      [{ text: "\u23F8\uFE0F \u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631", callback_data: `exam:stop:${sessionId}` }]
     ]
   };
 }
@@ -3389,12 +3381,18 @@ function groupExamReadyMenu(roundId, participantCount) {
     ]
   };
 }
-function individualExamResultMenu() {
-  const sharedText = `\u062C\u0631\u0651\u0628 ${CIVIL_LAW_GENERAL_2025_TITLE} \u0639\u0628\u0631 \u0628\u0648\u062A \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A.`;
+function individualExamResultMenu(options = {}) {
+  const isImportedExam = Boolean(options.subjectKey && options.formKey && options.levelKey && options.catalogSubjectKey);
+  const sharedText = `\u062C\u0631\u0651\u0628 ${options.examTitle ?? CIVIL_LAW_GENERAL_2025_TITLE} \u0639\u0628\u0631 \u0628\u0648\u062A \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A.`;
+  const retryCallback = isImportedExam ? `exam:retry:${encodeURIComponent(options.subjectKey)}:${encodeURIComponent(options.formKey)}` : "exam:retry";
+  const modelCallback = isImportedExam ? `exam:forms:${options.levelKey}:${options.catalogSubjectKey}:1` : "exam:civil";
+  const subjectCallback = isImportedExam ? `exam:level:${options.levelKey}` : "exam:levels";
   return {
     inline_keyboard: [
-      [{ text: "\u062D\u0627\u0648\u0644 \u0645\u062C\u062F\u062F\u064B\u0627", callback_data: "exam:retry" }],
-      [{ text: "\u0628\u062F\u0621 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u064A \u0645\u062C\u0645\u0648\u0639\u0629 \u2795", url: "https://t.me/Moieen2025Bot?startgroup=groupquiz" }],
+      [{ text: "\u{1F501} \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631", callback_data: retryCallback }],
+      [{ text: "\u{1F4C4} \u0627\u062E\u062A\u064A\u0627\u0631 \u0646\u0645\u0648\u0630\u062C \u0622\u062E\u0631", callback_data: modelCallback }],
+      [{ text: "\u{1F4DA} \u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0627\u062F\u0629 \u0623\u062E\u0631\u0649", callback_data: subjectCallback }],
+      [{ text: "\u{1F3E0} \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u0629", callback_data: "menu" }],
       [{ text: "\u0645\u0634\u0627\u0631\u0643\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u21AA\uFE0F", url: `https://t.me/share/url?url=${encodeURIComponent("https://t.me/Moieen2025Bot")}&text=${encodeURIComponent(sharedText)}` }]
     ]
   };
@@ -4812,38 +4810,84 @@ async function resolveNativeExamTimeout(pollId, store, sender) {
   });
   if (outcome) await continueNativeExamRound(session, outcome, store, sender);
 }
+function examResultSnapshotText(snapshot) {
+  const total = snapshot.score + snapshot.incorrectCount + snapshot.missedCount;
+  const percentage = total > 0 ? Math.round(snapshot.score / total * 100) : 0;
+  return total > 0 ? `\u2705 ${snapshot.score}/${total} \u0635\u062D\u064A\u062D\u0629 (${percentage}%)  \u2022  \u274C ${snapshot.incorrectCount}  \u2022  \u23F3 ${snapshot.missedCount}  \u2022  \u23F1 ${formatExamTime(snapshot.elapsedSeconds)}` : `\u2705 ${snapshot.score} \u0635\u062D\u064A\u062D\u0629  \u2022  \u274C ${snapshot.incorrectCount}  \u2022  \u23F3 ${snapshot.missedCount}  \u2022  \u23F1 ${formatExamTime(snapshot.elapsedSeconds)}`;
+}
+function examSetupText(subjectName, formName, questionCount) {
+  return [
+    "\u2699\uFE0F \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631",
+    "",
+    `\u{1F4DA} \u0627\u0644\u0645\u0627\u062F\u0629: ${subjectName}`,
+    `\u{1F4C4} \u0627\u0644\u0646\u0645\u0648\u0630\u062C: ${formName}`,
+    `\u{1F4DD} \u0639\u062F\u062F \u0627\u0644\u0623\u0633\u0626\u0644\u0629: ${questionCount}`,
+    "",
+    "\u23F1 \u0627\u062E\u062A\u0631 \u0627\u0644\u0632\u0645\u0646 \u0627\u0644\u0645\u062E\u0635\u0635 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644:",
+    "\u0633\u064A\u0628\u062F\u0623 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0628\u0639\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0645\u062F\u0629\u060C \u0648\u0644\u0646 \u064A\u064F\u0631\u0633\u0644 \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u0623\u0648\u0644 \u0642\u0628\u0644 \u062A\u0623\u0643\u064A\u062F\u0643."
+  ].join("\n");
+}
+function examReadyText(subjectName, formName, questionCount, timeLimitSeconds) {
+  return [
+    "\u2705 \u062A\u0645 \u0625\u0639\u062F\u0627\u062F \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631",
+    "",
+    `\u{1F4DA} \u0627\u0644\u0645\u0627\u062F\u0629: ${subjectName}`,
+    `\u{1F4C4} \u0627\u0644\u0646\u0645\u0648\u0630\u062C: ${formName}`,
+    `\u{1F4DD} \u0639\u062F\u062F \u0627\u0644\u0623\u0633\u0626\u0644\u0629: ${questionCount}`,
+    `\u23F1 \u0627\u0644\u0632\u0645\u0646: ${formatExamTime(timeLimitSeconds)} \u0644\u0643\u0644 \u0633\u0624\u0627\u0644`,
+    "",
+    "\u{1F4CC} \u0637\u0631\u064A\u0642\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631:",
+    "\u2022 \u0633\u064A\u0638\u0647\u0631 \u0643\u0644 \u0633\u0624\u0627\u0644 \u0641\u064A \u0627\u0633\u062A\u0637\u0644\u0627\u0639 \u0645\u0633\u062A\u0642\u0644\u060C \u0648\u064A\u0628\u062F\u0623 \u0627\u0644\u0648\u0642\u062A \u0639\u0646\u062F \u0638\u0647\u0648\u0631\u0647.",
+    "\u2022 \u0633\u062A\u0638\u0647\u0631 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0628\u0639\u062F \u0643\u0644 \u0625\u062C\u0627\u0628\u0629\u060C \u0648\u064A\u0638\u0647\u0631 \u0627\u0644\u0634\u0631\u062D \u0639\u0646\u062F \u062A\u0648\u0641\u0631\u0647.",
+    "\u2022 \u0644\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0641\u064A \u0623\u064A \u0648\u0642\u062A \u0623\u0631\u0633\u0644 /stop.",
+    "",
+    "\u0639\u0646\u062F\u0645\u0627 \u062A\u0643\u0648\u0646 \u0645\u0633\u062A\u0639\u062F\u064B\u0627 \u0627\u0636\u063A\u0637 \xAB\u25B6\uFE0F \u0627\u0628\u062F\u0623 \u0627\u0644\u0622\u0646\xBB."
+  ].join("\n");
+}
 async function sendNativeExamCompletionResult(chatId, session, result, store, sender) {
   const summary = await store.getExamResultSummary(session.id, session.telegramUserId);
   const location = getImportedExamCatalogLocation(session.subjectKey);
   const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : void 0;
-  const formName = subject ? (await store.listExamForms(session.subjectKey)).find((form) => form.formKey === session.sectionKey)?.formName : void 0;
-  const examTitle = subject ? `\u0627\u062E\u062A\u0628\u0627\u0631 ${subject.name} (${formName ?? "\u0627\u0644\u0646\u0645\u0648\u0630\u062C"})` : CIVIL_LAW_GENERAL_2025_TITLE;
+  const form = subject ? (await store.listExamForms(session.subjectKey)).find((item) => item.formKey === session.sectionKey) : void 0;
+  const subjectName = subject?.name ?? "\u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A";
+  const formName = form?.formName ?? "\u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0639\u0627\u0645 2025";
+  const totalQuestions = result.score + result.incorrectCount + result.missedCount;
+  const percentage = totalQuestions > 0 ? Math.round(result.score / totalQuestions * 100) : 0;
+  const examTitle = subject ? `\u0627\u062E\u062A\u0628\u0627\u0631 ${subject.name} \u2014 ${formName}` : CIVIL_LAW_GENERAL_2025_TITLE;
   const resultLines = [
-    `\u{1F3B2} \u0627\u0633\u0645 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631: ${examTitle}`,
+    "\u{1F3C1} \u0627\u0646\u062A\u0647\u0649 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631",
     "",
-    "\u{1F4DD} \u0646\u062A\u064A\u062C\u0629 \u0647\u0630\u0647 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629:",
-    `\u2705 \u0627\u0644\u0635\u062D\u064A\u062D\u0629: ${result.score} | \u274C \u0627\u0644\u062E\u0627\u0637\u0626\u0629: ${result.incorrectCount} | \u23F3 \u0627\u0644\u0641\u0627\u0626\u062A\u0629: ${result.missedCount} | \u23F1 \u0627\u0644\u0648\u0642\u062A: ${formatExamTime(result.elapsedSeconds)}`
+    `\u{1F4DA} \u0627\u0644\u0645\u0627\u062F\u0629: ${subjectName}`,
+    `\u{1F4C4} \u0627\u0644\u0646\u0645\u0648\u0630\u062C: ${formName}`,
+    "",
+    "\u{1F4CA} \u0645\u0644\u062E\u0635 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629",
+    `\u2705 \u0627\u0644\u0635\u062D\u064A\u062D\u0629: ${result.score}`,
+    `\u274C \u0627\u0644\u062E\u0627\u0637\u0626\u0629: ${result.incorrectCount}`,
+    `\u23F3 \u0627\u0644\u0641\u0627\u0626\u062A\u0629: ${result.missedCount}`,
+    `\u{1F3AF} \u0627\u0644\u0646\u062A\u064A\u062C\u0629: ${totalQuestions > 0 ? `${result.score}/${totalQuestions} (${percentage}%)` : `${result.score} \u0635\u062D\u064A\u062D\u0629`}`,
+    `\u23F1 \u0627\u0644\u0648\u0642\u062A: ${formatExamTime(result.elapsedSeconds)}`
   ];
-  const best = summary?.previousBest ?? result;
-  resultLines.push(
-    "",
-    "\u{1F3C5} \u0623\u0641\u0636\u0644 \u0646\u062A\u064A\u062C\u0629:",
-    `\u2705 \u0627\u0644\u0635\u062D\u064A\u062D\u0629: ${best.score} | \u274C \u0627\u0644\u062E\u0627\u0637\u0626\u0629: ${best.incorrectCount} | \u23F3 \u0627\u0644\u0641\u0627\u0626\u062A\u0629: ${best.missedCount} | \u23F1 \u0627\u0644\u0648\u0642\u062A: ${formatExamTime(best.elapsedSeconds)}`
-  );
-  const leaderboard = summary?.leaderboardResult ?? result;
-  resultLines.push(
-    "",
-    "\u{1F3C6} \u0646\u062A\u064A\u062C\u0629 \u0644\u0627\u0626\u062D\u0629 \u0627\u0644\u0645\u062A\u0635\u062F\u0631\u064A\u0646:",
-    `\u2705 \u0627\u0644\u0635\u062D\u064A\u062D\u0629: ${leaderboard.score} | \u274C \u0627\u0644\u062E\u0627\u0637\u0626\u0629: ${leaderboard.incorrectCount} | \u23F3 \u0627\u0644\u0641\u0627\u0626\u062A\u0629: ${leaderboard.missedCount} | \u23F1 \u0627\u0644\u0648\u0642\u062A: ${formatExamTime(leaderboard.elapsedSeconds)}`
-  );
-  if (summary) {
-    resultLines.push(
-      "",
-      `\u{1F4CA} \u0627\u0644\u062A\u0631\u062A\u064A\u0628: \u0627\u0644\u0645\u0631\u0643\u0632 ${summary.rank} \u0645\u0646 \u0623\u0635\u0644 ${summary.totalParticipants} (\u0623\u0639\u0644\u0649 \u0645\u0646 ${summary.percentile}% \u0645\u0646 \u0627\u0644\u0645\u0634\u0627\u0631\u0643\u064A\u0646).`
-    );
+  if (summary?.previousBest) {
+    resultLines.push("", "\u{1F3C5} \u0623\u0641\u0636\u0644 \u0646\u062A\u064A\u062C\u0629 \u0633\u0627\u0628\u0642\u0629 \u0644\u0643", examResultSnapshotText(summary.previousBest));
   }
-  resultLines.push("", "\u064A\u0645\u0643\u0646\u0643 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u060C \u0644\u0643\u0646 \u0644\u0646 \u064A\u062A\u063A\u064A\u0631 \u062A\u0631\u062A\u064A\u0628\u0643 \u0641\u064A \u0644\u0627\u0626\u062D\u0629 \u0627\u0644\u0645\u062A\u0635\u062F\u0631\u064A\u0646 \u0625\u0644\u0627 \u0625\u0630\u0627 \u062D\u0633\u0651\u0646\u062A \u0623\u0641\u0636\u0644 \u0646\u062A\u064A\u062C\u0629 \u0644\u0643.");
-  await sender.sendMessage(chatId, resultLines.join("\n"), individualExamResultMenu());
+  if (summary?.leaderboardResult) {
+    resultLines.push("", "\u{1F3C6} \u0623\u0641\u0636\u0644 \u0646\u062A\u064A\u062C\u0629 \u0645\u062D\u062A\u0633\u0628\u0629 \u0644\u0644\u062A\u0631\u062A\u064A\u0628", examResultSnapshotText(summary.leaderboardResult));
+  }
+  if (summary && summary.totalParticipants > 0) {
+    resultLines.push("", `\u{1F4C8} \u062A\u0631\u062A\u064A\u0628\u0643: \u0627\u0644\u0645\u0631\u0643\u0632 ${summary.rank} \u0645\u0646 \u0623\u0635\u0644 ${summary.totalParticipants} \u0645\u0634\u0627\u0631\u0643.`);
+  }
+  resultLines.push("", "\u064A\u0645\u0643\u0646\u0643 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0623\u0648 \u0627\u062E\u062A\u064A\u0627\u0631 \u0646\u0645\u0648\u0630\u062C \u0648\u0645\u0627\u062F\u0629 \u0623\u062E\u0631\u0649 \u0645\u0646 \u0627\u0644\u0623\u0632\u0631\u0627\u0631 \u0623\u062F\u0646\u0627\u0647.");
+  await sender.sendMessage(
+    chatId,
+    resultLines.join("\n"),
+    individualExamResultMenu({
+      examTitle,
+      subjectKey: subject ? session.subjectKey : void 0,
+      formKey: subject ? session.sectionKey : void 0,
+      levelKey: location?.levelKey,
+      catalogSubjectKey: location?.catalogSubjectKey
+    })
+  );
 }
 async function continueNativeExamRound(session, outcome, store, sender) {
   const chatId = Number(session.chatId);
@@ -5159,12 +5203,31 @@ ${referralHistoryText(history)}`, referralMenu());
       await sender.sendMessage(chatId2, cancelled ? "\u23F9 \u062A\u0645 \u0625\u0646\u0647\u0627\u0621 \u0627\u0644\u062C\u0648\u0644\u0629 \u0627\u0644\u062C\u0645\u0627\u0639\u064A\u0629. \u0644\u0627 \u062A\u064F\u062D\u062A\u0633\u0628 \u0623\u064A \u0625\u062C\u0627\u0628\u0627\u062A \u0644\u0627\u062D\u0642\u0629." : "\u0644\u0627 \u062A\u0648\u062C\u062F \u062C\u0648\u0644\u0629 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u0625\u0646\u0647\u0627\u0621 \u062D\u0627\u0644\u064A\u064B\u0627.");
       return;
     }
-    if (data === "exam:retry") {
+    if (data === "exam:retry" || data.startsWith("exam:retry:")) {
       if (!isPrivateChat(chat?.type)) {
         await sender.sendMessage(chatId2, "\u064A\u0645\u0643\u0646 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u0646 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0627\u0644\u062E\u0627\u0635\u0629 \u0645\u0639 \u0627\u0644\u0628\u0648\u062A \u0641\u0642\u0637.", mainMenu());
         return;
       }
-      await sender.sendMessage(chatId2, `${CIVIL_LAW_GENERAL_2025_TITLE}
+      if (data.startsWith("exam:retry:")) {
+        const [, , encodedSubjectKey, encodedFormKey] = data.split(":");
+        const subjectKey = encodedSubjectKey ? decodeURIComponent(encodedSubjectKey) : "";
+        const formKey = encodedFormKey ? decodeURIComponent(encodedFormKey) : "";
+        const location = getImportedExamCatalogLocation(subjectKey);
+        const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : void 0;
+        if (!location || !subject || !formKey) return;
+        const forms = await store.listExamForms(subjectKey);
+        const form = forms.find((item) => item.formKey === formKey);
+        if (!form) return;
+        await pageSender.sendMessage(
+          chatId2,
+          `\u{1F501} \u0625\u0639\u0627\u062F\u0629 \u0627\u062E\u062A\u0628\u0627\u0631 ${subject.name} \u2014 ${form.formName}
+
+\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0642\u0628\u0644 \u0628\u062F\u0621 \u0645\u062D\u0627\u0648\u0644\u0629 \u062C\u062F\u064A\u062F\u0629.`,
+          examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`)
+        );
+        return;
+      }
+      await pageSender.sendMessage(chatId2, `\u{1F501} \u0625\u0639\u0627\u062F\u0629 \u0627\u062E\u062A\u0628\u0627\u0631 ${CIVIL_LAW_GENERAL_2025_TITLE}
 
 \u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0642\u0628\u0644 \u0628\u062F\u0621 \u0645\u062D\u0627\u0648\u0644\u0629 \u062C\u062F\u064A\u062F\u0629.`, civilLawExamTimeMenu());
       return;
@@ -5432,7 +5495,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       if (importedSubjectKey) {
         const forms = await store.listExamForms(importedSubjectKey);
-        await sender.sendMessage(
+        await pageSender.sendMessage(
           chatId2,
           forms.length > 0 ? `\u{1F4D5} ${examSubjectHeading(levelKey, subject)}
 
@@ -5442,7 +5505,7 @@ ${referralHistoryText(history)}`, referralMenu());
         return;
       }
       const page = Number(requestedPage);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId2,
         `\u{1F4DA} ${getTelegramExamCatalogLevel(levelKey)?.name ?? "\u0627\u0644\u0645\u0633\u062A\u0648\u0649"} \u2190 ${subject.name}
 
@@ -5457,7 +5520,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject) return;
       const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId2, `\u{1F4D5} ${examSubjectHeading(levelKey, subject)}
+      await pageSender.sendMessage(chatId2, `\u{1F4D5} ${examSubjectHeading(levelKey, subject)}
 
 \u0627\u062E\u062A\u0631 \u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
       return;
@@ -5466,7 +5529,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, , levelKey, subjectKey] = data.split(":");
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!subject) return;
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId2,
         `\u{1F9EA} ${subject.name}
 
@@ -5488,30 +5551,26 @@ ${referralHistoryText(history)}`, referralMenu());
       const forms = await store.listExamForms(importedSubjectKey);
       const form = forms.find((item) => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
-        await sender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C. \u0627\u062E\u062A\u0631 \u0646\u0645\u0648\u0630\u062C\u064B\u0627 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+        await pageSender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C. \u0627\u062E\u062A\u0631 \u0646\u0645\u0648\u0630\u062C\u064B\u0627 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
         return;
       }
       const questions = await store.listExamQuestions(importedSubjectKey, form.formKey);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId2,
-        questions.length > 0 ? `\u{1F4D5} ${examSubjectHeading(levelKey, subject)} \u2014 ${form.formName}
-
-\u064A\u062A\u0636\u0645\u0646 \u0627\u0644\u0646\u0645\u0648\u0630\u062C ${questions.length} \u0633\u0624\u0627\u0644\u064B\u0627. \u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0642\u0628\u0644 \u0628\u062F\u0621 \u0627\u0644\u062C\u0648\u0644\u0629.` : "\u0644\u0627 \u062A\u062A\u0648\u0627\u0641\u0631 \u0623\u0633\u0626\u0644\u0629 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.",
+        questions.length > 0 ? examSetupText(subject.name, form.formName, questions.length) : "\u0644\u0627 \u062A\u062A\u0648\u0627\u0641\u0631 \u0623\u0633\u0626\u0644\u0629 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.",
         questions.length > 0 ? examTimeMenu(importedSubjectKey, form.sortOrder, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`) : examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1)
       );
       return;
     }
     if (data === "exam:civil") {
-      await sender.sendMessage(chatId2, "\u{1F4D9} \u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.", civilLawExamSectionMenu());
+      await pageSender.sendMessage(chatId2, "\u{1F4D9} \u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.", civilLawExamSectionMenu());
       return;
     }
     if (data === "exam:civil:general2025") {
       const questions = await store.listExamQuestions(CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId2,
-        questions.length > 0 ? `${CIVIL_LAW_GENERAL_2025_TITLE}
-
-\u064A\u062A\u0636\u0645\u0646 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 ${questions.length} \u0623\u0633\u0626\u0644\u0629. \u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0642\u0628\u0644 \u0628\u062F\u0621 \u0627\u0644\u062C\u0648\u0644\u0629.` : "\u0644\u0627 \u062A\u062A\u0648\u0627\u0641\u0631 \u0623\u0633\u0626\u0644\u0629 \u0647\u0630\u0627 \u0627\u0644\u0642\u0633\u0645 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.",
+        questions.length > 0 ? examSetupText("\u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A", "\u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0639\u0627\u0645 2025", questions.length) : "\u0644\u0627 \u062A\u062A\u0648\u0627\u0641\u0631 \u0623\u0633\u0626\u0644\u0629 \u0647\u0630\u0627 \u0627\u0644\u0642\u0633\u0645 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.",
         questions.length > 0 ? civilLawExamTimeMenu() : civilLawExamSectionMenu()
       );
       return;
@@ -5529,24 +5588,18 @@ ${referralHistoryText(history)}`, referralMenu());
       const forms = await store.listExamForms(subjectKey);
       const form = forms.find((item) => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
-        await sender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C. \u0627\u062E\u062A\u0631 \u0646\u0645\u0648\u0630\u062C\u064B\u0627 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
+        await pageSender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0646\u0645\u0648\u0630\u062C. \u0627\u062E\u062A\u0631 \u0646\u0645\u0648\u0630\u062C\u064B\u0627 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
         return;
       }
       const session = await store.startExamSession(telegramUserId2, String(chatId2), subjectKey, form.formKey, timeLimitSeconds);
       if (!session) {
-        await sender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.", examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
+        await pageSender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.", examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
         return;
       }
       const questions = await store.listExamQuestions(subjectKey, form.formKey);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId2,
-        [
-          `\u{1F3B2} \u0627\u0633\u062A\u0639\u062F \u062C\u064A\u062F\u064B\u0627 \u0644\u0640 '\u0627\u062E\u062A\u0628\u0627\u0631 ${subject.name} \u2014 ${form.formName}'`,
-          `\u{1F58A} ${questions.length} \u0623\u0633\u0626\u0644\u0629`,
-          `\u23F1 ${formatExamTime(timeLimitSeconds)} \u0644\u0643\u0644 \u0633\u0624\u0627\u0644`,
-          "\u{1F4D6} \u0633\u062A\u0638\u0647\u0631 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0648\u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0645\u0641\u0635\u0644 \u0628\u0639\u062F \u0643\u0644 \u0633\u0624\u0627\u0644\u060C \u0648\u064A\u0638\u0647\u0631 \u0627\u0644\u062A\u0644\u0645\u064A\u062D \u0639\u0646\u062F \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u062E\u0627\u0637\u0626\u0629.",
-          "\u{1F3C1} \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0627\u0644\u0632\u0631 \u0623\u062F\u0646\u0627\u0647 \u0639\u0646\u062F\u0645\u0627 \u062A\u0643\u0648\u0646 \u0645\u0633\u062A\u0639\u062F\u064B\u0627. \u0644\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0623\u0631\u0633\u0644 /stop."
-        ].join("\n"),
+        examReadyText(subject.name, form.formName, questions.length, timeLimitSeconds),
         civilLawExamReadyMenu(session.id)
       );
       return;
@@ -5560,19 +5613,13 @@ ${referralHistoryText(history)}`, referralMenu());
       if (![15, 30, 60, 300].includes(timeLimitSeconds)) return;
       const session = await store.startExamSession(telegramUserId2, String(chatId2), CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, timeLimitSeconds);
       if (!session) {
-        await sender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.", civilLawExamTimeMenu());
+        await pageSender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0627\u062D\u0642\u064B\u0627.", civilLawExamTimeMenu());
         return;
       }
       const questions = await store.listExamQuestions(CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId2,
-        [
-          `\u{1F3B2} \u0627\u0633\u062A\u0639\u062F \u062C\u064A\u062F\u064B\u0627 \u0644\u0640 '${CIVIL_LAW_GENERAL_2025_TITLE}'`,
-          `\u{1F58A} ${questions.length} \u0623\u0633\u0626\u0644\u0629`,
-          `\u23F1 ${formatExamTime(timeLimitSeconds)} \u0644\u0643\u0644 \u0633\u0624\u0627\u0644`,
-          "\u{1F4D6} \u0633\u062A\u0638\u0647\u0631 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u0635\u062D\u064A\u062D\u0629 \u0648\u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0645\u0641\u0635\u0644 \u0628\u0639\u062F \u0643\u0644 \u0633\u0624\u0627\u0644.",
-          "\u{1F3C1} \u0627\u0636\u063A\u0637 \u0639\u0644\u0649 \u0627\u0644\u0632\u0631 \u0623\u062F\u0646\u0627\u0647 \u0639\u0646\u062F\u0645\u0627 \u062A\u0643\u0648\u0646 \u0645\u0633\u062A\u0639\u062F\u064B\u0627. \u0644\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0623\u0631\u0633\u0644 /stop."
-        ].join("\n"),
+        examReadyText("\u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u0645\u062F\u0646\u064A", "\u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0639\u0627\u0645 2025", questions.length, timeLimitSeconds),
         civilLawExamReadyMenu(session.id)
       );
       return;

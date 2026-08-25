@@ -1125,7 +1125,8 @@ describe("Telegram library conversation", () => {
     expect(polls).toHaveLength(1);
 
     await callback("secondary-quran-written-next", "exam:written-next:91");
-    expect(messages.at(-1)?.text).toContain("نتيجة هذه المحاولة");
+    expect(messages.at(-1)?.text).toContain("🏁 انتهى الاختبار");
+    expect(messages.at(-1)?.text).toContain("🎯 النتيجة: 1/1 (100%)");
   });
 
   it("يعرض خياري الصح والخطأ في الثانوية بعبارات كاملة من دون تغيير مفتاح الإجابة", () => {
@@ -1185,12 +1186,14 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("2025 العام");
 
     await callback("exam-section", "exam:form:l4:l4-civil-law:general_2025:1");
-    expect(messages[3]?.text).toContain("يتضمن النموذج");
+    expect(messages[3]?.text).toContain("⚙️ تجهيز الاختبار");
+    expect(messages[3]?.text).toContain("📝 عدد الأسئلة: 2");
+    expect(messages[3]?.text).toContain("لن يُرسل السؤال الأول قبل تأكيدك");
     expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("exam:time:civil_law:20251:15");
 
     await callback("exam-time", "exam:time:civil_law:20251:15");
     expect(messages[4]?.text).toContain("15 ث لكل سؤال");
-    expect(JSON.stringify(messages[4]?.replyMarkup)).toContain("أنا مستعد");
+    expect(JSON.stringify(messages[4]?.replyMarkup)).toContain("▶️ ابدأ الآن");
 
     await callback("exam-ready", "exam:ready:91");
     expect(polls[0]?.question).toContain("[1/2]");
@@ -1203,21 +1206,52 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ poll: { id: "poll-2", is_closed: true } }, store, sender);
     const result = messages.at(-1)?.text ?? "";
-    expect(result).toContain("🎲 اسم الاختبار:");
-    expect(result).toContain("نتيجة هذه المحاولة");
+    expect(result).toContain("🏁 انتهى الاختبار");
+    expect(result).toContain("📊 ملخص المحاولة");
     expect(result).toContain("✅ الصحيحة: 1");
     expect(result).toContain("⏳ الفائتة: 1");
-    expect(result).toContain("🏅 أفضل نتيجة:");
-    expect(result).toContain("🏆 نتيجة لائحة المتصدرين:");
-    expect(result).toContain("📊 الترتيب: المركز 1 من أصل 1");
-    expect(result).toContain("لن يتغير ترتيبك");
+    expect(result).toContain("🎯 النتيجة: 1/2 (50%)");
+    expect(result).toContain("🏅 أفضل نتيجة سابقة لك");
+    expect(result).toContain("🏆 أفضل نتيجة محتسبة للترتيب");
+    expect(result).toContain("📈 ترتيبك: المركز 1 من أصل 1");
+    expect(result).not.toContain("لن يتغير ترتيبك");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:retry");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("startgroup=groupquiz");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:forms:l4:l4-civil-law:1");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:level:l4");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain('"callback_data":"menu"');
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("t.me/share/url");
 
     await callback("exam-retry", "exam:retry");
     expect(messages.at(-1)?.text).toContain("اختر المدة");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:30");
+  });
+
+  it("يحدّث بطاقة تجهيز الاختبار وبطاقة الاستعداد داخل الرسالة نفسها", async () => {
+    const { sender, messages, editedMessages } = createSender();
+    const store = createStore();
+    const callback = (id: string, data: string) => handleTelegramUpdate(
+      {
+        callback_query: {
+          id,
+          data,
+          from: { id: 12 },
+          message: { message_id: 700, chat: { id: 12, type: "private" } },
+        },
+      },
+      store,
+      sender
+    );
+
+    await callback("same-message-form", "exam:form:l4:l4-civil-law:general_2025:1");
+    expect(messages).toHaveLength(0);
+    expect(editedMessages.at(-1)?.messageId).toBe(700);
+    expect(editedMessages.at(-1)?.text).toContain("⚙️ تجهيز الاختبار");
+
+    await callback("same-message-time", "exam:time:civil_law:20251:30");
+    expect(messages).toHaveLength(0);
+    expect(editedMessages.at(-1)?.messageId).toBe(700);
+    expect(editedMessages.at(-1)?.text).toContain("✅ تم إعداد الاختبار");
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("▶️ ابدأ الآن");
   });
 
   it("يعرض التلميح عند الإجابة الخاطئة فقط قبل الإجابة الصحيحة والشرح", async () => {
@@ -1299,7 +1333,9 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("الموازي 2025");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_usul_fiqh:106:15");
     await callback("usul-time", "exam:time:l1_usul_fiqh:106:15");
-    expect(messages.at(-1)?.text).toContain("اختبار اصول الفقه — الموازي 2025");
+    expect(messages.at(-1)?.text).toContain("✅ تم إعداد الاختبار");
+    expect(messages.at(-1)?.text).toContain("📚 المادة: اصول الفقه");
+    expect(messages.at(-1)?.text).toContain("📄 النموذج: الموازي 2025");
     await callback("usul-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
   });
@@ -1332,7 +1368,9 @@ describe("Telegram library conversation", () => {
     await callback("criminology-form", "exam:form:l1:l1-criminology:general_2022:1");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_criminology:100:15");
     await callback("criminology-time", "exam:time:l1_criminology:general_2022:30");
-    expect(messages.at(-1)?.text).toContain("اختبار علم الاجرام والعقاب — العام 2022");
+    expect(messages.at(-1)?.text).toContain("✅ تم إعداد الاختبار");
+    expect(messages.at(-1)?.text).toContain("📚 المادة: علم الاجرام والعقاب");
+    expect(messages.at(-1)?.text).toContain("📄 النموذج: العام 2022");
     await callback("criminology-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
   });

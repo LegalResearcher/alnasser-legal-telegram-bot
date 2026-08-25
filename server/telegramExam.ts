@@ -416,15 +416,11 @@ export function civilLawExamSectionMenu(): TelegramInlineKeyboard {
 export function civilLawExamTimeMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [
-        { text: "15 ثانية لكل سؤال", callback_data: "exam:time:15" },
-        { text: "30 ثانية لكل سؤال", callback_data: "exam:time:30" },
-      ],
-      [
-        { text: "دقيقة لكل سؤال", callback_data: "exam:time:60" },
-        { text: "5 دقائق لكل سؤال", callback_data: "exam:time:300" },
-      ],
-      [{ text: "رجوع إلى القانون المدني", callback_data: "exam:civil" }],
+      [{ text: "⏱️ 15 ثانية لكل سؤال", callback_data: "exam:time:15" }],
+      [{ text: "⏱️ 30 ثانية لكل سؤال", callback_data: "exam:time:30" }],
+      [{ text: "⏱️ دقيقة لكل سؤال", callback_data: "exam:time:60" }],
+      [{ text: "⏱️ 5 دقائق لكل سؤال", callback_data: "exam:time:300" }],
+      [{ text: "↩️ رجوع إلى القانون المدني", callback_data: "exam:civil" }],
     ],
   };
 }
@@ -432,15 +428,11 @@ export function civilLawExamTimeMenu(): TelegramInlineKeyboard {
 export function examTimeMenu(subjectKey: string, formKeyOrSortOrder: string | number, backCallback: string): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [
-        { text: "15 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:15` },
-        { text: "30 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:30` },
-      ],
-      [
-        { text: "دقيقة لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:60` },
-        { text: "5 دقائق لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:300` },
-      ],
-      [{ text: "رجوع إلى النماذج", callback_data: backCallback }],
+      [{ text: "⏱️ 15 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:15` }],
+      [{ text: "⏱️ 30 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:30` }],
+      [{ text: "⏱️ دقيقة لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:60` }],
+      [{ text: "⏱️ 5 دقائق لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:300` }],
+      [{ text: "↩️ رجوع إلى النماذج", callback_data: backCallback }],
     ],
   };
 }
@@ -448,8 +440,8 @@ export function examTimeMenu(subjectKey: string, formKeyOrSortOrder: string | nu
 export function civilLawExamReadyMenu(sessionId: number): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [{ text: "أنا مستعد!", callback_data: `exam:ready:${sessionId}` }],
-      [{ text: "إيقاف الاختبار", callback_data: `exam:stop:${sessionId}` }],
+      [{ text: "▶️ ابدأ الآن", callback_data: `exam:ready:${sessionId}` }],
+      [{ text: "⏸️ إيقاف الاختبار", callback_data: `exam:stop:${sessionId}` }],
     ],
   };
 }
