@@ -12,6 +12,7 @@ import {
 } from "./db";
 import { classifyTelegramContractTemplate } from "./telegramContractTypes";
 import { getIllustratedLegalFormSource, getIllustratedLegalFormsFolderContents as getStaticIllustratedLegalFormsFolderContents } from "./illustratedLegalFormsCatalog";
+import { getLegalFormSource, getLegalFormsFolderContents as getStaticLegalFormsFolderContents } from "./legalFormsCatalog";
 import type {
   TelegramExamPollResolution,
   TelegramExamResultSummary,
@@ -237,7 +238,7 @@ async function getDriveSource(id: number): Promise<LegalSource | undefined> {
 }
 
 async function getBotSource(id: number): Promise<LegalSource | undefined> {
-  return getIllustratedLegalFormSource(id) ?? getDriveSource(id);
+  return getIllustratedLegalFormSource(id) ?? getLegalFormSource(id) ?? getDriveSource(id);
 }
 
 type ContractRow = { id: number; file_name: string | null; display_order: number | null; is_premium: boolean | null; content: unknown; };
@@ -396,7 +397,7 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     searchJudicialSources: (sessionId, page) => searchSourceScope("judicial", sessionId, page, "judicial"),
     getLegislationFolderContents: (folderId, page) => folderContents("legislation", folderId, page),
     getYemeniLawsFolderContents: (folderId, page) => folderContents("yemeni_laws", folderId, page),
-    getLegalFormsFolderContents: (folderId, page) => folderContents("legal_forms", folderId, page),
+    getLegalFormsFolderContents: (folderId, page) => Promise.resolve(getStaticLegalFormsFolderContents(folderId, page)),
     getIllustratedLegalFormsFolderContents: (folderId, page) => Promise.resolve(getStaticIllustratedLegalFormsFolderContents(folderId, page)),
     getAllYemeniLawsFolderContents: (folderId, page) => folderContents("all_yemeni_laws", folderId, page),
     getFeaturedReferencesFolderContents: (folderId, page) => folderContents("featured_references", folderId, page),

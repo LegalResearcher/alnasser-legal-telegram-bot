@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSupabaseBotStore } from "./supabaseBotStore";
-import { ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID } from "./db";
+import { ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID } from "./db";
 
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
@@ -50,6 +50,18 @@ describe("Supabase bot store", () => {
     expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
     const source = await store.getSource(result.sources[0]!.id);
     expect(source?.driveFileId).toBe("1PV9925vCUqQMn3h4mCpwLIKwoUHD6FZr");
+  });
+
+  it("يعرض نماذج وصيغ قانونية من فهرس روابط Drive دون تخزين الملفات في Supabase", async () => {
+    const store = createSupabaseBotStore();
+    const result = await store.getLegalFormsFolderContents(LEGAL_FORMS_ROOT_FOLDER_ID, 1);
+    expect(result.folder?.driveFolderId).toBe(LEGAL_FORMS_ROOT_FOLDER_ID);
+    expect(result.folders).toHaveLength(0);
+    expect(result.totalSources).toBe(217);
+    expect(result.sources[0]).toMatchObject({ collection: "legal_forms", title: "005دعوى اخلاء عين مؤجرة.doc" });
+    expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
+    const source = await store.getSource(result.sources[0]!.id);
+    expect(source?.driveFileId).toBe("1AEoWr4AY2H2IyDlX1DZXJF4QFo2U6V14");
   });
 
   it("يقرأ القوالب القانونية من legal_documents مع تصنيفها", async () => {
