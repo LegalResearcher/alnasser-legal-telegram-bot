@@ -2064,13 +2064,9 @@ async function sendFeaturedReferencesFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getFeaturedReferencesFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^مراجع مميزة\s*\/\s*/, "");
-  const pathText = path ? `المسار: مراجع مميزة / ${cleanFeaturedReferencesDisplayName(path)}` : "المسار: مراجع مميزة";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
-  await sender.sendMessage(
+    await sender.sendMessage(
     chatId,
-    [`مراجع مميزة — ${cleanFeaturedReferencesDisplayName(folder.name)}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["📌 مراجع مميزة", "اختر المرجع أو الملف المطلوب:"].join("\n\n"),
     featuredReferencesFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -3256,7 +3252,6 @@ export async function handleTelegramUpdate(
     }
     if (data === "featured") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "featured" });
-      await sender.sendMessage(chatId, featuredReferencesIntroText());
       await sendFeaturedReferencesFolder(chatId, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }

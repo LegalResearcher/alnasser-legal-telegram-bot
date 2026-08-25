@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSupabaseBotStore } from "./supabaseBotStore";
-import { ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID } from "./db";
+import { FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID } from "./db";
 
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
@@ -62,6 +62,16 @@ describe("Supabase bot store", () => {
     expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
     const source = await store.getSource(result.sources[0]!.id);
     expect(source?.driveFileId).toBe("1AEoWr4AY2H2IyDlX1DZXJF4QFo2U6V14");
+  });
+
+  it("يستخدم قسم مراجع مميزة مجلد نماذج وصيغ Drive نفسه", async () => {
+    const store = createSupabaseBotStore();
+    const result = await store.getFeaturedReferencesFolderContents(FEATURED_REFERENCES_ROOT_FOLDER_ID, 1);
+    expect(result.folder?.driveFolderId).toBe(LEGAL_FORMS_ROOT_FOLDER_ID);
+    expect(result.folder?.name).toBe("نماذج وصيغ قانونية");
+    expect(result.totalSources).toBe(217);
+    expect(result.sources[0]?.collection).toBe("legal_forms");
+    expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
   });
 
   it("يقرأ القوالب القانونية من legal_documents مع تصنيفها", async () => {

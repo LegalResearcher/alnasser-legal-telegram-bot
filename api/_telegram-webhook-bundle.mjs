@@ -4079,13 +4079,6 @@ function browseText() {
     "\u0627\u062E\u062A\u0631 \u0627\u0644\u062A\u0635\u0646\u064A\u0641 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0644\u0644\u0627\u0637\u0644\u0627\u0639 \u0639\u0644\u0649 \u0627\u0644\u0645\u0631\u0627\u062C\u0639 \u0648\u0627\u0644\u0643\u062A\u0628 \u0627\u0644\u0645\u062A\u0627\u062D\u0629."
   ].join("\n\n");
 }
-function featuredReferencesIntroText() {
-  return [
-    "\u{1F4CC} \u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629:",
-    "\u0641\u0647\u0631\u0633 \u062A\u0641\u0627\u0639\u0644\u064A \u0644\u0645\u0631\u0627\u062C\u0639 \u0642\u0627\u0646\u0648\u0646\u064A\u0629 \u0645\u0646\u062A\u0642\u0627\u0629 \u0648\u0643\u062A\u0628 \u0648\u0648\u062B\u0627\u0626\u0642 \u0645\u0641\u064A\u062F\u0629 \u0644\u0644\u0628\u0627\u062D\u062B \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A.",
-    "\u0639\u064F\u0631\u0636\u062A \u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0628\u0635\u0648\u0631\u0629 \u0645\u062E\u062A\u0635\u0631\u0629 \u0648\u0648\u0627\u0636\u062D\u0629\u061B \u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0644\u064A\u064F\u0631\u0633\u0644 \u062F\u0627\u062E\u0644 \u0645\u062D\u0627\u062F\u062B\u062A\u0643 \u0627\u0644\u062E\u0627\u0635\u0629."
-  ].join("\n\n");
-}
 function importantYemeniLawsIntroText() {
   return [
     "\u{1F510} \u062E\u062F\u0645\u0629 \u0623\u0647\u0645 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A",
@@ -4552,12 +4545,9 @@ async function sendFeaturedReferencesFolder(chatId, folderId, requestedPage, sto
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getFeaturedReferencesFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^مراجع مميزة\s*\/\s*/, "");
-  const pathText = path ? `\u0627\u0644\u0645\u0633\u0627\u0631: \u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629 / ${cleanFeaturedReferencesDisplayName(path)}` : "\u0627\u0644\u0645\u0633\u0627\u0631: \u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629";
-  const fileText = content.totalSources > 0 ? `\u0627\u0644\u0645\u0644\u0641\u0627\u062A: \u0627\u0644\u0635\u0641\u062D\u0629 ${page} \u0645\u0646 ${totalPages} (${content.totalSources} \u0645\u0644\u0641\u064B\u0627).` : "\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0644\u0641\u0627\u062A \u0645\u0628\u0627\u0634\u0631\u0629 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u062C\u0644\u062F.";
   await sender.sendMessage(
     chatId,
-    [`\u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629 \u2014 ${cleanFeaturedReferencesDisplayName(folder.name)}`, pathText, `\u0627\u0644\u0645\u062C\u0644\u062F\u0627\u062A \u0627\u0644\u0641\u0631\u0639\u064A\u0629: ${content.folders.length}.`, fileText, "\u0627\u062E\u062A\u0631 \u0645\u062C\u0644\u062F\u064B\u0627 \u0623\u0648 \u0645\u0644\u0641\u064B\u0627:"].join("\n"),
+    ["\u{1F4CC} \u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629", "\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0631\u062C\u0639 \u0623\u0648 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0645\u0637\u0644\u0648\u0628:"].join("\n\n"),
     featuredReferencesFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -5699,7 +5689,6 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data === "featured") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "featured" });
-      await sender.sendMessage(chatId2, featuredReferencesIntroText());
       await sendFeaturedReferencesFolder(chatId2, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }
@@ -7509,7 +7498,7 @@ function createSupabaseBotStore() {
     getLegalFormsFolderContents: (folderId, page) => Promise.resolve(getLegalFormsFolderContents2(folderId, page)),
     getIllustratedLegalFormsFolderContents: (folderId, page) => Promise.resolve(getIllustratedLegalFormsFolderContents2(folderId, page)),
     getAllYemeniLawsFolderContents: (folderId, page) => folderContents("all_yemeni_laws", folderId, page),
-    getFeaturedReferencesFolderContents: (folderId, page) => folderContents("featured_references", folderId, page),
+    getFeaturedReferencesFolderContents: (folderId, page) => Promise.resolve(getLegalFormsFolderContents2(folderId === FEATURED_REFERENCES_ROOT_FOLDER_ID ? LEGAL_FORMS_ROOT_FOLDER_ID : folderId, page)),
     getImportantYemeniLawsFolderContents: (folderId, page) => folderContents("important_yemeni_laws", folderId, page),
     hasImportantYemeniLawsAccess: (telegramUserId) => hasScopedAccess(telegramUserId, "important_laws"),
     hasManagedMenuItemPremiumAccess: (telegramUserId, menuItemId) => hasScopedAccess(telegramUserId, "managed_menu", menuItemId),

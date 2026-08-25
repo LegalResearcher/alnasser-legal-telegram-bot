@@ -400,7 +400,7 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     getLegalFormsFolderContents: (folderId, page) => Promise.resolve(getStaticLegalFormsFolderContents(folderId, page)),
     getIllustratedLegalFormsFolderContents: (folderId, page) => Promise.resolve(getStaticIllustratedLegalFormsFolderContents(folderId, page)),
     getAllYemeniLawsFolderContents: (folderId, page) => folderContents("all_yemeni_laws", folderId, page),
-    getFeaturedReferencesFolderContents: (folderId, page) => folderContents("featured_references", folderId, page),
+    getFeaturedReferencesFolderContents: (folderId, page) => Promise.resolve(getStaticLegalFormsFolderContents(folderId === FEATURED_REFERENCES_ROOT_FOLDER_ID ? LEGAL_FORMS_ROOT_FOLDER_ID : folderId, page)),
     getImportantYemeniLawsFolderContents: (folderId, page) => folderContents("important_yemeni_laws", folderId, page),
     hasImportantYemeniLawsAccess: telegramUserId => hasScopedAccess(telegramUserId, "important_laws"),
     hasManagedMenuItemPremiumAccess: (telegramUserId, menuItemId) => hasScopedAccess(telegramUserId, "managed_menu", menuItemId),

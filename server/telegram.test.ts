@@ -1493,7 +1493,10 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ callback_query: { id: "callback-featured", data: "featured", message: { chat: { id: 12 } } } }, store, sender);
     expect(messages[2]?.text).toContain("مراجع مميزة");
-    expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
+    expect(messages[2]?.text).toContain("اختر المرجع أو الملف المطلوب");
+    expect(messages[2]?.text).not.toContain("المسار:");
+    expect(messages[2]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
   });
 
   it("يستبعد ملفات القسم المدفوع من أحدث الإضافات ويمنع طلبها من زر عام دون اعتماد", async () => {
@@ -1861,12 +1864,15 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("مراجع مميزة");
-    expect(messages[1]?.text).toContain("الملفات: الصفحة 1 من 1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("إصدار وصياغة الأحكام القضائية الجنداري");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("تطبيق الباحث القانوني");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain(".pdf");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
+    expect(messages[0]?.text).toContain("اختر المرجع أو الملف المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("إصدار وصياغة الأحكام القضائية الجنداري");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("تطبيق الباحث القانوني");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain(".pdf");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-featured-references-file", data: "rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1", message: { chat: { id: 12, type: "private" } } } },
