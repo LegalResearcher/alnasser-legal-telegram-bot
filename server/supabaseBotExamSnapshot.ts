@@ -125,7 +125,9 @@ export async function snapshotSupabaseExamLevel(levelKey: string, options: Snaps
       questionsByForm.set(form.formKey, grouped);
     }
 
-    const subjectForms = Array.from(formsByKey.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.formKey.localeCompare(b.formKey));
+    const subjectForms = Array.from(formsByKey.values())
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.formKey.localeCompare(b.formKey))
+      .map((form, index) => ({ ...form, sortOrder: (levelKey.startsWith("secondary-") ? 2026000 : 100000) + index + 1 }));
     const subjectQuestions = Array.from(questionsByForm.values()).reduce((sum, batch) => sum + batch.length, 0);
     if (!options.dryRun) {
       const { error: deactivateFormsError } = await client.from("bot_exam_forms").update({ is_active: false, updated_at: new Date().toISOString() }).eq("subject_key", subjectKey);
