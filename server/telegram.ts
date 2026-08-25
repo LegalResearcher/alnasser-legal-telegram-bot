@@ -1008,7 +1008,7 @@ async function sendContractTemplatesMenu(chatId: number, requestedPage: number, 
   }
   await sender.sendMessage(
     chatId,
-    `📄 صيغ وعقود قانونية\n\nاختر النموذج أو العقد المطلوب. كل اختيار يجهز ملف Word مستقلًا عند طلبك.\nالصفحة ${safePage} من ${totalPages} (${content.total} ملفًا).`,
+    "📄 صيغ وعقود قانونية\n\nاختر النموذج أو العقد المطلوب:",
     contractTemplatesMenu(content.templates, safePage, content.total)
   );
 }
@@ -1065,7 +1065,7 @@ async function sendContractTemplatesByType(chatId: number, contractType: Telegra
   }
   await sender.sendMessage(
     chatId,
-    `📄 ${label}\n\nاختر النموذج المطلوب.\nالصفحة ${safePage} من ${totalPages} (${content.total} نموذجًا).`,
+    `📄 ${label}\n\nاختر النموذج المطلوب:`,
     contractTemplatesByTypeMenu(content.templates, contractType, safePage, content.total)
   );
 }
@@ -1872,13 +1872,9 @@ async function sendJudicialFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getJudicialFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^قواعد قضائية\s*\/\s*/, "");
-  const pathText = path ? `المسار: قواعد قضائية / ${path}` : "المسار: قواعد قضائية";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
   await sender.sendMessage(
     chatId,
-    [`قواعد قضائية — ${folder.name}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["⚖️ المبادئ والقواعد القضائية", "اختر المجال أو الملف المطلوب:"].join("\n\n"),
     judicialFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -1946,13 +1942,9 @@ async function sendLegislationFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getLegislationFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^التشريعات اليمنية\s*\/\s*/, "");
-  const pathText = path ? `المسار: التشريعات اليمنية / ${path}` : "المسار: التشريعات اليمنية";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
-  await sender.sendMessage(
+    await sender.sendMessage(
     chatId,
-    [`التشريعات اليمنية — ${folder.name}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["📜 التشريعات اليمنية", "اختر التشريع أو الملف المطلوب:"].join("\n\n"),
     legislationFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -2000,13 +1992,9 @@ async function sendLegalFormsFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getLegalFormsFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^نماذج وصيغ قانونية\s*\/\s*/, "");
-  const pathText = path ? `المسار: نماذج وصيغ قانونية / ${cleanLegalFormsDisplayName(path)}` : "المسار: نماذج وصيغ قانونية";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
-  await sender.sendMessage(
+    await sender.sendMessage(
     chatId,
-    [`نماذج وصيغ قانونية — ${cleanLegalFormsDisplayName(folder.name)}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["📝 نماذج وصيغ قانونية", "اختر النموذج أو العقد المطلوب:"].join("\n\n"),
     legalFormsFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -2053,10 +2041,9 @@ async function sendAllYemeniLawsFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getAllYemeniLawsFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const fileText = content.totalSources > 0 ? `الصفحة ${page} من ${totalPages} (${content.totalSources} قانونًا أو لائحة).` : "لا توجد عناصر مباشرة هنا.";
   await sender.sendMessage(
     chatId,
-    [`جميع القوانين اليمنية — ${cleanGenericFileDisplayName(folder.name)}`, fileText, "اختر الاسم المطلوب:"].join("\n"),
+    ["⚖️ جميع القوانين اليمنية", "اختر القانون أو اللائحة المطلوبة:"].join("\n\n"),
     allYemeniLawsFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -3129,31 +3116,26 @@ export async function handleTelegramUpdate(
     }
     if (data === "judicial") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "judicial" });
-      await sender.sendMessage(chatId, judicialIntroText());
       await sendJudicialFolder(chatId, JUDICIAL_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }
     if (data === "legislation") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "legislation" });
-      await sender.sendMessage(chatId, legislationIntroText());
       await sendLegislationFolder(chatId, LEGISLATION_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }
     if (data === "legal-forms") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "legal-forms" });
-      await sender.sendMessage(chatId, legalFormsIntroText());
       await sendLegalFormsFolder(chatId, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }
     if (data === "illustrated-legal-forms") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "illustrated-legal-forms" });
-      await sender.sendMessage(chatId, illustratedLegalFormsIntroText());
       await sendIllustratedLegalFormsFolder(chatId, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }
     if (data === "all-yemeni-laws") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "all-yemeni-laws" });
-      await sender.sendMessage(chatId, allYemeniLawsIntroText());
       await sendAllYemeniLawsFolder(chatId, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, sender);
       return;
     }

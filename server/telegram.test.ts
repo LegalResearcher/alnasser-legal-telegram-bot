@@ -1551,10 +1551,13 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("التشريعات اليمنية");
-    expect(messages[1]?.text).toContain("الملفات: الصفحة 1 من 1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("lfile:8:1bEkLg2uaeQOULqZi6yIEfU0aKtMMB3J4:1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("lsearch");
+    expect(messages[0]?.text).toContain("اختر التشريع أو الملف المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("lfile:8:1bEkLg2uaeQOULqZi6yIEfU0aKtMMB3J4:1");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("lsearch");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-legislation-search", data: "lsearch", message: { chat: { id: 12, type: "private" } } } },
@@ -1562,12 +1565,12 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
-    expect(messages[2]?.text).toContain("البحث السريع في التشريعات اليمنية");
-    expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("lq:تحكيم");
+    expect(messages[1]?.text).toContain("البحث السريع في التشريعات اليمنية");
+    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("lq:تحكيم");
 
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "تحكيم" } }, store, sender, provider);
-    expect(messages[3]?.text).toContain("نتائج «تحكيم» داخل التشريعات اليمنية");
-    expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("lresultfile:8:26:1");
+    expect(messages[2]?.text).toContain("نتائج «تحكيم» داخل التشريعات اليمنية");
+    expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("lresultfile:8:26:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-legislation-file", data: "lresultfile:8:26:1", message: { chat: { id: 12, type: "private" } } } },
@@ -1626,11 +1629,14 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("نماذج وصيغ قانونية");
-    expect(messages[1]?.text).toContain("الملفات: الصفحة 1 من 1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("مذكره بالرد على اسباب الطعن بالنقض ايجارات");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain(".doc");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("fform:10:1ABgTWPMDWPgj1HmFkRaV9rnTDU4kZ4h9:1");
+    expect(messages[0]?.text).toContain("اختر النموذج أو العقد المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("مذكره بالرد على اسباب الطعن بالنقض ايجارات");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain(".doc");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("fform:10:1ABgTWPMDWPgj1HmFkRaV9rnTDU4kZ4h9:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-legal-forms-file", data: "fform:10:1ABgTWPMDWPgj1HmFkRaV9rnTDU4kZ4h9:1", message: { chat: { id: 12, type: "private" } } } },
@@ -1653,14 +1659,16 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("نماذج مصورة وفق القوانين اليمنية");
-    expect(messages[1]?.text).toContain("اختر النموذج المطلوب");
-    expect(messages[1]?.text).not.toContain("المسار:");
-    expect(messages[1]?.text).not.toContain("17 عنصرًا");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("استئناف");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("استئناف.pdf");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("ملف:");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("vfile:13:17Yx06hL5bJXp2i80qW39n7yys3MqqztT:1");
+    expect(messages[0]?.text).toContain("اختر النموذج المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("17 عنصرًا");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("استئناف");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("استئناف.pdf");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("ملف:");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("vfile:13:17Yx06hL5bJXp2i80qW39n7yys3MqqztT:1");
     expect(documents).toEqual([]);
 
     await handleTelegramUpdate(
@@ -1684,11 +1692,14 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("جميع القوانين اليمنية");
-    expect(messages[1]?.text).toContain("146 قانونًا أو لائحة");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("قانون الإجراءات الجزائية");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("ملف:");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("ayfile:14:all-yemeni-laws-root:1");
+    expect(messages[0]?.text).toContain("اختر القانون أو اللائحة المطلوبة");
+    expect(messages[0]?.text).not.toContain("146 قانونًا أو لائحة");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("قانون الإجراءات الجزائية");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("ملف:");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("ayfile:14:all-yemeni-laws-root:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-all-yemeni-laws-file", data: "ayfile:14:all-yemeni-laws-root:1", message: { chat: { id: 12, type: "private" } } } },
@@ -2145,9 +2156,12 @@ describe("Telegram library conversation", () => {
       sender
     );
 
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("المبادئ والقواعد القضائية");
-    const markup = JSON.stringify(messages[1]?.replyMarkup);
+    expect(messages[0]?.text).toContain("اختر المجال أو الملف المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    const markup = JSON.stringify(messages[0]?.replyMarkup);
     expect(markup).toContain("الأحكام المدنية");
     expect(markup).not.toContain("مجلد:");
     expect(markup).not.toContain("ملف:");
