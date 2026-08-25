@@ -7497,6 +7497,8 @@ async function confirmSupabaseBotHasadAccess(telegramUserId, region) {
 // server/telegramWebhook.ts
 var TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 var PLATFORM_ORIGIN = "https://alnaseer.org";
+var PLATFORM_PREVIEW_ORIGIN = "https://alnaser-2hb0san58-hasadalyoum.vercel.app";
+var PLATFORM_ADMIN_ORIGINS = /* @__PURE__ */ new Set([PLATFORM_ORIGIN, PLATFORM_PREVIEW_ORIGIN]);
 var TELEGRAM_VERCEL_ORIGIN = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app";
 var TELEGRAM_VISIT_ORIGINS = /* @__PURE__ */ new Set([
   PLATFORM_ORIGIN,
@@ -7591,7 +7593,7 @@ function registerTelegramWebhook(app2) {
   };
   const setPlatformAdminCors = (req, res) => {
     const origin = req.get("origin");
-    if (origin === PLATFORM_ORIGIN) res.setHeader("Access-Control-Allow-Origin", origin);
+    if (origin && PLATFORM_ADMIN_ORIGINS.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
     res.setHeader("Vary", "Origin");
@@ -7606,7 +7608,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin-stats", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7645,7 +7647,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/menu-items", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7653,7 +7655,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/menu-items", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7667,7 +7669,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/menu-items/upload", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7703,7 +7705,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.put("/api/telegram/admin/menu-items/:id/upload", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     const itemId = Number(req.params.id);
     if (!adminUserId || !Number.isInteger(itemId) || itemId < 1) {
       res.status(403).json({ ok: false });
@@ -7736,7 +7738,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.put("/api/telegram/admin/menu-items/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7750,7 +7752,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.delete("/api/telegram/admin/menu-items/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId || !await (process.env.BOT_STORAGE_MODE === "supabase" ? deleteSupabaseBotManagedMenuItem(Number(req.params.id), adminUserId) : deleteManagedTelegramMenuItem(Number(req.params.id), adminUserId))) {
       res.status(403).json({ ok: false });
       return;
@@ -7763,7 +7765,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/sections", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7771,7 +7773,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.put("/api/telegram/admin/sections/:sectionKey", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7785,7 +7787,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/audit-logs", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7801,7 +7803,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/message-templates", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7809,7 +7811,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.put("/api/telegram/admin/message-templates/:messageKey", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7827,7 +7829,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/sources", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7837,7 +7839,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.put("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7851,7 +7853,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.delete("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId || !await deleteManagedTelegramSource(Number(req.params.id), adminUserId)) {
       res.status(403).json({ ok: false });
       return;
@@ -7864,7 +7866,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/sources/upload", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7912,7 +7914,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/folders", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7921,7 +7923,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.put("/api/telegram/admin/folders/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7935,7 +7937,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.delete("/api/telegram/admin/folders/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7957,7 +7959,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/broadcasts", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -7965,7 +7967,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/broadcasts", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -7979,7 +7981,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/broadcasts/:id/cancel", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     const id = Number(req.params.id);
     const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : void 0;
     const draft = adminUserId ? supabaseStore ? await supabaseStore.getBroadcastDraft(id, adminUserId) : await getTelegramBroadcastDraft(id, adminUserId) : void 0;
@@ -7995,7 +7997,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/broadcasts/:id/schedule", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     const id = Number(req.params.id);
     const scheduledFor = normalizeScheduledBroadcastTime(req.body?.scheduledFor);
     if (!adminUserId || req.body?.confirmation !== "SCHEDULE" || !Number.isInteger(id) || id < 1 || !scheduledFor) {
@@ -8074,7 +8076,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/broadcasts/:id/confirm", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     const id = Number(req.params.id);
     if (!adminUserId || req.body?.confirmation !== "SEND") {
       res.status(400).json({ ok: false, error: "confirmation_required" });
@@ -8119,7 +8121,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/subscriptions/pending", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -8132,7 +8134,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/referrals", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -8144,7 +8146,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/referrals/:id/revoke", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     const rewardId = Number(req.params.id);
     if (!adminUserId || !Number.isInteger(rewardId) || rewardId < 1) {
       res.status(400).json({ ok: false, error: "invalid_referral_reward" });
@@ -8162,7 +8164,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/usage-analytics", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -8176,7 +8178,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.get("/api/telegram/admin/visit-analytics", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !await isPlatformAdministrator(req.get("authorization"))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !await isPlatformAdministrator(req.get("authorization"))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -8189,7 +8191,7 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/telegram/admin/subscriptions/:id/:decision", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     const requestId = Number(req.params.id);
     const decision = req.params.decision;
     if (!adminUserId || !Number.isInteger(requestId) || requestId < 1 || !["approve", "reject"].includes(decision)) {
