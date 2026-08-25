@@ -314,7 +314,10 @@ function adaptReplyMarkupForTelegramContext(replyMarkup: TelegramInlineKeyboard 
   return {
     inline_keyboard: replyMarkup.inline_keyboard.map(row => row.map(button => {
       if (!button.web_app) return button;
-      return { text: button.text, url: button.web_app.url };
+      return {
+        text: "فتح المحادثة الخاصة لإكمال التحقق",
+        url: "https://t.me/Moieen2025Bot?start=verify",
+      };
     })),
   };
 }

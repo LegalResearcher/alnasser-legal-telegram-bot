@@ -2519,7 +2519,7 @@ describe("Telegram reply topics", () => {
     expect(requests[0]).toMatchObject({
       chat_id: 99,
       direct_messages_topic_id: 123456789,
-      reply_markup: { inline_keyboard: [[{ text: "فتح", url: "https://alnaseer.org/" }]] },
+      reply_markup: { inline_keyboard: [[{ text: "فتح المحادثة الخاصة لإكمال التحقق", url: "https://t.me/Moieen2025Bot?start=verify" }]] },
     });
     expect(requests[0]).not.toHaveProperty("message_thread_id");
     expect(requests[1]).toMatchObject({ chat_id: 99, message_thread_id: 42 });

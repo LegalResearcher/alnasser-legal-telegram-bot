@@ -3235,7 +3235,10 @@ function adaptReplyMarkupForTelegramContext(replyMarkup, replyContext) {
   return {
     inline_keyboard: replyMarkup.inline_keyboard.map((row) => row.map((button) => {
       if (!button.web_app) return button;
-      return { text: button.text, url: button.web_app.url };
+      return {
+        text: "\u0641\u062A\u062D \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0627\u0644\u062E\u0627\u0635\u0629 \u0644\u0625\u0643\u0645\u0627\u0644 \u0627\u0644\u062A\u062D\u0642\u0642",
+        url: "https://t.me/Moieen2025Bot?start=verify"
+      };
     }))
   };
 }
