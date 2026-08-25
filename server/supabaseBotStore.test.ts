@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSupabaseBotStore } from "./supabaseBotStore";
-import { JUDICIAL_ROOT_FOLDER_ID } from "./db";
+import { ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID } from "./db";
 
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
@@ -38,6 +38,18 @@ describe("Supabase bot store", () => {
     expect(result.totalSources).toBe(0);
     const child = await store.getJudicialFolderContents("child-folder", 1);
     expect(child.sources[0]).toMatchObject({ id: 101, driveFileId: "drive-file-101", collection: "judicial", title: "حكم مدني 2026.pdf" });
+  });
+
+  it("يعرض النماذج المصورة من فهرس روابط Drive دون تخزين الملفات في Supabase", async () => {
+    const store = createSupabaseBotStore();
+    const result = await store.getIllustratedLegalFormsFolderContents(ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1);
+    expect(result.folder?.driveFolderId).toBe(ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID);
+    expect(result.folders).toHaveLength(0);
+    expect(result.totalSources).toBe(17);
+    expect(result.sources[0]).toMatchObject({ collection: "illustrated_legal_forms", title: "إشعارات واعلانات.pdf" });
+    expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
+    const source = await store.getSource(result.sources[0]!.id);
+    expect(source?.driveFileId).toBe("1PV9925vCUqQMn3h4mCpwLIKwoUHD6FZr");
   });
 
   it("يقرأ القوالب القانونية من legal_documents مع تصنيفها", async () => {

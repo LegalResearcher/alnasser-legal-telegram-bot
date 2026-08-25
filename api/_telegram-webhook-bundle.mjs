@@ -6641,6 +6641,70 @@ async function verifyAndRecordTelegramPlatformVisit(initData, botToken) {
 // server/supabaseBotStore.ts
 import { createClient as createClient2 } from "@supabase/supabase-js";
 
+// server/illustratedLegalFormsCatalog.ts
+var ILLUSTRATED_SOURCE_DEFINITIONS = [
+  ["1PV9925vCUqQMn3h4mCpwLIKwoUHD6FZr", "\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0648\u0627\u0639\u0644\u0627\u0646\u0627\u062A.pdf"],
+  ["1f1kZPOMKX6YHYRgKOlzOebGZOq3W4E5F", "\u0625\u0642\u0631\u0627\u0631\u0627\u062A.pdf"],
+  ["1RCXV8qFSDHqIg80w1h1mu5op7gm83tUN", "\u0627\u0633\u062A\u0626\u0646\u0627\u0641.pdf"],
+  ["1nkRs51TiYQ6rPEd1MbXX63N_cN6UbLSH", "\u0627\u0633\u062A\u0634\u0643\u0627\u0644\u0627\u062A.pdf"],
+  ["1gk4JCrg2umakgx_81HsB0AbWYZFTuUoS", "\u0627\u0644\u062A\u0632\u0627\u0645\u0627\u062A.pdf"],
+  ["1oE5czmSuMJuRChwgXutU4T096b7DK_Rs", "\u0627\u0644\u0639\u0644\u064A\u0627.pdf"],
+  ["1kJHO_axBjV07Ld1rgvleicrTmJLgXAKE", "\u062A\u0638\u0644\u0645 \u0645\u0646 \u0623\u0648\u0627\u0645\u0631 \u0648\u0642\u0631\u0627\u0631\u0627\u062A \u062A\u0646\u0641\u064A\u0630\u064A\u0629.pdf"],
+  ["1g0jkml8HNT-rqkcJG-6kU7FjEREFmde0", "\u062A\u0638\u0644\u0645\u0627\u062A.pdf"],
+  ["1GHwmBjXhnMmDmRP6_S6FxDPvnRAqPmr5", "\u062A\u0643\u0644\u064A\u0641 \u0628\u0627\u0644\u0648\u0641\u0627\u0621.pdf"],
+  ["1u5Q0GwGPgl-FjX576OEjWpqDHv9v8dqr", "\u062A\u0648\u0643\u064A\u0644\u0627\u062A \u0648\u062A\u0641\u0648\u064A\u0636\u0627\u062A \u0648\u062A\u0646\u0627\u0632\u0644.pdf"],
+  ["1oyvzm5Zce6_zC7-YO-7L4lkPppaj_dm9", "\u062F\u0639\u0627\u0648\u0649.pdf"],
+  ["162qu-dE3mzEHL5mIyZkDLaSoiXeeUCMs", "\u062F\u0641\u0648\u0639.pdf"],
+  ["1I5t3o4-r4krhNOSngPUu10NzybyQiu-z", "\u0634\u0643\u0627\u0648\u0649.pdf"],
+  ["118_3JdTr2sv-LVV5D9Bo0AMeCHW6g1ta", "\u0636\u0645\u0627\u0646\u0627\u062A.pdf"],
+  ["1g2ewZ5EHCtrxQSrRMKoSDgx_H92kCVpQ", "\u0637\u0644\u0628\u0627\u062A.pdf"],
+  ["18C3ly9HqzyxYkWKeONw0cBxBkolwHk6T", "\u0639\u0642\u0648\u062F.pdf"],
+  ["1iHZmP3p7Htj-tKvUA4jFwWXlkjWTOeN-", "\u0643\u064A\u0641\u064A\u0629.pdf"]
+];
+var illustratedLegalFormsRootFolder = {
+  id: 0,
+  driveFolderId: ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID,
+  parentDriveFolderId: null,
+  collection: "illustrated_legal_forms",
+  name: "\u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629 \u0648\u0641\u0642 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629",
+  path: "\u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629 \u0648\u0641\u0642 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629",
+  sortOrder: 70,
+  createdAt: /* @__PURE__ */ new Date(0),
+  updatedAt: /* @__PURE__ */ new Date(0)
+};
+var illustratedLegalFormSources = ILLUSTRATED_SOURCE_DEFINITIONS.map(([driveFileId, title], index2) => ({
+  id: 900001 + index2,
+  category: "procedure",
+  collection: "illustrated_legal_forms",
+  sortOrder: index2 + 1,
+  driveFileId,
+  driveFolderId: ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID,
+  folderSortOrder: index2 + 1,
+  title,
+  description: `\u0645\u0633\u062A\u0648\u0631\u062F \u0645\u0646 \u0645\u0643\u062A\u0628\u0629 \u0623. \u0645\u0639\u064A\u0646 \u0627\u0644\u0646\u0627\u0635\u0631: \u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629 \u0648\u0641\u0642 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 / ${title}`,
+  url: `https://drive.google.com/uc?export=download&id=${encodeURIComponent(driveFileId)}`,
+  documentType: "other",
+  legislationYear: null,
+  issuingAuthority: null,
+  isFeatured: false,
+  createdAt: /* @__PURE__ */ new Date(0),
+  updatedAt: /* @__PURE__ */ new Date(0)
+}));
+function getIllustratedLegalFormsFolderContents2(folderId, page) {
+  if (folderId !== ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID) return { folder: void 0, folders: [], sources: [], totalSources: 0 };
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  const start = (safePage - 1) * 7;
+  return {
+    folder: illustratedLegalFormsRootFolder,
+    folders: [],
+    sources: illustratedLegalFormSources.slice(start, start + 7),
+    totalSources: illustratedLegalFormSources.length
+  };
+}
+function getIllustratedLegalFormSource(sourceId) {
+  return illustratedLegalFormSources.find((source) => source.id === sourceId);
+}
+
 // server/supabaseBotExamDb.ts
 import { createClient } from "@supabase/supabase-js";
 var DEFAULT_SUPABASE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
@@ -7014,6 +7078,9 @@ async function getDriveSource(id) {
   const index2 = await loadDriveIndex();
   return index2.sourceRows.find((item) => item.source.id === id)?.source;
 }
+async function getBotSource(id) {
+  return getIllustratedLegalFormSource(id) ?? getDriveSource(id);
+}
 function normalizeContractContent(value) {
   if (!Array.isArray(value)) return [];
   return value.filter((block) => Boolean(block) && typeof block === "object").map((block) => ({ num: typeof block.num === "string" ? block.num : void 0, text: typeof block.text === "string" ? block.text : void 0, type: typeof block.type === "string" ? block.type : void 0 })).filter((block) => Boolean(block.text?.trim()));
@@ -7095,9 +7162,9 @@ function createSupabaseBotStore() {
       const index2 = await loadDriveIndex();
       return index2.sourceRows.map((item) => item.source).filter((source) => source.collection === "judicial" && matchScore(query, `${source.title} ${source.description}`) > 0).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id).slice(0, 20);
     },
-    getSource: getDriveSource,
+    getSource: getBotSource,
     saveFavorite: async (telegramUserId, sourceId) => {
-      if (!await getDriveSource(sourceId)) return "unavailable";
+      if (!await getBotSource(sourceId)) return "unavailable";
       const client = getClient();
       const { data, error } = await client.from("bot_favorites").select("source_id").eq("telegram_user_id", telegramUserId).eq("source_id", sourceId).limit(1).maybeSingle();
       throwIfError(error, "check favorite");
@@ -7111,7 +7178,7 @@ function createSupabaseBotStore() {
       throwIfError(error, "list favorites");
       const result = [];
       for (const row of data ?? []) {
-        const source = await getDriveSource(Number(row.source_id));
+        const source = await getBotSource(Number(row.source_id));
         if (source) result.push({ source });
       }
       return result;
@@ -7232,7 +7299,7 @@ function createSupabaseBotStore() {
     getLegislationFolderContents: (folderId, page) => folderContents("legislation", folderId, page),
     getYemeniLawsFolderContents: (folderId, page) => folderContents("yemeni_laws", folderId, page),
     getLegalFormsFolderContents: (folderId, page) => folderContents("legal_forms", folderId, page),
-    getIllustratedLegalFormsFolderContents: (folderId, page) => folderContents("illustrated_legal_forms", folderId, page),
+    getIllustratedLegalFormsFolderContents: (folderId, page) => Promise.resolve(getIllustratedLegalFormsFolderContents2(folderId, page)),
     getAllYemeniLawsFolderContents: (folderId, page) => folderContents("all_yemeni_laws", folderId, page),
     getFeaturedReferencesFolderContents: (folderId, page) => folderContents("featured_references", folderId, page),
     getImportantYemeniLawsFolderContents: (folderId, page) => folderContents("important_yemeni_laws", folderId, page),

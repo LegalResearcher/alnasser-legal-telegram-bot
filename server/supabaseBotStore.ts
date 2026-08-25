@@ -11,6 +11,7 @@ import {
   YEMENI_LAWS_ROOT_FOLDER_ID,
 } from "./db";
 import { classifyTelegramContractTemplate } from "./telegramContractTypes";
+import { getIllustratedLegalFormSource, getIllustratedLegalFormsFolderContents as getStaticIllustratedLegalFormsFolderContents } from "./illustratedLegalFormsCatalog";
 import type {
   TelegramExamPollResolution,
   TelegramExamResultSummary,
@@ -235,6 +236,10 @@ async function getDriveSource(id: number): Promise<LegalSource | undefined> {
   return index.sourceRows.find(item => item.source.id === id)?.source;
 }
 
+async function getBotSource(id: number): Promise<LegalSource | undefined> {
+  return getIllustratedLegalFormSource(id) ?? getDriveSource(id);
+}
+
 type ContractRow = { id: number; file_name: string | null; display_order: number | null; is_premium: boolean | null; content: unknown; };
 function normalizeContractContent(value: unknown): Array<{ num?: string; text?: string; type?: string }> {
   if (!Array.isArray(value)) return [];
@@ -321,9 +326,9 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
       const index = await loadDriveIndex();
       return index.sourceRows.map(item => item.source).filter(source => source.collection === "judicial" && matchScore(query, `${source.title} ${source.description}`) > 0).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id).slice(0, 20);
     },
-    getSource: getDriveSource,
+    getSource: getBotSource,
     saveFavorite: async (telegramUserId, sourceId) => {
-      if (!await getDriveSource(sourceId)) return "unavailable";
+      if (!await getBotSource(sourceId)) return "unavailable";
       const client = getClient();
       const { data, error } = await client.from("bot_favorites").select("source_id").eq("telegram_user_id", telegramUserId).eq("source_id", sourceId).limit(1).maybeSingle();
       throwIfError(error, "check favorite");
@@ -337,7 +342,7 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
       throwIfError(error, "list favorites");
       const result: Array<{ source: LegalSource }> = [];
       for (const row of (data ?? []) as Array<{ source_id: number }>) {
-        const source = await getDriveSource(Number(row.source_id));
+        const source = await getBotSource(Number(row.source_id));
         if (source) result.push({ source });
       }
       return result;
@@ -392,7 +397,7 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     getLegislationFolderContents: (folderId, page) => folderContents("legislation", folderId, page),
     getYemeniLawsFolderContents: (folderId, page) => folderContents("yemeni_laws", folderId, page),
     getLegalFormsFolderContents: (folderId, page) => folderContents("legal_forms", folderId, page),
-    getIllustratedLegalFormsFolderContents: (folderId, page) => folderContents("illustrated_legal_forms", folderId, page),
+    getIllustratedLegalFormsFolderContents: (folderId, page) => Promise.resolve(getStaticIllustratedLegalFormsFolderContents(folderId, page)),
     getAllYemeniLawsFolderContents: (folderId, page) => folderContents("all_yemeni_laws", folderId, page),
     getFeaturedReferencesFolderContents: (folderId, page) => folderContents("featured_references", folderId, page),
     getImportantYemeniLawsFolderContents: (folderId, page) => folderContents("important_yemeni_laws", folderId, page),
