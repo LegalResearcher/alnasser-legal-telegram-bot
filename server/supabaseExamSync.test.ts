@@ -61,6 +61,37 @@ describe("Supabase exam synchronization policy", () => {
     vi.unstubAllEnvs();
   });
 
+  it("ينقل أسئلة النماذج التدريبية إلى مفتاح النموذج نفسه", async () => {
+    vi.stubEnv("SUPABASE_ANON_KEY", "test-read-key");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/levels?")) return new Response(JSON.stringify([{ id: "level-1", order_index: 1 }]));
+      if (url.includes("/subjects?")) return new Response(JSON.stringify([{ id: "subject-usul", level_id: "level-1", name: "اصول الفقه", order_index: 1 }]));
+      if (url.includes("/subject_exam_forms?")) return new Response(JSON.stringify([{ form_id: "Model_1", form_name: "الموازي2025", order_index: 1, hidden: false }]));
+      if (url.includes("/questions?")) return new Response(JSON.stringify([{
+        id: "question-model-1",
+        question_text: "سؤال تجريبي",
+        option_a: "أ",
+        option_b: "ب",
+        option_c: "ج",
+        option_d: "د",
+        correct_option: "A",
+        hint: null,
+        explanation: "شرح",
+        exam_year: null,
+        exam_form: "Model_1",
+        status: "active",
+        created_at: "2026-01-01T00:00:00.000Z",
+      }]));
+      throw new Error(`Unexpected URL: ${url}`);
+    }));
+    const { syncSupabaseExamLevel } = await import("./supabaseExamSync");
+    const result = await syncSupabaseExamLevel("l1", { dryRun: true });
+    expect(result).toEqual({ levelKey: "l1", subjects: 1, forms: 1, questions: 1, excludedQuestions: 0 });
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("ينبه المالك فقط عند الفشل دون نسخ نص الخطأ أو أي بيانات حساسة", async () => {
     const notices: Array<{ title: string; content: string }> = [];
     await expect(runSupabaseExamSync("l2", {
