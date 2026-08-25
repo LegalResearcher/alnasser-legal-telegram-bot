@@ -3230,6 +3230,23 @@ var categoryLabels = {
   procedure: "\u{1F4D7} \u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u062C\u0646\u0627\u0626\u064A",
   general: "\u{1F4D1} \u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u0639\u0645\u0644 \u0648\u0627\u0644\u0623\u062D\u0648\u0627\u0644 \u0627\u0644\u0634\u062E\u0635\u064A\u0629"
 };
+var BOT_COMMANDS = [
+  { command: "start", description: "\u0628\u062F\u0621 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0628\u0648\u062A \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A" },
+  { command: "search", description: "\u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0645\u0648\u062D\u062F \u0641\u064A \u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629" },
+  { command: "browse", description: "\u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0623\u0642\u0633\u0627\u0645 \u0627\u0644\u0645\u0643\u062A\u0628\u0629" },
+  { command: "support", description: "\u0625\u0631\u0633\u0627\u0644 \u0637\u0644\u0628 \u0644\u0644\u062F\u0639\u0645 \u0623\u0648 \u0627\u0642\u062A\u0631\u0627\u062D \u0645\u0631\u062C\u0639" },
+  { command: "newquiz", description: "\u0625\u0646\u0634\u0627\u0621 \u0627\u062E\u062A\u0628\u0627\u0631 \u062C\u062F\u064A\u062F" },
+  { command: "quizzes", description: "\u0639\u0631\u0636 \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A\u0643" },
+  { command: "stop", description: "\u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0627\u0644\u062D\u0627\u0644\u064A" },
+  { command: "startquiz", description: "\u0627\u0644\u0627\u0646\u0636\u0645\u0627\u0645 \u0625\u0644\u0649 \u0627\u062E\u062A\u0628\u0627\u0631 \u062C\u0645\u0627\u0639\u064A \u062F\u0627\u062E\u0644 \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629" }
+];
+var OWNER_COMMANDS = [
+  { command: "stats", description: "\u0625\u062D\u0635\u0627\u0621\u0627\u062A \u0627\u0644\u0628\u0648\u062A \u0627\u0644\u062E\u0627\u0635\u0629" },
+  { command: "supportrequests", description: "\u0639\u0631\u0636 \u0637\u0644\u0628\u0627\u062A \u0627\u0644\u062F\u0639\u0645 \u0627\u0644\u062C\u062F\u064A\u062F\u0629" },
+  { command: "broadcast", description: "\u0645\u0639\u0627\u064A\u0646\u0629 \u0628\u062B \u0631\u0633\u0627\u0644\u0629 \u0644\u0644\u0645\u0634\u062A\u0631\u0643\u064A\u0646" },
+  { command: "broadcastfile", description: "\u0628\u062B \u0645\u0644\u0641 \u0639\u0628\u0631 \u0648\u0635\u0641\u0647" },
+  { command: "importantlawsrequests", description: "\u0637\u0644\u0628\u0627\u062A \u0627\u0634\u062A\u0631\u0627\u0643 \u0623\u0647\u0645 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646" }
+];
 var pendingBroadcastFileUploads = /* @__PURE__ */ new Set();
 var pendingImportantLawsPaymentProofs = /* @__PURE__ */ new Map();
 var IMPORTANT_LAWS_PAYMENT_PROOF_TIMEOUT_MS = 15 * 60 * 1e3;
@@ -6446,6 +6463,35 @@ function createTelegramChannelMembershipChecker(token) {
     }
   };
 }
+function isFinalTelegramWebhookUrl(value) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.pathname === "/api/telegram/webhook";
+  } catch {
+    return false;
+  }
+}
+async function synchronizeTelegramConfiguration(config) {
+  const { token, webhookUrl, webhookSecret } = config;
+  if (!token) return;
+  await telegramRequest(token, "setMyCommands", { commands: BOT_COMMANDS });
+  const ownerTelegramId = Number(process.env.TELEGRAM_OWNER_ID);
+  if (Number.isSafeInteger(ownerTelegramId) && ownerTelegramId > 0) {
+    await telegramRequest(token, "setMyCommands", {
+      commands: [...BOT_COMMANDS, ...OWNER_COMMANDS],
+      scope: { type: "chat", chat_id: ownerTelegramId }
+    });
+  }
+  if (isFinalTelegramWebhookUrl(webhookUrl) && webhookSecret) {
+    await telegramRequest(token, "setWebhook", {
+      url: webhookUrl,
+      secret_token: webhookSecret,
+      allowed_updates: ["message", "callback_query", "poll_answer", "poll"],
+      drop_pending_updates: false
+    });
+  }
+}
 
 // server/telegramPlatformVisit.ts
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -8308,6 +8354,14 @@ var app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 registerTelegramWebhook(app);
+void synchronizeTelegramConfiguration({
+  token: process.env.TELEGRAM_BOT_TOKEN,
+  webhookUrl: process.env.TELEGRAM_WEBHOOK_URL,
+  webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET
+}).catch((error) => {
+  const message = error instanceof Error ? error.message : "unknown error";
+  console.error("[Telegram] Vercel configuration synchronization failed:", message);
+});
 var vercelTelegramEntrypoint_default = app;
 export {
   vercelTelegramEntrypoint_default as default
