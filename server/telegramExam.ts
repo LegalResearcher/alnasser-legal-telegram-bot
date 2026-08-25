@@ -279,8 +279,12 @@ type ExamFormMenuItem = { formKey: string; formName: string; sortOrder?: number;
 type AnnualFormKind = "general" | "parallel" | "mixed" | "secondary";
 type AnnualFormIdentity = { year: number; kind: AnnualFormKind };
 
+function isSecondaryExamForm(form: ExamFormMenuItem): boolean {
+  return /^(?:exam_)?secondary_/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName);
+}
+
 function examFormIdentity(form: ExamFormMenuItem): AnnualFormIdentity | undefined {
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName)) {
+  if (isSecondaryExamForm(form)) {
     const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
     return { year, kind: "secondary" };
   }
@@ -337,7 +341,7 @@ function experimentalForms(forms: ExamFormMenuItem[]): ExamFormMenuItem[] {
 }
 
 function annualFormSort(left: ExamFormMenuItem, right: ExamFormMenuItem): number {
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(left.formKey) || /^secondary_[a-z0-9_]+_model_\d+$/i.test(right.formKey)) {
+  if (isSecondaryExamForm(left) || isSecondaryExamForm(right)) {
     return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
   }
   const leftYear = Number(left.formName.match(/20\d{2}/)?.[0] ?? 9999);

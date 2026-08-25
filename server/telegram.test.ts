@@ -501,6 +501,10 @@ function createStore(
       { formKey: "secondary_english_model_7", formName: "النموذج السابع - اللغة الإنجليزية أدبي", sortOrder: 7, questionCount: 50 },
     ] : ["exam_secondary_scientific_quran", "exam_secondary_scientific_islamic", "exam_secondary_scientific_arabic", "exam_secondary_scientific_english", "exam_secondary_scientific_biology", "exam_secondary_scientific_physics", "exam_secondary_scientific_chemistry"].includes(subjectKey) ? [
       { formKey: `${subjectKey}-01`, formName: "2026 النموذج 1", sortOrder: 2026001, questionCount: 2 },
+      ...(subjectKey === "exam_secondary_scientific_physics" ? [
+        { formKey: `${subjectKey}-02`, formName: "2026 النموذج 2", sortOrder: 2026002, questionCount: 2 },
+        { formKey: `${subjectKey}-03`, formName: "2026 النموذج 3", sortOrder: 2026003, questionCount: 2 },
+      ] : []),
     ] : resolvedSubjectKey === "civil_law" ? [
       { formKey: "general_2025", formName: "العام 2025", sortOrder: 20251, questionCount: 2 },
     ] : [];
@@ -1070,6 +1074,11 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("الفيزياء");
     const scientificForms = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(scientificForms).toContain("2026 النموذج 1");
+    expect(scientificForms).toContain("2026 النموذج 2");
+    expect(scientificForms).toContain("2026 النموذج 3");
+    expect(scientificForms).not.toContain("🧪 أسئلة تجريبية");
+    expect(scientificForms.indexOf("2026 النموذج 1")).toBeLessThan(scientificForms.indexOf("2026 النموذج 2"));
+    expect(scientificForms.indexOf("2026 النموذج 2")).toBeLessThan(scientificForms.indexOf("2026 النموذج 3"));
     expect(scientificForms).toContain("exam:form:secondary-scientific:physics:2026001:1");
 
     await callback("scientific-form", "exam:form:secondary-scientific:physics:2026001:1");

@@ -2960,8 +2960,11 @@ function examSubjectsMenu(levelKey, requestedPage = 1) {
   rows.push([{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0645\u0633\u062A\u0648\u064A\u0627\u062A", callback_data: "exam:levels" }]);
   return { inline_keyboard: rows };
 }
+function isSecondaryExamForm(form) {
+  return /^(?:exam_)?secondary_/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName);
+}
 function examFormIdentity(form) {
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName)) {
+  if (isSecondaryExamForm(form)) {
     const year2 = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
     return { year: year2, kind: "secondary" };
   }
@@ -3008,7 +3011,7 @@ function experimentalForms(forms) {
   return forms.filter((form) => hasExamQuestions(form) && isExperimentalExamForm(form));
 }
 function annualFormSort(left, right) {
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(left.formKey) || /^secondary_[a-z0-9_]+_model_\d+$/i.test(right.formKey)) {
+  if (isSecondaryExamForm(left) || isSecondaryExamForm(right)) {
     return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
   }
   const leftYear = Number(left.formName.match(/20\d{2}/)?.[0] ?? 9999);
