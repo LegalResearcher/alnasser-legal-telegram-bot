@@ -1267,20 +1267,23 @@ describe("Telegram library conversation", () => {
     await callback("usul-subject", "exam:subject:l1:l1-usul:1");
     expect(messages.at(-1)?.text).toContain("اصول الفقه");
     const annualUsulMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(annualUsulMenu).toContain("exam:form:l1:l1-usul:1:1");
-    expect(annualUsulMenu).toContain("exam:form:l1:l1-usul:2:1");
     expect(annualUsulMenu).toContain("2022 العام");
-    expect(annualUsulMenu).toContain("القسم الأول");
+    expect(annualUsulMenu).toContain("2023 العام");
+    expect(annualUsulMenu).toContain("2024 العام");
+    expect(annualUsulMenu).toContain("2024 الموازي");
+    expect(annualUsulMenu).toContain("2025 العام");
+    expect(annualUsulMenu).toContain("2025 الموازي");
+    expect(annualUsulMenu).not.toContain("القسم الأول");
     expect(annualUsulMenu).toContain("🧪 أسئلة تجريبية");
     await callback("usul-training", "exam:training:l1:l1-usul:1");
     const usulTrainingMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(usulTrainingMenu).not.toContain("2025 الموازي");
     expect(usulTrainingMenu).toContain("القسم الأول");
-    await callback("usul-form", "exam:form:l1:l1-usul:Model_1:1");
-    expect(messages.at(-1)?.text).toContain("الموازي2025");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_usul_fiqh:1:15");
-    await callback("usul-time", "exam:time:l1_usul_fiqh:1:15");
-    expect(messages.at(-1)?.text).toContain("اختبار اصول الفقه — الموازي2025");
+    await callback("usul-form", "exam:form:l1:l1-usul:106:1");
+    expect(messages.at(-1)?.text).toContain("الموازي 2025");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_usul_fiqh:106:15");
+    await callback("usul-time", "exam:time:l1_usul_fiqh:106:15");
+    expect(messages.at(-1)?.text).toContain("اختبار اصول الفقه — الموازي 2025");
     await callback("usul-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
   });
@@ -1298,12 +1301,13 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("علم الاجرام والعقاب");
     const annualCriminologyMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(annualCriminologyMenu).toContain("2022 العام");
-    expect(annualCriminologyMenu.indexOf("2024 العام")).toBeLessThan(annualCriminologyMenu.indexOf("2024 الموازي"));
+    expect(annualCriminologyMenu).toContain("2023 العام");
+    expect(annualCriminologyMenu).toContain("2024 العام");
+    expect(annualCriminologyMenu).toContain("2024 الموازي");
+    expect(annualCriminologyMenu).toContain("2025 العام");
+    expect(annualCriminologyMenu).toContain("2025 الموازي");
+    expect(annualCriminologyMenu).not.toContain("المختلط 2025");
     expect(annualCriminologyMenu).toContain("🧪 أسئلة تجريبية");
-    await callback("criminology-next", "exam:forms:l1:l1-criminology:2");
-    const secondCriminologyPage = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(secondCriminologyPage).toContain("2025 المختلط");
-    expect(secondCriminologyPage.indexOf("2025 الموازي")).toBeLessThan(secondCriminologyPage.indexOf("2025 المختلط"));
     await callback("criminology-training", "exam:training:l1:l1-criminology:1");
     const criminologyTrainingMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(criminologyTrainingMenu).toContain("القسم الأول");
@@ -1316,7 +1320,7 @@ describe("Telegram library conversation", () => {
     expect(polls.at(-1)?.question).toContain("[1/2]");
   });
 
-  it("يعرض نموذجًا مفهرسًا من Supabase بحالة انتظار عند عدم استيراد أسئلته بعد", async () => {
+  it("لا يعرض نموذجًا مفهرسًا بلا أسئلة في القائمة الرئيسية", async () => {
     const { sender, messages } = createSender();
     const store = createStore();
     const callback = (id: string, data: string) => handleTelegramUpdate(
@@ -1327,7 +1331,7 @@ describe("Telegram library conversation", () => {
 
     await callback("political-subject", "exam:subject:l1:l1-political-systems:1");
     expect(messages.at(-1)?.text).toContain("النظم السياسية");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("2025 العام ⏳");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).not.toContain("2025 العام");
     await callback("political-form", "exam:form:l1:l1-political-systems:general_2025:1");
     expect(messages.at(-1)?.text).toContain("لا تتوافر أسئلة هذا النموذج حاليًا");
   });

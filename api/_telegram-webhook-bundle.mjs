@@ -2960,10 +2960,62 @@ function examSubjectsMenu(levelKey, requestedPage = 1) {
   rows.push([{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0645\u0633\u062A\u0648\u064A\u0627\u062A", callback_data: "exam:levels" }]);
   return { inline_keyboard: rows };
 }
-function isAnnualExamForm(form) {
-  if (/^Model_/i.test(form.formKey) && !/20\d{2}/.test(form.formName)) return false;
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey)) return true;
-  return /20\d{2}/.test(form.formName);
+function examFormIdentity(form) {
+  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName)) {
+    const year2 = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
+    return { year: year2, kind: "secondary" };
+  }
+  const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? form.formKey.match(/(?:general|parallel|mixed)_(20\d{2})/i)?.[1] ?? 0);
+  if (!year) return void 0;
+  const value = `${form.formKey} ${form.formName}`;
+  if (/general|العام/i.test(value)) return { year, kind: "general" };
+  if (/parallel|الموازي/i.test(value)) return { year, kind: "parallel" };
+  if (/mixed|المختلط/i.test(value)) return { year, kind: "mixed" };
+  return void 0;
+}
+function isOfficialAnnualExamForm(form) {
+  const identity = examFormIdentity(form);
+  if (!identity) return false;
+  if (identity.kind === "secondary") return true;
+  if (identity.kind === "mixed") return false;
+  if (identity.year < 2022 || identity.year > 2025) return false;
+  if (identity.year <= 2023 && identity.kind !== "general") return false;
+  return true;
+}
+function isExperimentalExamForm(form) {
+  const identity = examFormIdentity(form);
+  if (!identity) return true;
+  return false;
+}
+function hasExamQuestions(form) {
+  return form.questionCount === void 0 || form.questionCount > 0;
+}
+function officialAnnualForms(forms) {
+  const selected = /* @__PURE__ */ new Map();
+  for (const form of forms) {
+    if (!hasExamQuestions(form) || !isOfficialAnnualExamForm(form)) continue;
+    const identity = examFormIdentity(form);
+    if (!identity) continue;
+    const identityKey = identity.kind === "secondary" ? `${identity.year}:${identity.kind}:${form.formKey}` : `${identity.year}:${identity.kind}`;
+    const current = selected.get(identityKey);
+    const isCanonicalKey = /^(?:general|parallel)_20\d{2}$/i.test(form.formKey);
+    const currentIsCanonicalKey = current ? /^(?:general|parallel)_20\d{2}$/i.test(current.formKey) : false;
+    if (!current || isCanonicalKey && !currentIsCanonicalKey) selected.set(identityKey, form);
+  }
+  return Array.from(selected.values()).sort(annualFormSort);
+}
+function experimentalForms(forms) {
+  return forms.filter((form) => hasExamQuestions(form) && isExperimentalExamForm(form));
+}
+function annualFormSort(left, right) {
+  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(left.formKey) || /^secondary_[a-z0-9_]+_model_\d+$/i.test(right.formKey)) {
+    return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
+  }
+  const leftYear = Number(left.formName.match(/20\d{2}/)?.[0] ?? 9999);
+  const rightYear = Number(right.formName.match(/20\d{2}/)?.[0] ?? 9999);
+  if (leftYear !== rightYear) return leftYear - rightYear;
+  const priority = (name) => name.includes("\u0627\u0644\u0639\u0627\u0645") ? 1 : name.includes("\u0627\u0644\u0645\u0648\u0627\u0632\u064A") ? 2 : name.includes("\u0627\u0644\u0645\u062E\u062A\u0644\u0637") ? 3 : 4;
+  return priority(left.formName) - priority(right.formName) || left.formName.localeCompare(right.formName, "ar");
 }
 function annualFormDisplayName(form) {
   const year = form.formName.match(/20\d{2}/)?.[0];
@@ -2978,7 +3030,7 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
   const pageForms = forms.slice((page - 1) * pageSize, page * pageSize);
   const rows = pageForms.map((form) => [
     {
-      text: `${isAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " \u23F3" : ""}`,
+      text: `${isOfficialAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " \u23F3" : ""}`,
       callback_data: `exam:form:${levelKey}:${subjectKey}:${form.sortOrder ?? form.formKey}:${page}`
     }
   ]);
@@ -2994,14 +3046,14 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
   return { inline_keyboard: rows };
 }
 function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
-  const availableForms = [...forms].sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.formName.localeCompare(right.formName, "ar"));
-  return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", forms.some((form) => !isAnnualExamForm(form)));
+  const availableForms = officialAnnualForms(forms);
+  return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 function examTrainingFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
   return pagedFormsMenu(
     levelKey,
     subjectKey,
-    forms.filter((form) => !isAnnualExamForm(form)).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
+    experimentalForms(forms).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
     requestedPage,
     "exam:training",
     false

@@ -276,12 +276,64 @@ export function examSubjectsMenu(levelKey: string, requestedPage = 1): TelegramI
 
 type ExamFormMenuItem = { formKey: string; formName: string; sortOrder?: number; questionCount?: number };
 
-function isAnnualExamForm(form: ExamFormMenuItem): boolean {
-  // بعض بيانات الشريعة تستخدم Model_1 للنموذج السنوي «الموازي2025»،
-  // بينما Model_2 وما بعده أقسام تدريبية بلا سنة دراسية.
-  if (/^Model_/i.test(form.formKey) && !/20\d{2}/.test(form.formName)) return false;
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey)) return true;
-  return /20\d{2}/.test(form.formName);
+type AnnualFormKind = "general" | "parallel" | "mixed" | "secondary";
+type AnnualFormIdentity = { year: number; kind: AnnualFormKind };
+
+function examFormIdentity(form: ExamFormMenuItem): AnnualFormIdentity | undefined {
+  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName)) {
+    const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
+    return { year, kind: "secondary" };
+  }
+  const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? form.formKey.match(/(?:general|parallel|mixed)_(20\d{2})/i)?.[1] ?? 0);
+  if (!year) return undefined;
+  const value = `${form.formKey} ${form.formName}`;
+  if (/general|العام/i.test(value)) return { year, kind: "general" };
+  if (/parallel|الموازي/i.test(value)) return { year, kind: "parallel" };
+  if (/mixed|المختلط/i.test(value)) return { year, kind: "mixed" };
+  return undefined;
+}
+
+function isOfficialAnnualExamForm(form: ExamFormMenuItem): boolean {
+  const identity = examFormIdentity(form);
+  if (!identity) return false;
+  if (identity.kind === "secondary") return true;
+  if (identity.kind === "mixed") return false;
+  // هذا هو ترتيب النماذج الرسمية المطلوب في مواد الشريعة والقانون.
+  if (identity.year < 2022 || identity.year > 2025) return false;
+  if (identity.year <= 2023 && identity.kind !== "general") return false;
+  return true;
+}
+
+function isExperimentalExamForm(form: ExamFormMenuItem): boolean {
+  const identity = examFormIdentity(form);
+  if (!identity) return true;
+  // النموذج المختلط السنوي لا يدخل في قائمة السنوات المطلوبة ولا في التجريبي.
+  return false;
+}
+
+function hasExamQuestions(form: ExamFormMenuItem): boolean {
+  return form.questionCount === undefined || form.questionCount > 0;
+}
+
+function officialAnnualForms(forms: ExamFormMenuItem[]): ExamFormMenuItem[] {
+  const selected = new Map<string, ExamFormMenuItem>();
+  for (const form of forms) {
+    if (!hasExamQuestions(form) || !isOfficialAnnualExamForm(form)) continue;
+    const identity = examFormIdentity(form);
+    if (!identity) continue;
+    const identityKey = identity.kind === "secondary"
+      ? `${identity.year}:${identity.kind}:${form.formKey}`
+      : `${identity.year}:${identity.kind}`;
+    const current = selected.get(identityKey);
+    const isCanonicalKey = /^(?:general|parallel)_20\d{2}$/i.test(form.formKey);
+    const currentIsCanonicalKey = current ? /^(?:general|parallel)_20\d{2}$/i.test(current.formKey) : false;
+    if (!current || (isCanonicalKey && !currentIsCanonicalKey)) selected.set(identityKey, form);
+  }
+  return Array.from(selected.values()).sort(annualFormSort);
+}
+
+function experimentalForms(forms: ExamFormMenuItem[]): ExamFormMenuItem[] {
+  return forms.filter(form => hasExamQuestions(form) && isExperimentalExamForm(form));
 }
 
 function annualFormSort(left: ExamFormMenuItem, right: ExamFormMenuItem): number {
@@ -316,7 +368,7 @@ function pagedFormsMenu(
   const pageForms = forms.slice((page - 1) * pageSize, page * pageSize);
   const rows: TelegramInlineKeyboard["inline_keyboard"] = pageForms.map(form => [
     {
-      text: `${isAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " ⏳" : ""}`,
+      text: `${isOfficialAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " ⏳" : ""}`,
       callback_data: `exam:form:${levelKey}:${subjectKey}:${form.sortOrder ?? form.formKey}:${page}`,
     },
   ]);
@@ -333,18 +385,15 @@ function pagedFormsMenu(
 }
 
 export function examFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {
-  // لا نخفي النماذج التي لا تحمل سنة في القائمة الرئيسية؛ فمواد القانون
-  // تستخدم أسماء مثل «القسم الأول» و«الملكية الجزء الأول» للنماذج الأصلية.
-  // تبقى قائمة «الأسئلة التجريبية» متاحة عبر الزر المنفصل للتوافق مع التدفق السابق.
-  const availableForms = [...forms].sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.formName.localeCompare(right.formName, "ar"));
-  return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", forms.some(form => !isAnnualExamForm(form)));
+  const availableForms = officialAnnualForms(forms);
+  return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 
 export function examTrainingFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {
   return pagedFormsMenu(
     levelKey,
     subjectKey,
-    forms.filter(form => !isAnnualExamForm(form)).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
+    experimentalForms(forms).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
     requestedPage,
     "exam:training",
     false
