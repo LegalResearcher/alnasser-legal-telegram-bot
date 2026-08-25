@@ -53,6 +53,7 @@ export type TelegramSender = {
   sendPhotoByFileId: (chatId: number, fileId: string, caption?: string) => Promise<void>;
   sendQuizPoll: (chatId: number, poll: TelegramQuizPoll) => Promise<{ pollId: string }>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
+  editMessageText?: (chatId: number, messageId: number, text: string, replyMarkup?: TelegramInlineKeyboard) => Promise<void>;
   isChatAdministrator: (chatId: number, telegramUserId: string) => Promise<boolean>;
 };
 
@@ -343,6 +344,7 @@ export type TelegramUpdate = {
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
     message?: {
       chat?: { id?: number; type?: string };
+      message_id?: number;
       message_thread_id?: number;
       direct_messages_topic?: { topic_id?: number };
     };
@@ -414,26 +416,87 @@ const mainMenuSections = [
   { sectionKey: "support", text: "💬 تواصل ودعم", callbackData: "support", sortOrder: 150 },
 ] as const;
 
-function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
-  const sectionOverrides = new Map(managedSections.map(section => [section.sectionKey, section]));
-  const sectionRows = mainMenuSections
-    .map(section => ({ ...section, override: sectionOverrides.get(section.sectionKey) }))
-    .filter(section => section.override?.enabled !== false)
-    .sort((left, right) => (left.override?.sortOrder ?? left.sortOrder) - (right.override?.sortOrder ?? right.sortOrder))
-    .map(section => [{ text: section.override?.displayLabel?.trim() || section.text, callback_data: section.callbackData }]);
-  const managedRows = [...managedItems]
+function sectionOverridesMap(managedSections: TelegramManagedSectionRecord[]) {
+  return new Map(managedSections.map(section => [section.sectionKey, section]));
+}
+
+function configuredSectionButton(
+  sectionKey: string,
+  fallbackText: string,
+  callbackData: string,
+  overrides: Map<string, TelegramManagedSectionRecord>,
+): { text: string; callback_data: string } | undefined {
+  const override = overrides.get(sectionKey);
+  if (override?.enabled === false) return undefined;
+  return { text: override?.displayLabel?.trim() || fallbackText, callback_data: callbackData };
+}
+
+function managedItemsRows(managedItems: TelegramManagedMenuItemRecord[]) {
+  return [...managedItems]
     .sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id)
     .map(item => [{ text: item.label, ...(item.actionType === "url" && item.accessMode === "free" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` }) }]);
+}
+
+function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      ...sectionRows,
-      ...managedRows,
-      [{ text: "❓ مساعدة", callback_data: "help" }],
+      [{ text: "🔎 البحث القانوني", callback_data: "menu:search" }, { text: "📚 المكتبة القانونية", callback_data: "menu:library" }],
+      [{ text: "📝 بنك الأسئلة والاختبارات", callback_data: "menu:exams" }, { text: "📄 النماذج والصيغ القانونية", callback_data: "menu:documents" }],
+      [{ text: "📌 المراجع المميزة", callback_data: "menu:featured" }, { text: "🛠 الخدمات والأدوات", callback_data: "menu:services" }],
+      [{ text: "ℹ️ عن البوت والمساعدة", callback_data: "menu:help" }],
+      ...managedItemsRows(managedItems),
       [{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }],
       [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }],
-      [{ text: "ℹ️ عن المكتبة", callback_data: "about" }],
     ],
   };
+}
+
+function mainCategoryMenu(category: "search" | "library" | "exams" | "documents" | "featured" | "services" | "help", managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
+  const overrides = sectionOverridesMap(managedSections);
+  const section = (key: string, fallback: string, callback = key) => configuredSectionButton(key, fallback, callback, overrides);
+  const rows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
+  if (category === "search") {
+    rows.push([{ text: "🔎 بحث موحّد في المكتبة", callback_data: "search" }]);
+    rows.push([{ text: "📚 تصفح المكتبة", callback_data: "browse" }]);
+  } else if (category === "library") {
+    for (const value of [section("browse", "📚 تصفح المكتبة"), section("judicial", "⚖️ القواعد والمبادئ القضائية"), section("legislation", "📜 التشريعات اليمنية"), section("important-laws", "🔐 أهم القوانين اليمنية التفاعلي"), section("contract-templates", "📄 صيغ وعقود قانونية")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "exams") {
+    for (const value of [section("exams", "📝 بنك أسئلة كلية الشريعة والقانون"), section("secondary-exams", "🧮 بنك أسئلة اختبارات الثانوية العامة")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "documents") {
+    for (const value of [section("legal-forms", "📝 نماذج وصيغ قانونية"), section("illustrated-legal-forms", "🖼 نماذج مصورة وفق القوانين اليمنية")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "featured") {
+    for (const value of [section("featured", "📌 مراجع مميزة"), section("latest", "🆕 أحدث الإضافات"), section("popular", "⭐ الأكثر طلبًا"), section("favorites", "⭐ مفضلتي")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "services") {
+    const supportButton = section("support", "💬 تواصل ودعم");
+    if (supportButton) rows.push([supportButton]);
+    rows.push([{ text: "🎁 نظام الإحالة", callback_data: "premium:referral" }]);
+  } else {
+    rows.push([{ text: "❓ المساعدة", callback_data: "help" }], [{ text: "ℹ️ عن المكتبة", callback_data: "about" }]);
+    rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
+  }
+  rows.push([{ text: "↩️ القائمة الرئيسية", callback_data: "menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function mainCategoryText(category: "search" | "library" | "exams" | "documents" | "featured" | "services" | "help") {
+  const texts = {
+    search: "🔎 البحث القانوني\n\nابحث في المصادر القانونية أو تصفح المكتبة.",
+    library: "📚 المكتبة القانونية\n\nاختر نوع المصدر القانوني المطلوب.",
+    exams: "📝 بنك الأسئلة والاختبارات\n\nاختر البنك التعليمي المطلوب.",
+    documents: "📄 النماذج والصيغ القانونية\n\nاختر نوع النموذج أو الصيغة المطلوبة.",
+    featured: "📌 المراجع والمواد المميزة\n\nاختر القسم الذي تريد استعراضه.",
+    services: "🛠 الخدمات والأدوات\n\nاختر الخدمة المطلوبة.",
+    help: "ℹ️ عن البوت والمساعدة\n\nاختر المعلومات أو وسيلة التواصل المطلوبة.",
+  } as const;
+  return texts[category];
 }
 
 function groupExamLaunchMenu(): TelegramInlineKeyboard {
@@ -2503,6 +2566,18 @@ export async function handleTelegramUpdate(
       callbackAcknowledged = true;
       await sender.answerCallbackQuery(callback.id, text).catch(() => undefined);
     };
+    const presentCallbackPage = async (text: string, replyMarkup?: TelegramInlineKeyboard) => {
+      const messageId = callback.message?.message_id;
+      if (messageId && sender.editMessageText) {
+        try {
+          await sender.editMessageText(chatId, messageId, text, replyMarkup);
+          return;
+        } catch (error) {
+          if (error instanceof Error && /message is not modified/i.test(error.message)) return;
+        }
+      }
+      await sender.sendMessage(chatId, text, replyMarkup);
+    };
     await acknowledgeCallback();
     if (isPrivateChat(chat?.type)) {
       await store.registerSubscriber(String(chatId), telegramUserId, {
@@ -2776,8 +2851,14 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    const categoryMatch = data.match(/^menu:(search|library|exams|documents|featured|services|help)$/);
+    if (categoryMatch) {
+      const category = categoryMatch[1] as "search" | "library" | "exams" | "documents" | "featured" | "services" | "help";
+      await presentCallbackPage(mainCategoryText(category), mainCategoryMenu(category, managedSections));
+      return;
+    }
     if (data === "menu") {
-      await sender.sendMessage(chatId, welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
+      await presentCallbackPage(welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
       return;
     }
     if (data.startsWith("managed-premium:request:")) {
@@ -4002,6 +4083,14 @@ export function createTelegramSender(token: string, replyContext: TelegramReplyC
       await telegramRequest(token, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
         ...(text ? { text, show_alert: true } : {}),
+      });
+    },
+    async editMessageText(chatId, messageId, text, replyMarkup) {
+      await telegramRequest(token, "editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: adaptReplyMarkupForTelegramContext(replyMarkup, replyContext),
       });
     },
     async isChatAdministrator(chatId, telegramUserId) {

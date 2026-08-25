@@ -628,6 +628,7 @@ function createStore(
 
 function createSender() {
   const messages: Array<{ chatId: number; text: string; replyMarkup?: unknown }> = [];
+  const editedMessages: Array<{ chatId: number; messageId: number; text: string; replyMarkup?: unknown }> = [];
   const documents: Array<{ chatId: number; filename: string; caption: string }> = [];
   const fileIdDocuments: Array<{ chatId: number; fileId: string; caption?: string }> = [];
   const fileIdPhotos: Array<{ chatId: number; fileId: string; caption?: string }> = [];
@@ -653,9 +654,12 @@ function createSender() {
     answerCallbackQuery: async callbackQueryId => {
       callbacks.push(callbackQueryId);
     },
+    editMessageText: async (chatId, messageId, text, replyMarkup) => {
+      editedMessages.push({ chatId, messageId, text, replyMarkup });
+    },
     isChatAdministrator: async () => false,
   };
-  return { sender, messages, documents, fileIdDocuments, fileIdPhotos, polls, callbacks };
+  return { sender, messages, editedMessages, documents, fileIdDocuments, fileIdPhotos, polls, callbacks };
 }
 
 function createDocumentProvider() {
@@ -714,19 +718,20 @@ describe("Telegram library conversation", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("منصة معرفية وتعليمية بإشراف أ. معين الناصر");
     expect(messages[0]?.text).toContain("مبادرة تعليمية مستقلة");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📚 تصفح المكتبة");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("⚖️ قواعد قضائية");
+    const keyboard = JSON.stringify(messages[0]?.replyMarkup);
+    expect(keyboard).toContain("🔎 البحث القانوني");
+    expect(keyboard).toContain("📚 المكتبة القانونية");
+    expect(keyboard).toContain("📝 بنك الأسئلة والاختبارات");
+    expect(keyboard).toContain("📄 النماذج والصيغ القانونية");
+    expect(keyboard).toContain("📌 المراجع المميزة");
+    expect(keyboard).toContain("🛠 الخدمات والأدوات");
+    expect(keyboard).toContain("menu:library");
+    expect(keyboard).toContain("menu:exams");
+    expect(keyboard).not.toContain("📚 تصفح المكتبة");
+    expect(keyboard).not.toContain("⚖️ قواعد قضائية");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"url":"https://alnaseer.org/"');
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"url":"https://t.me/muen2025"');
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("قناة منصة الناصر القانونية");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📜 التشريعات اليمنية");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("callback_data\":\"legislation");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("🔎 بحث موحّد");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("🆕 أحدث الإضافات");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📚 بنك أسئلة كلية الشريعة والقانون");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("📚 القوانين اليمنية فهرس تفاعلي");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("أهم القوانين اليمنية التفاعلي");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("callback_data\":\"important-laws");
+    expect(keyboard).toContain("قناة منصة الناصر القانونية");
 
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
     expect(messages[1]?.text).toContain("مرحباً بك في بوت الناصر القانوني");
@@ -935,17 +940,22 @@ describe("Telegram library conversation", () => {
   });
 
   it("يطبق إخفاء وتسمية وترتيب الأقسام المدارة في القائمة الرئيسية", async () => {
-    const { sender, messages } = createSender();
+    const { sender, messages, editedMessages } = createSender();
     const store = createStore(true, false, { managedSections: [
       { sectionKey: "browse", displayLabel: "مكتبة الناصر", enabled: true, sortOrder: 500 },
       { sectionKey: "secondary-exams", displayLabel: "اختبارات الثانوية", enabled: false, sortOrder: 100 },
     ] });
 
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
-    const keyboard = JSON.stringify(messages[0]?.replyMarkup);
+    await handleTelegramUpdate({ callback_query: { id: "open-library-category", data: "menu:library", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 77 } } }, store, sender);
+    const libraryEdit = editedMessages.at(-1);
+    const keyboard = JSON.stringify(libraryEdit?.replyMarkup);
+    expect(libraryEdit?.messageId).toBe(77);
     expect(keyboard).toContain("مكتبة الناصر");
-    expect(keyboard).not.toContain("📚 بنك أسئلة اختبارات الثانوية العامة");
-    expect(keyboard.indexOf("📚 بنك أسئلة كلية الشريعة والقانون")).toBeLessThan(keyboard.indexOf("مكتبة الناصر"));
+    expect(keyboard).toContain("⚖️ القواعد والمبادئ القضائية");
+    await handleTelegramUpdate({ callback_query: { id: "open-exams-category", data: "menu:exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 77 } } }, store, sender);
+    expect(editedMessages.at(-1)?.text).toContain("بنك الأسئلة والاختبارات");
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).not.toContain("اختبارات الثانوية");
   });
 
   it("يسجل مفتاح القسم عند فتح قسم التشريعات لدعم التحليلات المجمعة", async () => {

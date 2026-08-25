@@ -3300,37 +3300,75 @@ var OWNER_COMMANDS = [
 var pendingBroadcastFileUploads = /* @__PURE__ */ new Set();
 var pendingImportantLawsPaymentProofs = /* @__PURE__ */ new Map();
 var IMPORTANT_LAWS_PAYMENT_PROOF_TIMEOUT_MS = 15 * 60 * 1e3;
-var mainMenuSections = [
-  { sectionKey: "browse", text: "\u{1F4DA} \u062A\u0635\u0641\u062D \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callbackData: "browse", sortOrder: 10 },
-  { sectionKey: "search", text: "\u{1F50E} \u0628\u062D\u062B \u0645\u0648\u062D\u0651\u062F", callbackData: "search", sortOrder: 20 },
-  { sectionKey: "judicial", text: "\u2696\uFE0F \u0642\u0648\u0627\u0639\u062F \u0642\u0636\u0627\u0626\u064A\u0629", callbackData: "judicial", sortOrder: 30 },
-  { sectionKey: "legislation", text: "\u{1F4DC} \u0627\u0644\u062A\u0634\u0631\u064A\u0639\u0627\u062A \u0627\u0644\u064A\u0645\u0646\u064A\u0629", callbackData: "legislation", sortOrder: 40 },
-  { sectionKey: "important-laws", text: "\u{1F510} \u0623\u0647\u0645 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A", callbackData: "important-laws", sortOrder: 50 },
-  { sectionKey: "legal-forms", text: "\u{1F4DD} \u0646\u0645\u0627\u0630\u062C \u0648\u0635\u064A\u063A \u0642\u0627\u0646\u0648\u0646\u064A\u0629", callbackData: "legal-forms", sortOrder: 60 },
-  { sectionKey: "illustrated-legal-forms", text: "\u{1F5BC} \u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629 \u0648\u0641\u0642 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629", callbackData: "illustrated-legal-forms", sortOrder: 70 },
-  { sectionKey: "contract-templates", text: "\u{1F4C4} \u0635\u064A\u063A \u0648\u0639\u0642\u0648\u062F \u0642\u0627\u0646\u0648\u0646\u064A\u0629", callbackData: "contract-templates", sortOrder: 80 },
-  { sectionKey: "exams", text: "\u{1F4DA} \u0628\u0646\u0643 \u0623\u0633\u0626\u0644\u0629 \u0643\u0644\u064A\u0629 \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0648\u0627\u0644\u0642\u0627\u0646\u0648\u0646", callbackData: "exams", sortOrder: 90 },
-  { sectionKey: "secondary-exams", text: "\u{1F4DA} \u0628\u0646\u0643 \u0623\u0633\u0626\u0644\u0629 \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u0629", callbackData: "secondary-exams", sortOrder: 100 },
-  { sectionKey: "latest", text: "\u{1F195} \u0623\u062D\u062F\u062B \u0627\u0644\u0625\u0636\u0627\u0641\u0627\u062A", callbackData: "latest", sortOrder: 110 },
-  { sectionKey: "popular", text: "\u2B50 \u0627\u0644\u0623\u0643\u062B\u0631 \u0637\u0644\u0628\u064B\u0627", callbackData: "popular", sortOrder: 120 },
-  { sectionKey: "favorites", text: "\u2B50 \u0645\u0641\u0636\u0644\u062A\u064A", callbackData: "favorites", sortOrder: 130 },
-  { sectionKey: "featured", text: "\u{1F4CC} \u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629", callbackData: "featured", sortOrder: 140 },
-  { sectionKey: "support", text: "\u{1F4AC} \u062A\u0648\u0627\u0635\u0644 \u0648\u062F\u0639\u0645", callbackData: "support", sortOrder: 150 }
-];
+function sectionOverridesMap(managedSections) {
+  return new Map(managedSections.map((section) => [section.sectionKey, section]));
+}
+function configuredSectionButton(sectionKey, fallbackText, callbackData, overrides) {
+  const override = overrides.get(sectionKey);
+  if (override?.enabled === false) return void 0;
+  return { text: override?.displayLabel?.trim() || fallbackText, callback_data: callbackData };
+}
+function managedItemsRows(managedItems) {
+  return [...managedItems].sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id).map((item) => [{ text: item.label, ...item.actionType === "url" && item.accessMode === "free" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` } }]);
+}
 function mainMenu(managedItems = [], managedSections = []) {
-  const sectionOverrides = new Map(managedSections.map((section) => [section.sectionKey, section]));
-  const sectionRows = mainMenuSections.map((section) => ({ ...section, override: sectionOverrides.get(section.sectionKey) })).filter((section) => section.override?.enabled !== false).sort((left, right) => (left.override?.sortOrder ?? left.sortOrder) - (right.override?.sortOrder ?? right.sortOrder)).map((section) => [{ text: section.override?.displayLabel?.trim() || section.text, callback_data: section.callbackData }]);
-  const managedRows = [...managedItems].sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id).map((item) => [{ text: item.label, ...item.actionType === "url" && item.accessMode === "free" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` } }]);
   return {
     inline_keyboard: [
-      ...sectionRows,
-      ...managedRows,
-      [{ text: "\u2753 \u0645\u0633\u0627\u0639\u062F\u0629", callback_data: "help" }],
+      [{ text: "\u{1F50E} \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A", callback_data: "menu:search" }, { text: "\u{1F4DA} \u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", callback_data: "menu:library" }],
+      [{ text: "\u{1F4DD} \u0628\u0646\u0643 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A", callback_data: "menu:exams" }, { text: "\u{1F4C4} \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0648\u0627\u0644\u0635\u064A\u063A \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", callback_data: "menu:documents" }],
+      [{ text: "\u{1F4CC} \u0627\u0644\u0645\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0645\u064A\u0632\u0629", callback_data: "menu:featured" }, { text: "\u{1F6E0} \u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0648\u0627\u0644\u0623\u062F\u0648\u0627\u062A", callback_data: "menu:services" }],
+      [{ text: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0628\u0648\u062A \u0648\u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629", callback_data: "menu:help" }],
+      ...managedItemsRows(managedItems),
       [{ text: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://alnaseer.org/" }],
-      [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }],
-      [{ text: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callback_data: "about" }]
+      [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }]
     ]
   };
+}
+function mainCategoryMenu(category, managedSections = []) {
+  const overrides = sectionOverridesMap(managedSections);
+  const section = (key, fallback, callback = key) => configuredSectionButton(key, fallback, callback, overrides);
+  const rows = [];
+  if (category === "search") {
+    rows.push([{ text: "\u{1F50E} \u0628\u062D\u062B \u0645\u0648\u062D\u0651\u062F \u0641\u064A \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callback_data: "search" }]);
+    rows.push([{ text: "\u{1F4DA} \u062A\u0635\u0641\u062D \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callback_data: "browse" }]);
+  } else if (category === "library") {
+    for (const value of [section("browse", "\u{1F4DA} \u062A\u0635\u0641\u062D \u0627\u0644\u0645\u0643\u062A\u0628\u0629"), section("judicial", "\u2696\uFE0F \u0627\u0644\u0642\u0648\u0627\u0639\u062F \u0648\u0627\u0644\u0645\u0628\u0627\u062F\u0626 \u0627\u0644\u0642\u0636\u0627\u0626\u064A\u0629"), section("legislation", "\u{1F4DC} \u0627\u0644\u062A\u0634\u0631\u064A\u0639\u0627\u062A \u0627\u0644\u064A\u0645\u0646\u064A\u0629"), section("important-laws", "\u{1F510} \u0623\u0647\u0645 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A"), section("contract-templates", "\u{1F4C4} \u0635\u064A\u063A \u0648\u0639\u0642\u0648\u062F \u0642\u0627\u0646\u0648\u0646\u064A\u0629")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "exams") {
+    for (const value of [section("exams", "\u{1F4DD} \u0628\u0646\u0643 \u0623\u0633\u0626\u0644\u0629 \u0643\u0644\u064A\u0629 \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0648\u0627\u0644\u0642\u0627\u0646\u0648\u0646"), section("secondary-exams", "\u{1F9EE} \u0628\u0646\u0643 \u0623\u0633\u0626\u0644\u0629 \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u0629")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "documents") {
+    for (const value of [section("legal-forms", "\u{1F4DD} \u0646\u0645\u0627\u0630\u062C \u0648\u0635\u064A\u063A \u0642\u0627\u0646\u0648\u0646\u064A\u0629"), section("illustrated-legal-forms", "\u{1F5BC} \u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629 \u0648\u0641\u0642 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "featured") {
+    for (const value of [section("featured", "\u{1F4CC} \u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629"), section("latest", "\u{1F195} \u0623\u062D\u062F\u062B \u0627\u0644\u0625\u0636\u0627\u0641\u0627\u062A"), section("popular", "\u2B50 \u0627\u0644\u0623\u0643\u062B\u0631 \u0637\u0644\u0628\u064B\u0627"), section("favorites", "\u2B50 \u0645\u0641\u0636\u0644\u062A\u064A")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "services") {
+    const supportButton = section("support", "\u{1F4AC} \u062A\u0648\u0627\u0635\u0644 \u0648\u062F\u0639\u0645");
+    if (supportButton) rows.push([supportButton]);
+    rows.push([{ text: "\u{1F381} \u0646\u0638\u0627\u0645 \u0627\u0644\u0625\u062D\u0627\u0644\u0629", callback_data: "premium:referral" }]);
+  } else {
+    rows.push([{ text: "\u2753 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629", callback_data: "help" }], [{ text: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callback_data: "about" }]);
+    rows.push([{ text: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://alnaseer.org/" }], [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }]);
+  }
+  rows.push([{ text: "\u21A9\uFE0F \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629", callback_data: "menu" }]);
+  return { inline_keyboard: rows };
+}
+function mainCategoryText(category) {
+  const texts = {
+    search: "\u{1F50E} \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\n\n\u0627\u0628\u062D\u062B \u0641\u064A \u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629 \u0623\u0648 \u062A\u0635\u0641\u062D \u0627\u0644\u0645\u0643\u062A\u0628\u0629.",
+    library: "\u{1F4DA} \u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629\n\n\u0627\u062E\u062A\u0631 \u0646\u0648\u0639 \u0627\u0644\u0645\u0635\u062F\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628.",
+    exams: "\u{1F4DD} \u0628\u0646\u0643 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0628\u0646\u0643 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628.",
+    documents: "\u{1F4C4} \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0648\u0627\u0644\u0635\u064A\u063A \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629\n\n\u0627\u062E\u062A\u0631 \u0646\u0648\u0639 \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0623\u0648 \u0627\u0644\u0635\u064A\u063A\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629.",
+    featured: "\u{1F4CC} \u0627\u0644\u0645\u0631\u0627\u062C\u0639 \u0648\u0627\u0644\u0645\u0648\u0627\u062F \u0627\u0644\u0645\u0645\u064A\u0632\u0629\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0630\u064A \u062A\u0631\u064A\u062F \u0627\u0633\u062A\u0639\u0631\u0627\u0636\u0647.",
+    services: "\u{1F6E0} \u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0648\u0627\u0644\u0623\u062F\u0648\u0627\u062A\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u062E\u062F\u0645\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629.",
+    help: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0628\u0648\u062A \u0648\u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0623\u0648 \u0648\u0633\u064A\u0644\u0629 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629."
+  };
+  return texts[category];
 }
 function groupExamLaunchMenu() {
   return { inline_keyboard: [[{ text: "\u0628\u062F\u0621 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u064A \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u2795", callback_data: "gexam:open" }]] };
@@ -4920,6 +4958,18 @@ async function handleTelegramUpdate(update, store, sender, documentProvider = { 
       callbackAcknowledged = true;
       await sender.answerCallbackQuery(callback.id, text3).catch(() => void 0);
     };
+    const presentCallbackPage = async (text3, replyMarkup) => {
+      const messageId = callback.message?.message_id;
+      if (messageId && sender.editMessageText) {
+        try {
+          await sender.editMessageText(chatId2, messageId, text3, replyMarkup);
+          return;
+        } catch (error) {
+          if (error instanceof Error && /message is not modified/i.test(error.message)) return;
+        }
+      }
+      await sender.sendMessage(chatId2, text3, replyMarkup);
+    };
     await acknowledgeCallback();
     if (isPrivateChat(chat?.type)) {
       await store.registerSubscriber(String(chatId2), telegramUserId2, {
@@ -5203,8 +5253,14 @@ ${referralHistoryText(history)}`, referralMenu());
     if (isFileRequest && !isPrivateChat(chat?.type)) {
       return;
     }
+    const categoryMatch = data.match(/^menu:(search|library|exams|documents|featured|services|help)$/);
+    if (categoryMatch) {
+      const category = categoryMatch[1];
+      await presentCallbackPage(mainCategoryText(category), mainCategoryMenu(category, managedSections));
+      return;
+    }
     if (data === "menu") {
-      await sender.sendMessage(chatId2, welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
+      await presentCallbackPage(welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
       return;
     }
     if (data.startsWith("managed-premium:request:")) {
@@ -6441,6 +6497,14 @@ function createTelegramSender(token, replyContext = {}) {
       await telegramRequest(token, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
         ...text2 ? { text: text2, show_alert: true } : {}
+      });
+    },
+    async editMessageText(chatId, messageId, text2, replyMarkup) {
+      await telegramRequest(token, "editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text: text2,
+        reply_markup: adaptReplyMarkupForTelegramContext(replyMarkup, replyContext)
       });
     },
     async isChatAdministrator(chatId, telegramUserId) {
