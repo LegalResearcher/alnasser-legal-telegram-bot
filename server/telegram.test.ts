@@ -753,7 +753,7 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
     expect(messages.at(-1)?.text).toContain("القواعد القضائية");
     expect(messages.at(-1)?.text).not.toContain("الصيغ والعقود القانونية");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("https://hasad-alyoum.com/");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-hasad-visit.html");
 
     await handleTelegramUpdate({ callback_query: { id: "contracts-blocked", data: "contract-templates", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");

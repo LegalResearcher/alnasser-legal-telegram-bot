@@ -3220,6 +3220,7 @@ function classifyTelegramContractTemplate(fileName) {
 // server/telegram.ts
 var legalCategories = ["fiqh", "civil", "commercial", "procedure", "general"];
 var TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html";
+var TELEGRAM_HASAD_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-hasad-visit.html";
 var importantYemeniLawsPaymentMethods = {
   karimi: { label: "\u0643\u0631\u064A\u0645\u064A", details: "\u0631\u0642\u0645 \u062D\u0633\u0627\u0628 \u0643\u0631\u064A\u0645\u064A: 3007145477" },
   jeeb: { label: "\u0645\u062D\u0641\u0638\u0629 \u062C\u064A\u0628", details: "\u0631\u0642\u0645 \u062D\u0633\u0627\u0628 \u062C\u064A\u0628: 488281" }
@@ -3339,7 +3340,7 @@ function quizQuickCommandsText() {
 function hasadAccessMenu() {
   return {
     inline_keyboard: [
-      [{ text: "\u0641\u062A\u062D \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0632\u064A\u0627\u0631\u0629", web_app: { url: "https://hasad-alyoum.com/" } }]
+      [{ text: "\u0641\u062A\u062D \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0632\u064A\u0627\u0631\u0629", web_app: { url: TELEGRAM_HASAD_VERIFY_WEB_APP_URL } }]
     ]
   };
 }

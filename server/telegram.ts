@@ -9,6 +9,7 @@ export const legalCategories = ["fiqh", "civil", "commercial", "procedure", "gen
 export type LegalCategory = (typeof legalCategories)[number];
 
 const TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html";
+const TELEGRAM_HASAD_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-hasad-visit.html";
 
 const importantYemeniLawsPaymentMethods = {
   karimi: { label: "كريمي", details: "رقم حساب كريمي: 3007145477" },
@@ -494,7 +495,7 @@ function platformAccessMenu(): TelegramInlineKeyboard {
 function hasadAccessMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [{ text: "فتح حصاد اليوم وتوثيق الزيارة", web_app: { url: "https://hasad-alyoum.com/" } }],
+      [{ text: "فتح حصاد اليوم وتوثيق الزيارة", web_app: { url: TELEGRAM_HASAD_VERIFY_WEB_APP_URL } }],
     ],
   };
 }
