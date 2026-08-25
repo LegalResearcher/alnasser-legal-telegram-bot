@@ -4,7 +4,43 @@ import { getDb } from "./db";
 import { TELEGRAM_EXAM_CATALOG, getImportedExamSubjectKey } from "./telegramExam";
 
 const SOURCE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co/rest/v1";
-const LEVEL_KEY_BY_ORDER: Record<number, string> = { 1: "l1", 2: "l2", 3: "l3", 4: "l4" };
+const LEVEL_KEY_BY_ORDER: Record<number, string> = {
+  1: "l1",
+  2: "l2",
+  3: "l3",
+  4: "l4",
+  6: "secondary-literary",
+  7: "secondary-scientific",
+};
+export function levelKeyForSupabaseLevelOrder(order: number): string | undefined {
+  return LEVEL_KEY_BY_ORDER[order];
+}
+
+export const SECONDARY_SOURCE_SUBJECT_NAMES: Record<string, string[]> = {
+  "secondary-literary": [
+    "التاريخ",
+    "الجغرافيا",
+    "الفلسفة والمنطق وعلم النفس",
+    "التربية الإسلامية",
+    "اللغة العربية",
+    "القرآن الكريم",
+    "اللغة الإنجليزية",
+    "الرياضيات",
+  ],
+  "secondary-scientific": [
+    "القرآن الكريم",
+    "التربية الإسلامية",
+    "اللغة العربية",
+    "اللغة الإنجليزية",
+    "الأحياء",
+    "الفيزياء",
+    "الكيمياء",
+  ],
+};
+
+export function normalizedArabicLabel(value: string): string {
+  return value.normalize("NFKC").replace(/[ًٌٍَُِّْـ]/g, "").replace(/[إأآ]/g, "ا").replace(/\s+/g, " ").trim();
+}
 const ANNUAL_FORM_TYPES: Record<string, { key: string; name: string; priority: number }> = {
   General: { key: "general", name: "العام", priority: 1 },
   Parallel: { key: "parallel", name: "الموازي", priority: 2 },
@@ -13,7 +49,7 @@ const ANNUAL_FORM_TYPES: Record<string, { key: string; name: string; priority: n
 const ARABIC_ORDINALS = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر", "الثالث عشر", "الرابع عشر", "الخامس عشر", "السادس عشر", "السابع عشر", "الثامن عشر", "التاسع عشر", "العشرون"];
 
 type SourceLevel = { id: string; order_index: number };
-type SourceSubject = { id: string; level_id: string; order_index: number };
+type SourceSubject = { id: string; level_id: string; name: string; order_index: number };
 type SourceForm = { form_id: string; form_name: string; order_index: number; hidden: boolean };
 type SourceQuestion = {
   id: string;
@@ -33,7 +69,10 @@ type SourceQuestion = {
 
 export type SupabaseExamSyncResult = { levelKey: string; subjects: number; forms: number; questions: number; excludedQuestions: number };
 export type SupabaseExamSyncSubjectResult = { levelKey: string; subjectKey: string; subjectName: string; forms: number; questions: number; excludedQuestions: number };
-export type SupabaseExamSyncOptions = { onSubjectComplete?: (result: SupabaseExamSyncSubjectResult) => Promise<void> | void };
+export type SupabaseExamSyncOptions = {
+  dryRun?: boolean;
+  onSubjectComplete?: (result: SupabaseExamSyncSubjectResult) => Promise<void> | void;
+};
 
 export function isExcludedExamYear(levelKey: string, year: number | null | undefined): boolean {
   return ["l1", "l2", "l3"].includes(levelKey) && (year === 2020 || year === 2021);
@@ -44,15 +83,19 @@ function trainingDisplayName(formKey: string): string {
   return modelNumber > 0 ? `القسم ${ARABIC_ORDINALS[modelNumber] ?? `رقم ${modelNumber}`}` : formKey;
 }
 
-function normalizedForm(input: { formKey: string; sourceName?: string; sourceOrder?: number; year?: number | null }): { formKey: string; formName: string; sortOrder: number } {
+export function normalizedForm(input: { formKey: string; sourceName?: string; sourceOrder?: number; year?: number | null; treatAsAnnual?: boolean }): { formKey: string; formName: string; sortOrder: number } {
   const annual = ANNUAL_FORM_TYPES[input.formKey];
   if (annual && input.year) {
     return { formKey: `${annual.key}_${input.year}`, formName: `${annual.name} ${input.year}`, sortOrder: input.year * 10 + annual.priority };
   }
   const modelNumber = Number(input.formKey.match(/^Model_(\d+)$/i)?.[1] ?? 0);
+  const sourceName = input.sourceName?.trim() || trainingDisplayName(input.formKey);
+  if (input.treatAsAnnual && input.year) {
+    return { formKey: input.formKey, formName: `${input.year} ${sourceName}`, sortOrder: input.year * 1000 + (input.sourceOrder || modelNumber || 900) };
+  }
   return {
     formKey: input.formKey,
-    formName: modelNumber > 0 ? trainingDisplayName(input.formKey) : input.sourceName?.trim() || trainingDisplayName(input.formKey),
+    formName: modelNumber > 0 ? trainingDisplayName(input.formKey) : sourceName,
     sortOrder: 100000 + (modelNumber || input.sourceOrder || 900),
   };
 }
@@ -77,14 +120,14 @@ async function sourceSelectAll<T>(table: string, params: Record<string, string>)
 export async function syncSupabaseExamLevel(levelKey: string, options: SupabaseExamSyncOptions = {}): Promise<SupabaseExamSyncResult> {
   const level = TELEGRAM_EXAM_CATALOG.find(item => item.key === levelKey && !item.comingSoon);
   if (!level) throw new Error("المستوى المطلوب غير صالح للمزامنة.");
-  const db = await getDb();
-  if (!db) throw new Error("تعذر الاتصال بقاعدة بيانات البوت.");
+  const db = options.dryRun ? null : await getDb();
+  if (!options.dryRun && !db) throw new Error("تعذر الاتصال بقاعدة بيانات البوت.");
 
   const [sourceLevels, sourceSubjects] = await Promise.all([
     sourceSelectAll<SourceLevel>("levels", { select: "id,order_index" }),
-    sourceSelectAll<SourceSubject>("subjects", { select: "id,level_id,order_index" }),
+    sourceSelectAll<SourceSubject>("subjects", { select: "id,level_id,name,order_index" }),
   ]);
-  const sourceLevel = sourceLevels.find(item => LEVEL_KEY_BY_ORDER[Number(item.order_index)] === levelKey);
+  const sourceLevel = sourceLevels.find(item => levelKeyForSupabaseLevelOrder(Number(item.order_index)) === levelKey);
   if (!sourceLevel) throw new Error("تعذر العثور على المستوى في Supabase.");
 
   let subjectCount = 0;
@@ -94,8 +137,17 @@ export async function syncSupabaseExamLevel(levelKey: string, options: SupabaseE
   const levelSubjects = sourceSubjects.filter(item => item.level_id === sourceLevel.id).sort((left, right) => Number(left.order_index) - Number(right.order_index));
 
   for (const sourceSubject of levelSubjects) {
-    const catalogSubject = level.subjects[Number(sourceSubject.order_index) - 1];
-    if (!catalogSubject) continue;
+    const subjectOrder = Number(sourceSubject.order_index);
+    const catalogSubject = level.subjects[subjectOrder - 1];
+    const expectedSourceNames = SECONDARY_SOURCE_SUBJECT_NAMES[levelKey];
+    const expectedSourceName = expectedSourceNames?.[subjectOrder - 1];
+    if (!catalogSubject) {
+      if (expectedSourceNames) throw new Error(`مادة Supabase ذات الترتيب ${subjectOrder} غير موجودة في كتالوج ${levelKey}.`);
+      continue;
+    }
+    if (expectedSourceName && normalizedArabicLabel(sourceSubject.name) !== normalizedArabicLabel(expectedSourceName)) {
+      throw new Error(`اختلاف مطابقة مادة ${levelKey} رقم ${subjectOrder}: المصدر «${sourceSubject.name}» والمتوقع «${expectedSourceName}».`);
+    }
     const subjectKey = getImportedExamSubjectKey(levelKey, catalogSubject.key);
     if (!subjectKey) continue;
     const [sourceForms, sourceQuestions] = await Promise.all([
@@ -116,7 +168,12 @@ export async function syncSupabaseExamLevel(levelKey: string, options: SupabaseE
     const questionsByForm = new Map<string, SourceQuestion[]>();
 
     for (const sourceForm of Array.from(sourceFormByKey.values())) {
-      const normalized = normalizedForm({ formKey: sourceForm.form_id, sourceName: sourceForm.form_name, sourceOrder: Number(sourceForm.order_index) });
+      const normalized = normalizedForm({
+        formKey: sourceForm.form_id,
+        sourceName: sourceForm.form_name,
+        sourceOrder: Number(sourceForm.order_index),
+        treatAsAnnual: levelKey.startsWith("secondary-"),
+      });
       if (!isExcludedExamYear(levelKey, Number(normalized.formName.match(/20\d{2}/)?.[0]))) formsByKey.set(normalized.formKey, normalized);
     }
     let subjectExcludedQuestions = 0;
@@ -134,6 +191,7 @@ export async function syncSupabaseExamLevel(levelKey: string, options: SupabaseE
         sourceName: sourceForm?.form_name ?? (sourceFormKey === "unclassified" ? "أسئلة عامة" : undefined),
         sourceOrder: sourceForm?.order_index,
         year: Number(question.exam_year) || null,
+        treatAsAnnual: levelKey.startsWith("secondary-"),
       });
       formsByKey.set(normalized.formKey, normalized);
       const questions = questionsByForm.get(normalized.formKey) ?? [];
@@ -141,44 +199,47 @@ export async function syncSupabaseExamLevel(levelKey: string, options: SupabaseE
       questionsByForm.set(normalized.formKey, questions);
     }
 
-    await db.update(telegramExamForms).set({ isActive: false }).where(eq(telegramExamForms.subjectKey, subjectKey));
-    await db.update(telegramExamQuestions).set({ isActive: false }).where(eq(telegramExamQuestions.subjectKey, subjectKey));
     const forms = Array.from(formsByKey.values());
-    for (let start = 0; start < forms.length; start += 100) {
-      const batch = forms.slice(start, start + 100).map(form => ({ ...form, subjectKey, isActive: true }));
-      if (!batch.length) continue;
-      await db.insert(telegramExamForms).values(batch).onDuplicateKeyUpdate({
-        set: { formName: sql`VALUES(${telegramExamForms.formName})`, sortOrder: sql`VALUES(${telegramExamForms.sortOrder})`, isActive: true },
-      });
-    }
-    for (const [formKey, questions] of Array.from(questionsByForm.entries())) {
-      for (let start = 0; start < questions.length; start += 100) {
-        const batch = questions.slice(start, start + 100).map((question: SourceQuestion, index: number) => ({
-          sourceQuestionId: question.id,
-          subjectKey,
-          sectionKey: formKey,
-          questionText: question.question_text ?? "",
-          optionA: question.option_a ?? "",
-          optionB: question.option_b ?? "",
-          optionC: question.option_c ?? "",
-          optionD: question.option_d ?? "",
-          correctOption: question.correct_option as "A" | "B" | "C" | "D",
-          hint: question.hint ?? null,
-          explanation: question.explanation ?? "",
-          sortOrder: start + index + 1,
-          isActive: true,
-        }));
+    if (!options.dryRun) {
+      if (!db) throw new Error("تعذر الاتصال بقاعدة بيانات البوت.");
+      await db.update(telegramExamForms).set({ isActive: false }).where(eq(telegramExamForms.subjectKey, subjectKey));
+      await db.update(telegramExamQuestions).set({ isActive: false }).where(eq(telegramExamQuestions.subjectKey, subjectKey));
+      for (let start = 0; start < forms.length; start += 100) {
+        const batch = forms.slice(start, start + 100).map(form => ({ ...form, subjectKey, isActive: true }));
         if (!batch.length) continue;
-        await db.insert(telegramExamQuestions).values(batch).onDuplicateKeyUpdate({
-          set: {
-            subjectKey: sql`VALUES(${telegramExamQuestions.subjectKey})`, sectionKey: sql`VALUES(${telegramExamQuestions.sectionKey})`,
-            questionText: sql`VALUES(${telegramExamQuestions.questionText})`, optionA: sql`VALUES(${telegramExamQuestions.optionA})`,
-            optionB: sql`VALUES(${telegramExamQuestions.optionB})`, optionC: sql`VALUES(${telegramExamQuestions.optionC})`,
-            optionD: sql`VALUES(${telegramExamQuestions.optionD})`, correctOption: sql`VALUES(${telegramExamQuestions.correctOption})`,
-            hint: sql`VALUES(${telegramExamQuestions.hint})`, explanation: sql`VALUES(${telegramExamQuestions.explanation})`,
-            sortOrder: sql`VALUES(${telegramExamQuestions.sortOrder})`, isActive: true,
-          },
+        await db.insert(telegramExamForms).values(batch).onDuplicateKeyUpdate({
+          set: { formName: sql`VALUES(${telegramExamForms.formName})`, sortOrder: sql`VALUES(${telegramExamForms.sortOrder})`, isActive: true },
         });
+      }
+      for (const [formKey, questions] of Array.from(questionsByForm.entries())) {
+        for (let start = 0; start < questions.length; start += 100) {
+          const batch = questions.slice(start, start + 100).map((question: SourceQuestion, index: number) => ({
+            sourceQuestionId: question.id,
+            subjectKey,
+            sectionKey: formKey,
+            questionText: question.question_text ?? "",
+            optionA: question.option_a ?? "",
+            optionB: question.option_b ?? "",
+            optionC: question.option_c ?? "",
+            optionD: question.option_d ?? "",
+            correctOption: question.correct_option as "A" | "B" | "C" | "D",
+            hint: question.hint ?? null,
+            explanation: question.explanation ?? "",
+            sortOrder: start + index + 1,
+            isActive: true,
+          }));
+          if (!batch.length) continue;
+          await db.insert(telegramExamQuestions).values(batch).onDuplicateKeyUpdate({
+            set: {
+              subjectKey: sql`VALUES(${telegramExamQuestions.subjectKey})`, sectionKey: sql`VALUES(${telegramExamQuestions.sectionKey})`,
+              questionText: sql`VALUES(${telegramExamQuestions.questionText})`, optionA: sql`VALUES(${telegramExamQuestions.optionA})`,
+              optionB: sql`VALUES(${telegramExamQuestions.optionB})`, optionC: sql`VALUES(${telegramExamQuestions.optionC})`,
+              optionD: sql`VALUES(${telegramExamQuestions.optionD})`, correctOption: sql`VALUES(${telegramExamQuestions.correctOption})`,
+              hint: sql`VALUES(${telegramExamQuestions.hint})`, explanation: sql`VALUES(${telegramExamQuestions.explanation})`,
+              sortOrder: sql`VALUES(${telegramExamQuestions.sortOrder})`, isActive: true,
+            },
+          });
+        }
       }
     }
     subjectCount += 1;

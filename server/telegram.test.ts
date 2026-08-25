@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LegalFolder, LegalSource, TelegramContractTemplate } from "../drizzle/schema";
 import { approximateArabicMatchScore, fallbackJudicialSearchResults, normalizeArabicSearch } from "./db";
-import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
+import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, createTelegramSender, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
 import { examPollOptionText, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 
 const sampleSource: LegalSource = {
@@ -413,7 +413,11 @@ function createStore(
     beginLibrarySearch: async () => undefined,
     consumeLibrarySearchQuery: async (_chatId, query) => (query.includes("مكتبة") ? { id: 27 } : undefined),
     searchLibrarySources: async (sessionId, page) => sessionId === 27 && page === 1 ? { query: "مكتبة", sources: [sampleSource], total: 1, matchType: "exact" } : undefined,
-    listExamForms: async subjectKey => subjectKey === "l1_usul_fiqh" ? [
+    listExamForms: async subjectKey => {
+      const resolvedSubjectKey = subjectKey.startsWith("exam_secondary_literary_")
+        ? subjectKey.replace("exam_secondary_literary_", "exam_secondary_")
+        : subjectKey;
+      return resolvedSubjectKey === "l1_usul_fiqh" ? [
       { formKey: "Model_1", formName: "الموازي2025", sortOrder: 1 },
       { formKey: "Model_2", formName: "القسم الأول", sortOrder: 2 },
       { formKey: "general_2022", formName: "العام 2022", sortOrder: 100 },
@@ -435,19 +439,19 @@ function createStore(
       { formKey: "mixed_2025", formName: "المختلط 2025", sortOrder: 107 },
     ] : subjectKey === "exam_l1_l1_political_systems" ? [
       { formKey: "general_2025", formName: "العام 2025", sortOrder: 20251, questionCount: 0 },
-    ] : subjectKey === "exam_secondary_math" ? [
+    ] : resolvedSubjectKey === "exam_secondary_math" ? [
       { formKey: "secondary_math_model_1", formName: "النموذج الأول — رياضيات أدبي", sortOrder: 1, questionCount: 40 },
       { formKey: "secondary_math_model_2", formName: "النموذج الثاني — رياضيات أدبي", sortOrder: 2, questionCount: 40 },
       { formKey: "secondary_math_model_3", formName: "النموذج الثالث — رياضيات أدبي", sortOrder: 3, questionCount: 40 },
       { formKey: "secondary_math_model_4", formName: "النموذج الرابع — رياضيات أدبي", sortOrder: 4, questionCount: 40 },
-    ] : subjectKey === "exam_secondary_history" ? [
+    ] : resolvedSubjectKey === "exam_secondary_history" ? [
       { formKey: "secondary_history_model_1", formName: "النموذج الأول — تاريخ أدبي", sortOrder: 1, questionCount: 50 },
       { formKey: "secondary_history_model_2", formName: "النموذج الثاني — تاريخ أدبي", sortOrder: 2, questionCount: 50 },
       { formKey: "secondary_history_model_3", formName: "النموذج الثالث — تاريخ أدبي", sortOrder: 3, questionCount: 50 },
       { formKey: "secondary_history_model_4", formName: "النموذج الرابع — تاريخ أدبي", sortOrder: 4, questionCount: 50 },
       { formKey: "secondary_history_model_5", formName: "النموذج الخامس — تاريخ أدبي", sortOrder: 5, questionCount: 50 },
       { formKey: "secondary_history_model_6", formName: "النموذج السادس — تاريخ أدبي", sortOrder: 6, questionCount: 50 },
-    ] : subjectKey === "exam_secondary_arabic" ? [
+    ] : resolvedSubjectKey === "exam_secondary_arabic" ? [
       { formKey: "secondary_arabic_model_1", formName: "النموذج الأول - لغة عربية أدبي", sortOrder: 1, questionCount: 46 },
       { formKey: "secondary_arabic_model_2", formName: "النموذج الثاني - لغة عربية أدبي", sortOrder: 2, questionCount: 46 },
       { formKey: "secondary_arabic_model_3", formName: "النموذج الثالث - لغة عربية أدبي", sortOrder: 3, questionCount: 46 },
@@ -455,7 +459,7 @@ function createStore(
       { formKey: "secondary_arabic_model_5", formName: "النموذج الخامس - لغة عربية أدبي", sortOrder: 5, questionCount: 46 },
       { formKey: "secondary_arabic_model_6", formName: "النموذج السادس - لغة عربية أدبي", sortOrder: 6, questionCount: 46 },
       { formKey: "secondary_arabic_model_7", formName: "النموذج السابع - لغة عربية أدبي", sortOrder: 7, questionCount: 46 },
-    ] : subjectKey === "exam_secondary_geography" ? [
+    ] : resolvedSubjectKey === "exam_secondary_geography" ? [
       { formKey: "secondary_geography_model_1", formName: "النموذج الأول - جغرافيا أدبي", sortOrder: 1, questionCount: 50 },
       { formKey: "secondary_geography_model_2", formName: "النموذج الثاني - جغرافيا أدبي", sortOrder: 2, questionCount: 50 },
       { formKey: "secondary_geography_model_3", formName: "النموذج الثالث - جغرافيا أدبي", sortOrder: 3, questionCount: 50 },
@@ -463,7 +467,7 @@ function createStore(
       { formKey: "secondary_geography_model_5", formName: "النموذج الخامس - جغرافيا أدبي", sortOrder: 5, questionCount: 50 },
       { formKey: "secondary_geography_model_6", formName: "النموذج السادس - جغرافيا أدبي", sortOrder: 6, questionCount: 50 },
       { formKey: "secondary_geography_model_7", formName: "النموذج السابع - جغرافيا أدبي", sortOrder: 7, questionCount: 50 },
-    ] : subjectKey === "exam_secondary_quran" ? [
+    ] : resolvedSubjectKey === "exam_secondary_quran" ? [
       { formKey: "secondary_quran_model_1", formName: "النموذج الأول - قرآن كريم أدبي", sortOrder: 1, questionCount: options.secondaryQuranWrittenQuestion ? 2 : 47 },
       { formKey: "secondary_quran_model_2", formName: "النموذج الثاني - قرآن كريم أدبي", sortOrder: 2, questionCount: 47 },
       { formKey: "secondary_quran_model_3", formName: "النموذج الثالث - قرآن كريم أدبي", sortOrder: 3, questionCount: 47 },
@@ -471,7 +475,7 @@ function createStore(
       { formKey: "secondary_quran_model_5", formName: "النموذج الخامس - قرآن كريم أدبي", sortOrder: 5, questionCount: 47 },
       { formKey: "secondary_quran_model_6", formName: "النموذج السادس - قرآن كريم أدبي", sortOrder: 6, questionCount: 47 },
       { formKey: "secondary_quran_model_7", formName: "النموذج السابع - قرآن كريم أدبي", sortOrder: 7, questionCount: 47 },
-    ] : subjectKey === "exam_secondary_philosophy" ? [
+    ] : resolvedSubjectKey === "exam_secondary_philosophy" ? [
       { formKey: "secondary_philosophy_model_1", formName: "النموذج الأول - الفلسفة والمنطق وعلم النفس أدبي", sortOrder: 1, questionCount: 50 },
       { formKey: "secondary_philosophy_model_2", formName: "النموذج الثاني - الفلسفة والمنطق وعلم النفس أدبي", sortOrder: 2, questionCount: 50 },
       { formKey: "secondary_philosophy_model_3", formName: "النموذج الثالث - الفلسفة والمنطق وعلم النفس أدبي", sortOrder: 3, questionCount: 50 },
@@ -479,7 +483,7 @@ function createStore(
       { formKey: "secondary_philosophy_model_5", formName: "النموذج الخامس - الفلسفة والمنطق وعلم النفس أدبي", sortOrder: 5, questionCount: 50 },
       { formKey: "secondary_philosophy_model_6", formName: "النموذج السادس - الفلسفة والمنطق وعلم النفس أدبي", sortOrder: 6, questionCount: 50 },
       { formKey: "secondary_philosophy_model_7", formName: "النموذج السابع - الفلسفة والمنطق وعلم النفس أدبي", sortOrder: 7, questionCount: 50 },
-    ] : subjectKey === "exam_secondary_islamic" ? [
+    ] : resolvedSubjectKey === "exam_secondary_islamic" ? [
       { formKey: "secondary_islamic_model_1", formName: "النموذج الأول - التربية الإسلامية أدبي", sortOrder: 1, questionCount: 50 },
       { formKey: "secondary_islamic_model_2", formName: "النموذج الثاني - التربية الإسلامية أدبي", sortOrder: 2, questionCount: 50 },
       { formKey: "secondary_islamic_model_3", formName: "النموذج الثالث - التربية الإسلامية أدبي", sortOrder: 3, questionCount: 50 },
@@ -487,7 +491,7 @@ function createStore(
       { formKey: "secondary_islamic_model_5", formName: "النموذج الخامس - التربية الإسلامية أدبي", sortOrder: 5, questionCount: 50 },
       { formKey: "secondary_islamic_model_6", formName: "النموذج السادس - التربية الإسلامية أدبي", sortOrder: 6, questionCount: 50 },
       { formKey: "secondary_islamic_model_7", formName: "النموذج السابع - التربية الإسلامية أدبي", sortOrder: 7, questionCount: 50 },
-    ] : subjectKey === "exam_secondary_english" ? [
+    ] : resolvedSubjectKey === "exam_secondary_english" ? [
       { formKey: "secondary_english_model_1", formName: "النموذج الأول - اللغة الإنجليزية أدبي", sortOrder: 1, questionCount: 50 },
       { formKey: "secondary_english_model_2", formName: "النموذج الثاني - اللغة الإنجليزية أدبي", sortOrder: 2, questionCount: 50 },
       { formKey: "secondary_english_model_3", formName: "النموذج الثالث - اللغة الإنجليزية أدبي", sortOrder: 3, questionCount: 50 },
@@ -495,10 +499,17 @@ function createStore(
       { formKey: "secondary_english_model_5", formName: "النموذج الخامس - اللغة الإنجليزية أدبي", sortOrder: 5, questionCount: 50 },
       { formKey: "secondary_english_model_6", formName: "النموذج السادس - اللغة الإنجليزية أدبي", sortOrder: 6, questionCount: 50 },
       { formKey: "secondary_english_model_7", formName: "النموذج السابع - اللغة الإنجليزية أدبي", sortOrder: 7, questionCount: 50 },
-    ] : subjectKey === "civil_law" ? [
+    ] : ["exam_secondary_scientific_quran", "exam_secondary_scientific_islamic", "exam_secondary_scientific_arabic", "exam_secondary_scientific_english", "exam_secondary_scientific_biology", "exam_secondary_scientific_physics", "exam_secondary_scientific_chemistry"].includes(subjectKey) ? [
+      { formKey: `${subjectKey}-01`, formName: "2026 النموذج 1", sortOrder: 2026001, questionCount: 2 },
+      ...(subjectKey === "exam_secondary_scientific_physics" ? [
+        { formKey: `${subjectKey}-02`, formName: "2026 النموذج 2", sortOrder: 2026002, questionCount: 2 },
+        { formKey: `${subjectKey}-03`, formName: "2026 النموذج 3", sortOrder: 2026003, questionCount: 2 },
+      ] : []),
+    ] : resolvedSubjectKey === "civil_law" ? [
       { formKey: "general_2025", formName: "العام 2025", sortOrder: 20251, questionCount: 2 },
-    ] : [],
-    listExamQuestions: async subjectKey => ["civil_law", "l1_usul_fiqh", "l1_criminology", "exam_secondary_math", "exam_secondary_history", "exam_secondary_arabic", "exam_secondary_geography", "exam_secondary_quran", "exam_secondary_philosophy", "exam_secondary_islamic", "exam_secondary_english"].includes(subjectKey) ? examQuestions : [],
+    ] : [];
+    },
+    listExamQuestions: async subjectKey => ["civil_law", "l1_usul_fiqh", "l1_criminology", "exam_secondary_math", "exam_secondary_history", "exam_secondary_arabic", "exam_secondary_geography", "exam_secondary_quran", "exam_secondary_philosophy", "exam_secondary_islamic", "exam_secondary_english", "exam_secondary_literary_math", "exam_secondary_literary_history", "exam_secondary_literary_arabic", "exam_secondary_literary_geography", "exam_secondary_literary_quran", "exam_secondary_literary_philosophy", "exam_secondary_literary_islamic", "exam_secondary_literary_english", "exam_secondary_scientific_quran", "exam_secondary_scientific_islamic", "exam_secondary_scientific_arabic", "exam_secondary_scientific_english", "exam_secondary_scientific_biology", "exam_secondary_scientific_physics", "exam_secondary_scientific_chemistry"].includes(subjectKey) ? examQuestions : [],
     startExamSession: async (telegramUserId, chatId, subjectKey, sectionKey, timeLimitSeconds) => {
       examSession = { id: 91, telegramUserId, chatId, subjectKey, sectionKey, status: "active", questionIndex: 0, score: 0, incorrectCount: 0, missedCount: 0, timeLimitSeconds, activePollId: null, startedAt: new Date() };
       return { id: examSession.id };
@@ -617,6 +628,7 @@ function createStore(
 
 function createSender() {
   const messages: Array<{ chatId: number; text: string; replyMarkup?: unknown }> = [];
+  const editedMessages: Array<{ chatId: number; messageId: number; text: string; replyMarkup?: unknown }> = [];
   const documents: Array<{ chatId: number; filename: string; caption: string }> = [];
   const fileIdDocuments: Array<{ chatId: number; fileId: string; caption?: string }> = [];
   const fileIdPhotos: Array<{ chatId: number; fileId: string; caption?: string }> = [];
@@ -642,9 +654,12 @@ function createSender() {
     answerCallbackQuery: async callbackQueryId => {
       callbacks.push(callbackQueryId);
     },
+    editMessageText: async (chatId, messageId, text, replyMarkup) => {
+      editedMessages.push({ chatId, messageId, text, replyMarkup });
+    },
     isChatAdministrator: async () => false,
   };
-  return { sender, messages, documents, fileIdDocuments, fileIdPhotos, polls, callbacks };
+  return { sender, messages, editedMessages, documents, fileIdDocuments, fileIdPhotos, polls, callbacks };
 }
 
 function createDocumentProvider() {
@@ -703,19 +718,20 @@ describe("Telegram library conversation", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("منصة معرفية وتعليمية بإشراف أ. معين الناصر");
     expect(messages[0]?.text).toContain("مبادرة تعليمية مستقلة");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📚 تصفح المكتبة");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("⚖️ قواعد قضائية");
+    const keyboard = JSON.stringify(messages[0]?.replyMarkup);
+    expect(keyboard).toContain("🔎 البحث القانوني");
+    expect(keyboard).toContain("📚 المكتبة القانونية");
+    expect(keyboard).toContain("📝 بنك الأسئلة والاختبارات");
+    expect(keyboard).toContain("📄 النماذج والصيغ القانونية");
+    expect(keyboard).toContain("📌 المراجع المميزة");
+    expect(keyboard).toContain("🛠 الخدمات والأدوات");
+    expect(keyboard).toContain("menu:library");
+    expect(keyboard).toContain("menu:exams");
+    expect(keyboard).not.toContain("📚 تصفح المكتبة");
+    expect(keyboard).not.toContain("⚖️ قواعد قضائية");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"url":"https://alnaseer.org/"');
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"url":"https://t.me/muen2025"');
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("قناة منصة الناصر القانونية");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📜 التشريعات اليمنية");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("callback_data\":\"legislation");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("🔎 بحث موحّد");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("🆕 أحدث الإضافات");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📝 اختبارات الشريعة والقانون");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("📚 القوانين اليمنية فهرس تفاعلي");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("أهم القوانين اليمنية التفاعلي");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("callback_data\":\"important-laws");
+    expect(keyboard).toContain("قناة منصة الناصر القانونية");
 
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
     expect(messages[1]?.text).toContain("مرحباً بك في بوت الناصر القانوني");
@@ -746,7 +762,7 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
     expect(messages.at(-1)?.text).toContain("القواعد القضائية");
     expect(messages.at(-1)?.text).not.toContain("الصيغ والعقود القانونية");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("https://hasad-alyoum.com/");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-hasad-visit.html");
 
     await handleTelegramUpdate({ callback_query: { id: "contracts-blocked", data: "contract-templates", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
@@ -791,34 +807,26 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
   });
 
-  it("يعرض لاختبارات الشريعة والقانون رسالة مستقلة مع الإحالة والاشتراك المدفوع", async () => {
+  it("يفتح اختبارات الشريعة والقانون مجانًا بعد توثيق زيارة حصاد اليوم", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
-    await handleTelegramUpdate({ callback_query: { id: "exam-support", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    await handleTelegramUpdate({ callback_query: { id: "exam-free-hasad", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("دعم اختياري");
-    expect(response?.text).toContain("من دون تحديد مبلغ");
-    expect(response?.text).toContain("5 إحالات مؤهلة");
-    expect(response?.text).toContain("اختبارات الشريعة والقانون");
-    expect(response?.text).not.toContain("اختبارات الثانوية العامة");
-    expect(response?.text).not.toMatch(/3000|300٠/);
-    expect(JSON.stringify(response?.replyMarkup)).toContain("premium:referral");
-    expect(JSON.stringify(response?.replyMarkup)).toContain("premium:request:sharia_exams");
-
-    await handleTelegramUpdate({ callback_query: { id: "exam-payment", data: "premium:request:sharia_exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
-    expect(messages.at(-1)?.text).toContain("اختر طريقة التحويل التي استخدمتها");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("3007145477");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("488281");
+    expect(response?.text).toContain("📝 اختبارات الشريعة والقانون");
+    expect(response?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.");
+    expect(response?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(response?.text).not.toContain("دعم اختياري");
+    expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
 
-  it("يفصل رسالة اختبارات الثانوية العامة عن اختبارات الشريعة والقانون", async () => {
+  it("يفتح اختبارات الثانوية العامة مجانًا بعد توثيق زيارة حصاد اليوم", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
-    await handleTelegramUpdate({ callback_query: { id: "secondary-support", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    await handleTelegramUpdate({ callback_query: { id: "secondary-free-hasad", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
     expect(response?.text).toContain("اختبارات الثانوية العامة");
-    expect(response?.text).not.toContain("اختبارات الشريعة والقانون");
-    expect(JSON.stringify(response?.replyMarkup)).toContain("premium:request:secondary_exams");
+    expect(response?.text).not.toContain("دعم اختياري");
+    expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
 
   it("يفتح قسم الاختبارات مباشرة عند تحويله إداريًا إلى الوصول المجاني", async () => {
@@ -932,17 +940,22 @@ describe("Telegram library conversation", () => {
   });
 
   it("يطبق إخفاء وتسمية وترتيب الأقسام المدارة في القائمة الرئيسية", async () => {
-    const { sender, messages } = createSender();
+    const { sender, messages, editedMessages } = createSender();
     const store = createStore(true, false, { managedSections: [
       { sectionKey: "browse", displayLabel: "مكتبة الناصر", enabled: true, sortOrder: 500 },
       { sectionKey: "secondary-exams", displayLabel: "اختبارات الثانوية", enabled: false, sortOrder: 100 },
     ] });
 
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
-    const keyboard = JSON.stringify(messages[0]?.replyMarkup);
+    await handleTelegramUpdate({ callback_query: { id: "open-library-category", data: "menu:library", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 77 } } }, store, sender);
+    const libraryEdit = editedMessages.at(-1);
+    const keyboard = JSON.stringify(libraryEdit?.replyMarkup);
+    expect(libraryEdit?.messageId).toBe(77);
     expect(keyboard).toContain("مكتبة الناصر");
-    expect(keyboard).not.toContain("اختبارات الثانوية العامة");
-    expect(keyboard.indexOf("📝 اختبارات الشريعة والقانون")).toBeLessThan(keyboard.indexOf("مكتبة الناصر"));
+    expect(keyboard).toContain("⚖️ القواعد والمبادئ القضائية");
+    await handleTelegramUpdate({ callback_query: { id: "open-exams-category", data: "menu:exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 77 } } }, store, sender);
+    expect(editedMessages.at(-1)?.text).toContain("بنك الأسئلة والاختبارات");
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).not.toContain("اختبارات الثانوية");
   });
 
   it("يسجل مفتاح القسم عند فتح قسم التشريعات لدعم التحليلات المجمعة", async () => {
@@ -993,13 +1006,17 @@ describe("Telegram library conversation", () => {
       "المستوى الثالث",
       "المستوى الرابع",
       "اختبارات الثانوية العامة",
+      "ثالث ثانوي – القسم الأدبي",
+      "ثالث ثانوي – القسم العلمي",
       "بوابة التأهيل القضائي والأكاديمي",
     ]);
-    expect(TELEGRAM_EXAM_CATALOG.flatMap(level => level.subjects)).toHaveLength(60);
+    expect(TELEGRAM_EXAM_CATALOG.flatMap(level => level.subjects)).toHaveLength(76);
     expect(TELEGRAM_EXAM_CATALOG[0]?.subjects.slice(0, 3).map(subject => subject.name)).toEqual(["اصول الفقه", "علم الاجرام والعقاب", "النظم السياسية"]);
     expect(TELEGRAM_EXAM_CATALOG[3]?.subjects[10]).toMatchObject({ name: "القانون المدني", hasQuestions: true });
-    expect(TELEGRAM_EXAM_CATALOG[4]).toMatchObject({ name: "اختبارات الثانوية العامة", subjects: [{ name: "الرياضيات", hasQuestions: true }, { name: "التاريخ", hasQuestions: true }, { name: "اللغة العربية", hasQuestions: true }, { name: "الجغرافيا", hasQuestions: true }, { name: "القرآن الكريم", hasQuestions: true }, { name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true }, { name: "التربية الإسلامية", hasQuestions: true }, { name: "اللغة الإنجليزية", hasQuestions: true }, { name: "الكيمياء", hasQuestions: true }] });
-    expect(TELEGRAM_EXAM_CATALOG[5]).toMatchObject({ name: "بوابة التأهيل القضائي والأكاديمي", subjects: [], comingSoon: true });
+    expect(TELEGRAM_EXAM_CATALOG[4]).toMatchObject({ name: "اختبارات الثانوية العامة", hidden: true });
+    expect(TELEGRAM_EXAM_CATALOG[5]?.subjects.map(subject => subject.key)).toEqual(["history", "geography", "philosophy", "islamic", "arabic", "quran", "english", "math"]);
+    expect(TELEGRAM_EXAM_CATALOG[6]?.subjects.map(subject => subject.key)).toEqual(["quran", "islamic", "arabic", "english", "biology", "physics", "chemistry"]);
+    expect(TELEGRAM_EXAM_CATALOG[7]).toMatchObject({ name: "بوابة التأهيل القضائي والأكاديمي", subjects: [], comingSoon: true });
 
     const { sender, messages } = createSender();
     await handleTelegramUpdate(
@@ -1019,7 +1036,7 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("قريبًا");
   });
 
-  it("يعرض اختبارات الثانوية العامة ويفصل نماذج الرياضيات في اختبارات مستقلة", async () => {
+  it("يفصل اختبارات الثانوية إلى الأدبي والعلمي ويبدأ نموذجًا محليًا من كل قسم", async () => {
     const { sender, messages, polls } = createSender();
     const store = createStore();
     const callback = (id: string, data: string) => handleTelegramUpdate(
@@ -1029,99 +1046,58 @@ describe("Telegram library conversation", () => {
     );
 
     await callback("secondary-menu", "secondary-exams");
-    expect(messages.at(-1)?.text).toContain("اختبارات الثانوية العامة");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:subject:secondary:math:1");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:subject:secondary:history:1");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:subject:secondary:geography:1");
+    const sectionsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(messages.at(-1)?.text).toContain("🧮 اختبارات الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م");
+    expect(messages.at(-1)?.text).toContain("اختر القسم المطلوب.");
+    expect(sectionsMenu).toContain("exam:level:secondary-literary");
+    expect(sectionsMenu).toContain("exam:level:secondary-scientific");
+    expect(sectionsMenu).not.toContain("exam:subject:secondary:");
 
-    await callback("secondary-math", "exam:subject:secondary:math:1");
+    await callback("literary-level", "exam:level:secondary-literary");
+    const literarySubjects = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(literarySubjects).toContain("exam:subject:secondary-literary:history:1");
+    expect(literarySubjects).not.toContain("biology");
+    await callback("literary-next", "exam:level:secondary-literary:2");
+    const literarySubjectsPageTwo = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(literarySubjectsPageTwo).toContain("exam:subject:secondary-literary:math:2");
+
+    await callback("literary-math", "exam:subject:secondary-literary:math:2");
     expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الرياضيات للعام الدراسي 2023م");
-    const formsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(formsMenu).toContain("النموذج الأول — رياضيات أدبي");
-    expect(formsMenu).toContain("النموذج الرابع — رياضيات أدبي");
-    expect(formsMenu).toContain("exam:form:secondary:math:2:1");
+    const literaryForms = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(literaryForms).toContain("exam:form:secondary-literary:math:2:1");
 
-    await callback("secondary-model-two", "exam:form:secondary:math:2:1");
+    await callback("literary-form", "exam:form:secondary-literary:math:2:1");
     expect(messages.at(-1)?.text).toContain("النموذج الثاني — رياضيات أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:secondary:math:2:15");
+    const literaryTimeMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(literaryTimeMenu).toContain("exam:time:exam_secondary_literary_math:2:15");
+    expect(literaryTimeMenu.length).toBeLessThan(4096);
 
-    await callback("secondary-time", "exam:time:secondary:math:2:15");
-    await callback("secondary-ready", "exam:ready:91");
-    expect(polls.at(-1)?.explanation).toBe("");
-    const messageCountBeforeAnswer = messages.length;
-    await handleTelegramUpdate({ poll_answer: { poll_id: "poll-1", user: { id: 12 }, option_ids: [0] } }, store, sender);
-    expect(messages).toHaveLength(messageCountBeforeAnswer);
-    expect(polls.at(-1)?.question).toContain("[2/2]");
+    await callback("literary-time", "exam:time:exam_secondary_literary_math:2:15");
+    await callback("literary-ready", "exam:ready:91");
+    expect(polls.at(-1)?.question).toContain("[1/2]");
 
-    await callback("secondary-history", "exam:subject:secondary:history:1");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة التاريخ للعام الدراسي 2023م");
-    const historyFormsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(historyFormsMenu).toContain("النموذج الأول — تاريخ أدبي");
-    expect(historyFormsMenu).toContain("النموذج السادس — تاريخ أدبي");
-    expect(historyFormsMenu.indexOf("النموذج الأول — تاريخ أدبي")).toBeLessThan(historyFormsMenu.indexOf("النموذج السادس — تاريخ أدبي"));
-    expect(historyFormsMenu).toContain("exam:form:secondary:history:1:1");
+    await callback("scientific-level", "exam:level:secondary-scientific");
+    const scientificSubjects = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(scientificSubjects).toContain("exam:subject:secondary-scientific:biology:1");
+    expect(scientificSubjects).toContain("exam:subject:secondary-scientific:physics:1");
+    expect(scientificSubjects).toContain("exam:subject:secondary-scientific:chemistry:1");
+    expect(scientificSubjects).not.toContain("math");
 
-    await callback("secondary-history-model-one", "exam:form:secondary:history:1:1");
-    expect(messages.at(-1)?.text).toContain("النموذج الأول — تاريخ أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:secondary:history:1:15");
+    await callback("scientific-physics", "exam:subject:secondary-scientific:physics:1");
+    expect(messages.at(-1)?.text).toContain("الفيزياء");
+    const scientificForms = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(scientificForms).toContain("2026 النموذج 1");
+    expect(scientificForms).toContain("2026 النموذج 2");
+    expect(scientificForms).toContain("2026 النموذج 3");
+    expect(scientificForms).not.toContain("🧪 أسئلة تجريبية");
+    expect(scientificForms.indexOf("2026 النموذج 1")).toBeLessThan(scientificForms.indexOf("2026 النموذج 2"));
+    expect(scientificForms.indexOf("2026 النموذج 2")).toBeLessThan(scientificForms.indexOf("2026 النموذج 3"));
+    expect(scientificForms).toContain("exam:form:secondary-scientific:physics:2026001:1");
 
-    await callback("secondary-arabic", "exam:subject:secondary:arabic:1");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة اللغة العربية للعام الدراسي 2025—2026م");
-    const arabicFormsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(arabicFormsMenu).toContain("النموذج الأول - لغة عربية أدبي");
-    expect(arabicFormsMenu).toContain("النموذج السابع - لغة عربية أدبي");
-    expect(arabicFormsMenu).toContain("exam:form:secondary:arabic:1:1");
-
-    await callback("secondary-arabic-model-one", "exam:form:secondary:arabic:1:1");
-    expect(messages.at(-1)?.text).toContain("النموذج الأول - لغة عربية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:secondary:arabic:1:15");
-
-    await callback("secondary-geography", "exam:subject:secondary:geography:1");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الجغرافيا للعام الدراسي 2025—2026م");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الأول - جغرافيا أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السابع - جغرافيا أدبي");
-    const geographyButtons = messages.at(-1)?.replyMarkup?.inline_keyboard.flat() ?? [];
-    expect(geographyButtons.every(button => !button.callback_data || button.callback_data.length <= 64)).toBe(true);
-
-    await callback("secondary-geography-model-one", "exam:form:secondary:geography:1:1");
-    expect(messages.at(-1)?.text).toContain("النموذج الأول - جغرافيا أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:secondary:geography:1:15");
-
-    await callback("secondary-philosophy", "exam:subject:secondary:philosophy:1");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الفلسفة والمنطق وعلم النفس للعام الدراسي 2025—2026م");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الأول - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الثاني - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الثالث - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الرابع - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الخامس - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السادس - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السابع - الفلسفة والمنطق وعلم النفس أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:form:secondary:philosophy:1:1");
-
-    await callback("secondary-chemistry", "exam:subject:secondary:chemistry:1");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الكيمياء للعام الدراسي 2025—2026م");
-
-    await callback("secondary-islamic", "exam:subject:secondary:islamic:1");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة التربية الإسلامية للعام الدراسي 2025—2026م");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الأول - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الثاني - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الثالث - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الرابع - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الخامس - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السادس - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السابع - التربية الإسلامية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:form:secondary:islamic:1:1");
-
-    await callback("secondary-english", "exam:subject:secondary:english:2");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة اللغة الإنجليزية للعام الدراسي 2025—2026م");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الأول - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الثاني - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الثالث - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الرابع - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الخامس - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السادس - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السابع - اللغة الإنجليزية أدبي");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:form:secondary:english:1:1");
+    await callback("scientific-form", "exam:form:secondary-scientific:physics:2026001:1");
+    expect(messages.at(-1)?.text).toContain("2026 النموذج 1");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:exam_secondary_scientific_physics:2026001:15");
   });
 
   it("يبقي سؤال الحفظ رقم 47 في نموذج القرآن الكريم نصًا كتابيًا ثم ينهي الاختبار بلا خيارات", async () => {
@@ -1133,12 +1109,12 @@ describe("Telegram library conversation", () => {
       sender
     );
 
-    await callback("secondary-quran", "exam:subject:secondary:quran:1");
+    await callback("secondary-quran", "exam:subject:secondary-literary:quran:1");
     expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة القرآن الكريم للعام الدراسي 2025—2026م");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج الرابع - قرآن كريم أدبي");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("النموذج السابع - قرآن كريم أدبي");
-    await callback("secondary-quran-form", "exam:form:secondary:quran:1:1");
-    await callback("secondary-quran-time", "exam:time:secondary:quran:1:15");
+    await callback("secondary-quran-form", "exam:form:secondary-literary:quran:secondary_quran_model_1:1");
+    await callback("secondary-quran-time", "exam:time:exam_secondary_literary_quran:secondary_quran_model_1:15");
     await callback("secondary-quran-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
 
@@ -1149,7 +1125,8 @@ describe("Telegram library conversation", () => {
     expect(polls).toHaveLength(1);
 
     await callback("secondary-quran-written-next", "exam:written-next:91");
-    expect(messages.at(-1)?.text).toContain("نتيجة هذه المحاولة");
+    expect(messages.at(-1)?.text).toContain("🏁 انتهى الاختبار");
+    expect(messages.at(-1)?.text).toContain("🎯 النتيجة: 1/1 (100%)");
   });
 
   it("يعرض خياري الصح والخطأ في الثانوية بعبارات كاملة من دون تغيير مفتاح الإجابة", () => {
@@ -1188,10 +1165,12 @@ describe("Telegram library conversation", () => {
     );
 
     await callback("exam-menu", "exams");
-    expect(messages[0]?.text).toContain("اختبارات الشريعة والقانون");
-    expect(messages[0]?.text).toContain("/newquiz");
-    expect(messages[0]?.text).toContain("/quizzes");
-    expect(messages[0]?.text).toContain("/stop");
+    expect(messages[0]?.text).toContain("📝 اختبارات الشريعة والقانون");
+    expect(messages[0]?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية");
+    expect(messages[0]?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(messages[0]?.text).not.toContain("/newquiz");
+    expect(messages[0]?.text).not.toContain("/quizzes");
+    expect(messages[0]?.text).not.toContain("/stop");
     expect(messages[0]?.text).not.toContain("/help");
     expect(messages[0]?.text).not.toContain("/lang");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("exam:level:l1");
@@ -1207,12 +1186,14 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("2025 العام");
 
     await callback("exam-section", "exam:form:l4:l4-civil-law:general_2025:1");
-    expect(messages[3]?.text).toContain("يتضمن النموذج");
-    expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("exam:time:l4:l4-civil-law:20251:15");
+    expect(messages[3]?.text).toContain("⚙️ تجهيز الاختبار");
+    expect(messages[3]?.text).toContain("📝 عدد الأسئلة: 2");
+    expect(messages[3]?.text).toContain("لن يُرسل السؤال الأول قبل تأكيدك");
+    expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("exam:time:civil_law:20251:15");
 
-    await callback("exam-time", "exam:time:l4:l4-civil-law:20251:15");
+    await callback("exam-time", "exam:time:civil_law:20251:15");
     expect(messages[4]?.text).toContain("15 ث لكل سؤال");
-    expect(JSON.stringify(messages[4]?.replyMarkup)).toContain("أنا مستعد");
+    expect(JSON.stringify(messages[4]?.replyMarkup)).toContain("▶️ ابدأ الآن");
 
     await callback("exam-ready", "exam:ready:91");
     expect(polls[0]?.question).toContain("[1/2]");
@@ -1225,21 +1206,52 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ poll: { id: "poll-2", is_closed: true } }, store, sender);
     const result = messages.at(-1)?.text ?? "";
-    expect(result).toContain("🎲 اسم الاختبار:");
-    expect(result).toContain("نتيجة هذه المحاولة");
+    expect(result).toContain("🏁 انتهى الاختبار");
+    expect(result).toContain("📊 ملخص المحاولة");
     expect(result).toContain("✅ الصحيحة: 1");
     expect(result).toContain("⏳ الفائتة: 1");
-    expect(result).toContain("🏅 أفضل نتيجة:");
-    expect(result).toContain("🏆 نتيجة لائحة المتصدرين:");
-    expect(result).toContain("📊 الترتيب: المركز 1 من أصل 1");
-    expect(result).toContain("لن يتغير ترتيبك");
+    expect(result).toContain("🎯 النتيجة: 1/2 (50%)");
+    expect(result).toContain("🏅 أفضل نتيجة سابقة لك");
+    expect(result).toContain("🏆 أفضل نتيجة محتسبة للترتيب");
+    expect(result).toContain("📈 ترتيبك: المركز 1 من أصل 1");
+    expect(result).not.toContain("لن يتغير ترتيبك");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:retry");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("startgroup=groupquiz");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:forms:l4:l4-civil-law:1");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:level:l4");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain('"callback_data":"menu"');
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("t.me/share/url");
 
     await callback("exam-retry", "exam:retry");
     expect(messages.at(-1)?.text).toContain("اختر المدة");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:30");
+  });
+
+  it("يحدّث بطاقة تجهيز الاختبار وبطاقة الاستعداد داخل الرسالة نفسها", async () => {
+    const { sender, messages, editedMessages } = createSender();
+    const store = createStore();
+    const callback = (id: string, data: string) => handleTelegramUpdate(
+      {
+        callback_query: {
+          id,
+          data,
+          from: { id: 12 },
+          message: { message_id: 700, chat: { id: 12, type: "private" } },
+        },
+      },
+      store,
+      sender
+    );
+
+    await callback("same-message-form", "exam:form:l4:l4-civil-law:general_2025:1");
+    expect(messages).toHaveLength(0);
+    expect(editedMessages.at(-1)?.messageId).toBe(700);
+    expect(editedMessages.at(-1)?.text).toContain("⚙️ تجهيز الاختبار");
+
+    await callback("same-message-time", "exam:time:civil_law:20251:30");
+    expect(messages).toHaveLength(0);
+    expect(editedMessages.at(-1)?.messageId).toBe(700);
+    expect(editedMessages.at(-1)?.text).toContain("✅ تم إعداد الاختبار");
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("▶️ ابدأ الآن");
   });
 
   it("يعرض التلميح عند الإجابة الخاطئة فقط قبل الإجابة الصحيحة والشرح", async () => {
@@ -1305,18 +1317,25 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("اصول الفقه");
     const annualUsulMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(annualUsulMenu).toContain("2022 العام");
+    expect(annualUsulMenu).toContain("2023 العام");
+    expect(annualUsulMenu).toContain("2024 العام");
+    expect(annualUsulMenu).toContain("2024 الموازي");
+    expect(annualUsulMenu).toContain("2025 العام");
     expect(annualUsulMenu).toContain("2025 الموازي");
-    expect(annualUsulMenu.indexOf("2023 العام")).toBeLessThan(annualUsulMenu.indexOf("2023 الموازي"));
     expect(annualUsulMenu).not.toContain("القسم الأول");
     expect(annualUsulMenu).toContain("🧪 أسئلة تجريبية");
     await callback("usul-training", "exam:training:l1:l1-usul:1");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("الموازي2025");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("القسم الأول");
-    await callback("usul-form", "exam:form:l1:l1-usul:1:1");
-    expect(messages.at(-1)?.text).toContain("الموازي2025");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1:l1-usul:1:15");
-    await callback("usul-time", "exam:time:l1:l1-usul:1:15");
-    expect(messages.at(-1)?.text).toContain("اختبار اصول الفقه — الموازي2025");
+    expect(messages.at(-1)?.text).toContain("الأسئلة التجريبية ستكون متاحة قريبًا");
+    const usulTrainingMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
+    expect(usulTrainingMenu).toContain("رجوع إلى النماذج الأساسية");
+    expect(usulTrainingMenu).not.toContain("القسم الأول");
+    await callback("usul-form", "exam:form:l1:l1-usul:106:1");
+    expect(messages.at(-1)?.text).toContain("الموازي 2025");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_usul_fiqh:106:15");
+    await callback("usul-time", "exam:time:l1_usul_fiqh:106:15");
+    expect(messages.at(-1)?.text).toContain("✅ تم إعداد الاختبار");
+    expect(messages.at(-1)?.text).toContain("📚 المادة: اصول الفقه");
+    expect(messages.at(-1)?.text).toContain("📄 النموذج: الموازي 2025");
     await callback("usul-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
   });
@@ -1334,25 +1353,29 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("علم الاجرام والعقاب");
     const annualCriminologyMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(annualCriminologyMenu).toContain("2022 العام");
-    expect(annualCriminologyMenu.indexOf("2024 العام")).toBeLessThan(annualCriminologyMenu.indexOf("2024 الموازي"));
+    expect(annualCriminologyMenu).toContain("2023 العام");
+    expect(annualCriminologyMenu).toContain("2024 العام");
+    expect(annualCriminologyMenu).toContain("2024 الموازي");
+    expect(annualCriminologyMenu).toContain("2025 العام");
+    expect(annualCriminologyMenu).toContain("2025 الموازي");
+    expect(annualCriminologyMenu).not.toContain("المختلط 2025");
     expect(annualCriminologyMenu).toContain("🧪 أسئلة تجريبية");
-    await callback("criminology-next", "exam:forms:l1:l1-criminology:2");
-    const secondCriminologyPage = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(secondCriminologyPage).toContain("2025 المختلط");
-    expect(secondCriminologyPage.indexOf("2025 الموازي")).toBeLessThan(secondCriminologyPage.indexOf("2025 المختلط"));
     await callback("criminology-training", "exam:training:l1:l1-criminology:1");
+    expect(messages.at(-1)?.text).toContain("الأسئلة التجريبية ستكون متاحة قريبًا");
     const criminologyTrainingMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(criminologyTrainingMenu).toContain("القسم الأول");
-    expect(criminologyTrainingMenu).not.toContain("2022 العام");
-    await callback("criminology-form", "exam:form:l1:l1-criminology:100:1");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1:l1-criminology:100:15");
-    await callback("criminology-time", "exam:time:l1:l1-criminology:100:30");
-    expect(messages.at(-1)?.text).toContain("اختبار علم الاجرام والعقاب — العام 2022");
+    expect(criminologyTrainingMenu).toContain("رجوع إلى النماذج الأساسية");
+    expect(criminologyTrainingMenu).not.toContain("القسم الأول");
+    await callback("criminology-form", "exam:form:l1:l1-criminology:general_2022:1");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_criminology:100:15");
+    await callback("criminology-time", "exam:time:l1_criminology:general_2022:30");
+    expect(messages.at(-1)?.text).toContain("✅ تم إعداد الاختبار");
+    expect(messages.at(-1)?.text).toContain("📚 المادة: علم الاجرام والعقاب");
+    expect(messages.at(-1)?.text).toContain("📄 النموذج: العام 2022");
     await callback("criminology-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
   });
 
-  it("يعرض نموذجًا مفهرسًا من Supabase بحالة انتظار عند عدم استيراد أسئلته بعد", async () => {
+  it("لا يعرض نموذجًا مفهرسًا بلا أسئلة في القائمة الرئيسية", async () => {
     const { sender, messages } = createSender();
     const store = createStore();
     const callback = (id: string, data: string) => handleTelegramUpdate(
@@ -1363,7 +1386,7 @@ describe("Telegram library conversation", () => {
 
     await callback("political-subject", "exam:subject:l1:l1-political-systems:1");
     expect(messages.at(-1)?.text).toContain("النظم السياسية");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("2025 العام ⏳");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).not.toContain("2025 العام");
     await callback("political-form", "exam:form:l1:l1-political-systems:general_2025:1");
     expect(messages.at(-1)?.text).toContain("لا تتوافر أسئلة هذا النموذج حاليًا");
   });
@@ -1456,11 +1479,11 @@ describe("Telegram library conversation", () => {
     const firstGateMarkup = JSON.stringify(messages[0]?.replyMarkup);
     expect(firstGateMarkup).toContain("https://t.me/muen2025");
     expect(firstGateMarkup).toContain("https://t.me/hasadalyoum");
-    expect(firstGateMarkup).toContain('"web_app":{"url":"https://alnaseer.org/"}');
+    expect(firstGateMarkup).toContain('"web_app":{"url":"https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html"}');
     expect(firstGateMarkup).toContain("فتح منصة الناصر القانونية والتحقق");
     expect(firstGateMarkup).toContain("channel:check");
     expect(firstGateMarkup.indexOf("https://t.me/muen2025")).toBeLessThan(firstGateMarkup.indexOf("https://t.me/hasadalyoum"));
-    expect(firstGateMarkup.indexOf("https://t.me/hasadalyoum")).toBeLessThan(firstGateMarkup.indexOf('"web_app":{"url":"https://alnaseer.org/"}'));
+    expect(firstGateMarkup.indexOf("https://t.me/hasadalyoum")).toBeLessThan(firstGateMarkup.indexOf('"web_app":{"url":"https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html"}'));
 
     subscriptions["@hasadalyoum"] = true;
     await handleTelegramUpdate(
@@ -1518,7 +1541,10 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ callback_query: { id: "callback-featured", data: "featured", message: { chat: { id: 12 } } } }, store, sender);
     expect(messages[2]?.text).toContain("مراجع مميزة");
-    expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
+    expect(messages[2]?.text).toContain("اختر المرجع أو الملف المطلوب");
+    expect(messages[2]?.text).not.toContain("المسار:");
+    expect(messages[2]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
   });
 
   it("يستبعد ملفات القسم المدفوع من أحدث الإضافات ويمنع طلبها من زر عام دون اعتماد", async () => {
@@ -1576,10 +1602,13 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("التشريعات اليمنية");
-    expect(messages[1]?.text).toContain("الملفات: الصفحة 1 من 1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("lfile:8:1bEkLg2uaeQOULqZi6yIEfU0aKtMMB3J4:1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("lsearch");
+    expect(messages[0]?.text).toContain("اختر التشريع أو الملف المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("lfile:8:1bEkLg2uaeQOULqZi6yIEfU0aKtMMB3J4:1");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("lsearch");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-legislation-search", data: "lsearch", message: { chat: { id: 12, type: "private" } } } },
@@ -1587,12 +1616,12 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
-    expect(messages[2]?.text).toContain("البحث السريع في التشريعات اليمنية");
-    expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("lq:تحكيم");
+    expect(messages[1]?.text).toContain("البحث السريع في التشريعات اليمنية");
+    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("lq:تحكيم");
 
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "تحكيم" } }, store, sender, provider);
-    expect(messages[3]?.text).toContain("نتائج «تحكيم» داخل التشريعات اليمنية");
-    expect(JSON.stringify(messages[3]?.replyMarkup)).toContain("lresultfile:8:26:1");
+    expect(messages[2]?.text).toContain("نتائج «تحكيم» داخل التشريعات اليمنية");
+    expect(JSON.stringify(messages[2]?.replyMarkup)).toContain("lresultfile:8:26:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-legislation-file", data: "lresultfile:8:26:1", message: { chat: { id: 12, type: "private" } } } },
@@ -1651,11 +1680,14 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("نماذج وصيغ قانونية");
-    expect(messages[1]?.text).toContain("الملفات: الصفحة 1 من 1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("مذكره بالرد على اسباب الطعن بالنقض ايجارات");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain(".doc");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("fform:10:1ABgTWPMDWPgj1HmFkRaV9rnTDU4kZ4h9:1");
+    expect(messages[0]?.text).toContain("اختر النموذج أو العقد المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("مذكره بالرد على اسباب الطعن بالنقض ايجارات");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain(".doc");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("fform:10:1ABgTWPMDWPgj1HmFkRaV9rnTDU4kZ4h9:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-legal-forms-file", data: "fform:10:1ABgTWPMDWPgj1HmFkRaV9rnTDU4kZ4h9:1", message: { chat: { id: 12, type: "private" } } } },
@@ -1678,12 +1710,16 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("نماذج مصورة وفق القوانين اليمنية");
-    expect(messages[1]?.text).toContain("17 عنصرًا");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("استئناف");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("استئناف.pdf");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("ملف:");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("vfile:13:17Yx06hL5bJXp2i80qW39n7yys3MqqztT:1");
+    expect(messages[0]?.text).toContain("اختر النموذج المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("17 عنصرًا");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("استئناف");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("استئناف.pdf");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("ملف:");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("vfile:13:17Yx06hL5bJXp2i80qW39n7yys3MqqztT:1");
     expect(documents).toEqual([]);
 
     await handleTelegramUpdate(
@@ -1693,7 +1729,7 @@ describe("Telegram library conversation", () => {
       provider
     );
     expect(requestedSources[0]?.id).toBe(illustratedLegalFormsSource.id);
-    expect(documents).toEqual([{ chatId: 12, filename: illustratedLegalFormsSource.title, caption: `مستورد من مكتبة أ. معين الناصر\n${illustratedLegalFormsSource.title}` }]);
+    expect(documents).toEqual([{ chatId: 12, filename: illustratedLegalFormsSource.title, caption: "مستورد من مكتبة أ. معين الناصر" }]);
   });
 
   it("يعرض جميع القوانين اليمنية بأسماء مقروءة ويبحث فيها ويسلمها في المحادثة الخاصة فقط", async () => {
@@ -1707,11 +1743,14 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("جميع القوانين اليمنية");
-    expect(messages[1]?.text).toContain("146 قانونًا أو لائحة");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("قانون الإجراءات الجزائية");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("ملف:");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("ayfile:14:all-yemeni-laws-root:1");
+    expect(messages[0]?.text).toContain("اختر القانون أو اللائحة المطلوبة");
+    expect(messages[0]?.text).not.toContain("146 قانونًا أو لائحة");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("قانون الإجراءات الجزائية");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("ملف:");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("ayfile:14:all-yemeni-laws-root:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-all-yemeni-laws-file", data: "ayfile:14:all-yemeni-laws-root:1", message: { chat: { id: 12, type: "private" } } } },
@@ -1873,12 +1912,15 @@ describe("Telegram library conversation", () => {
       sender,
       provider
     );
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("مراجع مميزة");
-    expect(messages[1]?.text).toContain("الملفات: الصفحة 1 من 1");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("إصدار وصياغة الأحكام القضائية الجنداري");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("تطبيق الباحث القانوني");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain(".pdf");
-    expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
+    expect(messages[0]?.text).toContain("اختر المرجع أو الملف المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("إصدار وصياغة الأحكام القضائية الجنداري");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("تطبيق الباحث القانوني");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain(".pdf");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1");
 
     await handleTelegramUpdate(
       { callback_query: { id: "callback-featured-references-file", data: "rfile:11:17QASX45F7JlN4EIYICMUHN2NtfsEvuIu:1", message: { chat: { id: 12, type: "private" } } } },
@@ -2003,7 +2045,7 @@ describe("Telegram library conversation", () => {
     expect(messages[0]?.text).toContain("✅ قناة منصة الناصر القانونية (@muen2025): مكتمل");
     expect(messages[0]?.text).toContain("✅ قناة حصاد اليوم الإخباري (@hasadalyoum): مكتمل");
     expect(messages[0]?.text).toContain("❌ منصة الناصر القانونية: لم تتم الزيارة أو لم يُتحقق منها بعد");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"web_app":{"url":"https://alnaseer.org/"}');
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"web_app":{"url":"https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html"}');
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("https://t.me/muen2025");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("https://t.me/hasadalyoum");
 
@@ -2168,9 +2210,12 @@ describe("Telegram library conversation", () => {
       sender
     );
 
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(1);
     expect(messages[0]?.text).toContain("المبادئ والقواعد القضائية");
-    const markup = JSON.stringify(messages[1]?.replyMarkup);
+    expect(messages[0]?.text).toContain("اختر المجال أو الملف المطلوب");
+    expect(messages[0]?.text).not.toContain("المسار:");
+    expect(messages[0]?.text).not.toContain("الصفحة");
+    const markup = JSON.stringify(messages[0]?.replyMarkup);
     expect(markup).toContain("الأحكام المدنية");
     expect(markup).not.toContain("مجلد:");
     expect(markup).not.toContain("ملف:");
@@ -2529,5 +2574,42 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(commandCalls[0]?.payload.commands)).not.toContain("broadcast");
     expect(commandCalls[1]?.payload.commands).toEqual([...BOT_COMMANDS, ...OWNER_COMMANDS]);
     expect(commandCalls[1]?.payload.scope).toEqual({ type: "chat", chat_id: Number(process.env.TELEGRAM_OWNER_ID) });
+  });
+});
+
+describe("Telegram reply topics", () => {
+  it("يمرر topic identifiers إلى sendMessage عند الرد داخل قناة أو موضوع خاص", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await createTelegramSender("اختبار", { directMessagesTopicId: 123456789 }).sendMessage(99, "رسالة", {
+        inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]],
+      });
+      await createTelegramSender("اختبار", { messageThreadId: 42 }).sendMessage(99, "موضوع");
+      await createTelegramSender("اختبار").sendMessage(99, "عادي", {
+        inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]],
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requests[0]).toMatchObject({
+      chat_id: 99,
+      direct_messages_topic_id: 123456789,
+      reply_markup: { inline_keyboard: [[{ text: "فتح المحادثة الخاصة لإكمال التحقق", url: "https://t.me/Moieen2025Bot?start=verify" }]] },
+    });
+    expect(requests[0]).not.toHaveProperty("message_thread_id");
+    expect(requests[1]).toMatchObject({ chat_id: 99, message_thread_id: 42 });
+    expect(requests[1]).not.toHaveProperty("direct_messages_topic_id");
+    expect(requests[2]).toMatchObject({
+      chat_id: 99,
+      text: "عادي",
+      reply_markup: { inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]] },
+    });
   });
 });

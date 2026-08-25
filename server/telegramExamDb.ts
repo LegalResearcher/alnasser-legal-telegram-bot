@@ -174,3 +174,40 @@ export async function resolveTelegramExamPoll(input: { sessionId: number; telegr
     elapsedSeconds: Math.max(0, Math.floor((Date.now() - session.startedAt.getTime()) / 1000)),
   };
 }
+
+export async function advanceTelegramExamWrittenQuestion(input: { sessionId: number; telegramUserId: string; questionIndex: number }): Promise<{ score: number; incorrectCount: number; missedCount: number; nextQuestionIndex: number; total: number; completed: boolean; elapsedSeconds: number } | undefined> {
+  const db = await getDb();
+  if (!db || !Number.isInteger(input.sessionId) || input.sessionId < 1 || input.questionIndex < 0) return undefined;
+  const session = await getTelegramExamSession(input.sessionId, input.telegramUserId);
+  if (!session || session.status !== "active" || session.questionIndex !== input.questionIndex || session.activePollId) return undefined;
+  const questions = await listTelegramExamQuestions(session.subjectKey, session.sectionKey);
+  const question = questions[input.questionIndex];
+  if (!question || [question.optionA, question.optionB, question.optionC, question.optionD].some(option => option.trim())) return undefined;
+  const nextQuestionIndex = input.questionIndex + 1;
+  const completed = nextQuestionIndex >= questions.length;
+  const result = await db.update(telegramExamSessions)
+    .set({
+      questionIndex: nextQuestionIndex,
+      missedCount: session.missedCount + 1,
+      status: completed ? "completed" : "active",
+      completedAt: completed ? new Date() : null,
+      activePollId: null,
+    })
+    .where(and(
+      eq(telegramExamSessions.id, input.sessionId),
+      eq(telegramExamSessions.telegramUserId, input.telegramUserId),
+      eq(telegramExamSessions.status, "active"),
+      eq(telegramExamSessions.questionIndex, input.questionIndex),
+      isNull(telegramExamSessions.activePollId)
+    ));
+  if (Number((result as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0) < 1) return undefined;
+  return {
+    score: session.score,
+    incorrectCount: session.incorrectCount,
+    missedCount: session.missedCount + 1,
+    nextQuestionIndex,
+    total: questions.length,
+    completed,
+    elapsedSeconds: Math.max(0, Math.floor((Date.now() - session.startedAt.getTime()) / 1000)),
+  };
+}

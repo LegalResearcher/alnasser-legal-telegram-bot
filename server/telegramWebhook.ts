@@ -17,16 +17,43 @@ import { hasManagedTelegramMenuItemPremiumAccess } from "./db";
 import { beginScheduledTelegramBroadcast, getScheduledTelegramBroadcast, scheduleTelegramBroadcast } from "./db";
 import { createHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { sdk } from "./_core/sdk";
-import { cancelTelegramExamSession, getTelegramExamSession, getTelegramExamSessionByPoll, listTelegramExamForms, listTelegramExamQuestions, resolveTelegramExamPoll, setTelegramExamActivePoll, startTelegramExamSession } from "./telegramExamDb";
+import { advanceTelegramExamWrittenQuestion, cancelTelegramExamSession, getTelegramExamSession, getTelegramExamSessionByPoll, listTelegramExamForms, listTelegramExamQuestions, resolveTelegramExamPoll, setTelegramExamActivePoll, startTelegramExamSession } from "./telegramExamDb";
 import { activateTelegramGroupExamRound, cancelTelegramGroupExamRound, createTelegramGroupExamRound, getTelegramGroupExamLeaderboard, getTelegramGroupExamRound, getTelegramGroupExamRoundByPoll, getTelegramGroupExamWaitingRound, joinTelegramGroupExamRound, recordTelegramGroupExamAnswer, resolveTelegramGroupExamPoll, setTelegramGroupExamActivePoll } from "./telegramGroupExamDb";
 import { getTelegramExamResultSummary } from "./telegramExamResults";
 import { createTelegramChannelMembershipChecker, createTelegramSender, handleTelegramUpdate, type TelegramUpdate } from "./telegram";
 import { validateTelegramWebAppInitData, verifyAndRecordTelegramPlatformVisit } from "./telegramPlatformVisit";
+import {
+  confirmSupabaseBotHasadAccess,
+  confirmSupabaseBotPlatformAccess,
+  createSupabaseBotStore,
+  createSupabaseBotManagedMenuItem,
+  deleteSupabaseBotManagedMenuItem,
+  listSupabaseBotAdminAuditLogs,
+  listSupabaseBotBroadcasts,
+  listSupabaseBotManagedMenuItems,
+  listSupabaseBotManagedMessages,
+  listSupabaseBotManagedSections,
+  updateSupabaseBotManagedMenuItem,
+  updateSupabaseBotManagedMessage,
+  updateSupabaseBotManagedSection,
+  recordSupabaseBotAdminAudit,
+} from "./supabaseBotStore";
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const PLATFORM_ORIGIN = "https://alnaseer.org";
+const PLATFORM_PREVIEW_ORIGIN = "https://alnaser-2hb0san58-hasadalyoum.vercel.app";
+const PLATFORM_ADMIN_ORIGINS = new Set([PLATFORM_ORIGIN, PLATFORM_PREVIEW_ORIGIN]);
+const TELEGRAM_VERCEL_ORIGIN = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app";
 const HASAD_ORIGINS = new Set(["https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
-const TELEGRAM_VISIT_ORIGINS = new Set([PLATFORM_ORIGIN, "https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
+const TELEGRAM_VISIT_ORIGINS = new Set([
+  PLATFORM_ORIGIN,
+  TELEGRAM_VERCEL_ORIGIN,
+  "https://www.hasad-alyoum.com",
+  "https://hasad-alyoum.com",
+  "https://web.telegram.org",
+  "https://telegram.org",
+  "null",
+]);
 const PLATFORM_SUPABASE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
 
 export function normalizeTelegramRegion(value: unknown): string | null {
@@ -128,7 +155,7 @@ export function registerTelegramWebhook(app: Express) {
 
   const setPlatformAdminCors = (req: { get: (name: string) => string | undefined }, res: { setHeader: (name: string, value: string) => void }) => {
     const origin = req.get("origin");
-    if (origin === PLATFORM_ORIGIN) res.setHeader("Access-Control-Allow-Origin", origin);
+    if (origin && PLATFORM_ADMIN_ORIGINS.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
     res.setHeader("Vary", "Origin");
@@ -146,11 +173,18 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin-stats", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
     try {
+      if (process.env.BOT_STORAGE_MODE === "supabase") {
+        const supabaseStore = createSupabaseBotStore();
+        const subscribers = await supabaseStore.listSubscriberChatIds();
+        const usage = await supabaseStore.getOwnerStatistics();
+        res.status(200).json({ ok: true, totalSubscribers: subscribers.length, firstSubscribedAt: null, lastActiveAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
+        return;
+      }
       const stats = await getTelegramOwnerStatistics();
       res.status(200).json({
         ok: true,
@@ -180,21 +214,21 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/menu-items", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, items: await listManagedTelegramMenuItems(true) });
+    res.status(200).json({ ok: true, items: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedMenuItems(true) : await listManagedTelegramMenuItems(true) });
   });
 
   app.post("/api/telegram/admin/menu-items", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
     }
-    const item = await createManagedTelegramMenuItem(req.body ?? {}, adminUserId);
+    const item = process.env.BOT_STORAGE_MODE === "supabase" ? await createSupabaseBotManagedMenuItem(req.body ?? {}, adminUserId) : await createManagedTelegramMenuItem(req.body ?? {}, adminUserId);
     if (!item) {
       res.status(400).json({ ok: false, error: "invalid_menu_item" });
       return;
@@ -204,7 +238,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.post("/api/telegram/admin/menu-items/upload", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -241,7 +275,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.put("/api/telegram/admin/menu-items/:id/upload", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     const itemId = Number(req.params.id);
     if (!adminUserId || !Number.isInteger(itemId) || itemId < 1) {
       res.status(403).json({ ok: false });
@@ -261,7 +295,7 @@ export function registerTelegramWebhook(app: Express) {
         return;
       }
       const stored = await storagePut(createTelegramLibraryStorageKey(fileName), data, contentType);
-      const item = await updateManagedTelegramMenuItem(itemId, { ...req.body, actionType: "file", actionValue: stored.url }, adminUserId);
+      const item = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedMenuItem(itemId, { ...req.body, actionType: "file", actionValue: stored.url }, adminUserId) : await updateManagedTelegramMenuItem(itemId, { ...req.body, actionType: "file", actionValue: stored.url }, adminUserId);
       if (!item) {
         res.status(400).json({ ok: false, error: "invalid_menu_item" });
         return;
@@ -275,12 +309,12 @@ export function registerTelegramWebhook(app: Express) {
 
   app.put("/api/telegram/admin/menu-items/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
     }
-    const item = await updateManagedTelegramMenuItem(Number(req.params.id), req.body ?? {}, adminUserId);
+    const item = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedMenuItem(Number(req.params.id), req.body ?? {}, adminUserId) : await updateManagedTelegramMenuItem(Number(req.params.id), req.body ?? {}, adminUserId);
     if (!item) {
       res.status(400).json({ ok: false, error: "invalid_menu_item" });
       return;
@@ -290,8 +324,8 @@ export function registerTelegramWebhook(app: Express) {
 
   app.delete("/api/telegram/admin/menu-items/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
-    if (!adminUserId || !(await deleteManagedTelegramMenuItem(Number(req.params.id), adminUserId))) {
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    if (!adminUserId || !(await (process.env.BOT_STORAGE_MODE === "supabase" ? deleteSupabaseBotManagedMenuItem(Number(req.params.id), adminUserId) : deleteManagedTelegramMenuItem(Number(req.params.id), adminUserId)))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -305,21 +339,21 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/sections", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, sections: await listManagedTelegramSectionConfigs() });
+    res.status(200).json({ ok: true, sections: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedSections() : await listManagedTelegramSectionConfigs() });
   });
 
   app.put("/api/telegram/admin/sections/:sectionKey", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
     }
-    const section = await updateManagedTelegramSection(req.params.sectionKey, req.body ?? {}, adminUserId);
+    const section = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedSection(req.params.sectionKey, req.body ?? {}, adminUserId) : await updateManagedTelegramSection(req.params.sectionKey, req.body ?? {}, adminUserId);
     if (!section) {
       res.status(400).json({ ok: false, error: "invalid_section" });
       return;
@@ -329,11 +363,11 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/audit-logs", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, logs: await listTelegramAdminAuditLogs() });
+    res.status(200).json({ ok: true, logs: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotAdminAuditLogs() : await listTelegramAdminAuditLogs() });
   });
 
   app.options("/api/telegram/admin/audit-logs", (req, res) => {
@@ -348,21 +382,21 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/message-templates", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, templates: await listManagedTelegramMessageConfigs() });
+    res.status(200).json({ ok: true, templates: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedMessages() : await listManagedTelegramMessageConfigs() });
   });
 
   app.put("/api/telegram/admin/message-templates/:messageKey", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
     }
-    const template = await updateManagedTelegramMessageTemplate(req.params.messageKey, req.body?.content, adminUserId);
+    const template = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedMessage(req.params.messageKey, req.body?.content, adminUserId) : await updateManagedTelegramMessageTemplate(req.params.messageKey, req.body?.content, adminUserId);
     if (!template) {
       res.status(400).json({ ok: false, error: "invalid_message_template" });
       return;
@@ -377,7 +411,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/sources", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -388,7 +422,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.put("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -403,7 +437,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.delete("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId || !(await deleteManagedTelegramSource(Number(req.params.id), adminUserId))) {
       res.status(403).json({ ok: false });
       return;
@@ -418,7 +452,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.post("/api/telegram/admin/sources/upload", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -468,7 +502,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/folders", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -478,7 +512,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.put("/api/telegram/admin/folders/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -493,7 +527,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.delete("/api/telegram/admin/folders/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
@@ -517,21 +551,23 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/broadcasts", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, broadcasts: await listManagedTelegramBroadcasts() });
+    res.status(200).json({ ok: true, broadcasts: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotBroadcasts() : await listManagedTelegramBroadcasts() });
   });
 
   app.post("/api/telegram/admin/broadcasts", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
       return;
     }
-    const broadcast = await createManagedTelegramBroadcastDraft(adminUserId, req.body?.message);
+    const broadcast = process.env.BOT_STORAGE_MODE === "supabase"
+      ? await createSupabaseBotStore().createBroadcastDraft({ ownerTelegramUserId: adminUserId, kind: "message", message: typeof req.body?.message === "string" ? req.body.message : "" })
+      : await createManagedTelegramBroadcastDraft(adminUserId, req.body?.message);
     if (!broadcast) {
       res.status(400).json({ ok: false, error: "invalid_broadcast" });
       return;
@@ -541,21 +577,23 @@ export function registerTelegramWebhook(app: Express) {
 
   app.post("/api/telegram/admin/broadcasts/:id/cancel", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     const id = Number(req.params.id);
-    const draft = adminUserId ? await getTelegramBroadcastDraft(id, adminUserId) : undefined;
-    if (!adminUserId || !draft || !(await cancelTelegramBroadcastDraft(id, adminUserId))) {
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : undefined;
+    const draft = adminUserId ? (supabaseStore ? await supabaseStore.getBroadcastDraft(id, adminUserId) : await getTelegramBroadcastDraft(id, adminUserId)) : undefined;
+    if (!adminUserId || !draft || !(await (supabaseStore ? supabaseStore.cancelBroadcastDraft(id, adminUserId) : cancelTelegramBroadcastDraft(id, adminUserId)))) {
       res.status(400).json({ ok: false });
       return;
     }
-    if (draft.scheduleCronTaskUid) await deleteHeartbeatJob(draft.scheduleCronTaskUid, "").catch(() => undefined);
-    await recordManagedTelegramBroadcastAudit(adminUserId, id, "cancel");
+    const scheduleCronTaskUid = (draft as typeof draft & { scheduleCronTaskUid?: string }).scheduleCronTaskUid;
+    if (scheduleCronTaskUid) await deleteHeartbeatJob(scheduleCronTaskUid, "").catch(() => undefined);
+    if (supabaseStore) await recordSupabaseBotAdminAudit(adminUserId, "cancel", "broadcast", id, {}); else await recordManagedTelegramBroadcastAudit(adminUserId, id, "cancel");
     res.status(200).json({ ok: true });
   });
 
   app.post("/api/telegram/admin/broadcasts/:id/schedule", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     const id = Number(req.params.id);
     const scheduledFor = normalizeScheduledBroadcastTime(req.body?.scheduledFor);
     if (!adminUserId || req.body?.confirmation !== "SCHEDULE" || !Number.isInteger(id) || id < 1 || !scheduledFor) {
@@ -636,21 +674,22 @@ export function registerTelegramWebhook(app: Express) {
 
   app.post("/api/telegram/admin/broadcasts/:id/confirm", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     const id = Number(req.params.id);
     if (!adminUserId || req.body?.confirmation !== "SEND") {
       res.status(400).json({ ok: false, error: "confirmation_required" });
       return;
     }
-    const draft = await getTelegramBroadcastDraft(id, adminUserId);
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : undefined;
+    const draft = supabaseStore ? await supabaseStore.getBroadcastDraft(id, adminUserId) : await getTelegramBroadcastDraft(id, adminUserId);
     const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!draft || draft.status !== "draft" || draft.kind !== "message" || !draft.message || !token || !(await beginTelegramBroadcast(id, adminUserId))) {
+    if (!draft || draft.status !== "draft" || draft.kind !== "message" || !draft.message || !token || !(await (supabaseStore ? supabaseStore.beginBroadcast(id, adminUserId) : beginTelegramBroadcast(id, adminUserId)))) {
       res.status(400).json({ ok: false, error: "unavailable_broadcast" });
       return;
     }
-    await recordManagedTelegramBroadcastAudit(adminUserId, id, "confirm", { recipientCount: draft.recipientCount });
+    if (supabaseStore) await recordSupabaseBotAdminAudit(adminUserId, "confirm", "broadcast", id, { recipientCount: draft.recipientCount }); else await recordManagedTelegramBroadcastAudit(adminUserId, id, "confirm", { recipientCount: draft.recipientCount });
     const sender = createTelegramSender(token);
-    const recipients = await listTelegramSubscriberChatIds();
+    const recipients = supabaseStore ? await supabaseStore.listSubscriberChatIds() : await listTelegramSubscriberChatIds();
     let successCount = 0;
     let failureCount = 0;
     for (const recipient of recipients) {
@@ -667,8 +706,8 @@ export function registerTelegramWebhook(app: Express) {
       }
       await new Promise(resolve => setTimeout(resolve, 60));
     }
-    await completeTelegramBroadcast(id, adminUserId, successCount, failureCount);
-    await recordManagedTelegramBroadcastAudit(adminUserId, id, "complete", { successCount, failureCount });
+    if (supabaseStore) await supabaseStore.completeBroadcast(id, adminUserId, successCount, failureCount); else await completeTelegramBroadcast(id, adminUserId, successCount, failureCount);
+    if (supabaseStore) await recordSupabaseBotAdminAudit(adminUserId, "complete", "broadcast", id, { successCount, failureCount }); else await recordManagedTelegramBroadcastAudit(adminUserId, id, "complete", { successCount, failureCount });
     res.status(200).json({ ok: true, id, successCount, failureCount });
   });
 
@@ -679,11 +718,12 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/subscriptions/pending", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, requests: await listPendingImportantYemeniLawsSubscriptionRequests(20) });
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : undefined;
+    res.status(200).json({ ok: true, requests: supabaseStore ? await supabaseStore.listPendingImportantYemeniLawsSubscriptionRequests() : await listPendingImportantYemeniLawsSubscriptionRequests(20) });
   });
 
   app.options("/api/telegram/admin/referrals", (req, res) => {
@@ -693,7 +733,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/referrals", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -707,7 +747,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.post("/api/telegram/admin/referrals/:id/revoke", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     const rewardId = Number(req.params.id);
     if (!adminUserId || !Number.isInteger(rewardId) || rewardId < 1) {
       res.status(400).json({ ok: false, error: "invalid_referral_reward" });
@@ -727,7 +767,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/usage-analytics", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -743,7 +783,7 @@ export function registerTelegramWebhook(app: Express) {
 
   app.get("/api/telegram/admin/visit-analytics", async (req, res) => {
     setPlatformAdminCors(req, res);
-    if (req.get("origin") !== PLATFORM_ORIGIN || !(await isPlatformAdministrator(req.get("authorization")))) {
+    if (!PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") || !(await isPlatformAdministrator(req.get("authorization")))) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -757,23 +797,24 @@ export function registerTelegramWebhook(app: Express) {
 
   app.post("/api/telegram/admin/subscriptions/:id/:decision", async (req, res) => {
     setPlatformAdminCors(req, res);
-    const adminUserId = req.get("origin") === PLATFORM_ORIGIN ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
+    const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     const requestId = Number(req.params.id);
     const decision = req.params.decision;
     if (!adminUserId || !Number.isInteger(requestId) || requestId < 1 || !["approve", "reject"].includes(decision)) {
       res.status(400).json({ ok: false });
       return;
     }
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : undefined;
     const result = decision === "approve"
-      ? await approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId)
-      : await rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId);
+      ? await (supabaseStore ? supabaseStore.approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId))
+      : await (supabaseStore ? supabaseStore.rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId));
     if (!result) {
       res.status(409).json({ ok: false, error: "request_unavailable" });
       return;
     }
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const managedItemLabel = result.managedMenuItemId
-      ? (await listManagedTelegramMenuItems(true)).find(item => item.id === result.managedMenuItemId)?.label || "الزر المخصص"
+      ? (await (supabaseStore ? listSupabaseBotManagedMenuItems(true) : listManagedTelegramMenuItems(true))).find(item => item.id === result.managedMenuItemId)?.label || "الزر المخصص"
       : "أهم القوانين اليمنية التفاعلي";
     let notified = false;
     const chatId = Number(result.chatId);
@@ -787,7 +828,7 @@ export function registerTelegramWebhook(app: Express) {
         notified = false;
       }
     }
-    await recordManagedTelegramAdminAudit(adminUserId, decision, result.managedMenuItemId ? "managed_menu_subscription" : "important_laws_subscription", String(requestId), { notified, managedMenuItemId: result.managedMenuItemId });
+    if (supabaseStore) await recordSupabaseBotAdminAudit(adminUserId, decision, result.managedMenuItemId ? "managed_menu_subscription" : "important_laws_subscription", String(requestId), { notified, managedMenuItemId: result.managedMenuItemId }); else await recordManagedTelegramAdminAudit(adminUserId, decision, result.managedMenuItemId ? "managed_menu_subscription" : "important_laws_subscription", String(requestId), { notified, managedMenuItemId: result.managedMenuItemId });
     res.status(200).json({ ok: true, decision, notified, telegramUserId: result.telegramUserId });
   });
 
@@ -804,7 +845,7 @@ export function registerTelegramWebhook(app: Express) {
   app.post("/api/telegram/platform-visit", async (req, res) => {
     setPlatformVisitCors(req, res);
     const origin = req.get("origin");
-    if (origin && origin !== "https://alnaseer.org") {
+    if (origin && !TELEGRAM_VISIT_ORIGINS.has(origin)) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -817,7 +858,8 @@ export function registerTelegramWebhook(app: Express) {
 
     try {
       const visit = await verifyAndRecordTelegramPlatformVisit(initData, token);
-      await confirmTelegramPlatformAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      if (process.env.BOT_STORAGE_MODE === "supabase") await confirmSupabaseBotPlatformAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      else await confirmTelegramPlatformAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
       res.status(200).json({ ok: true });
     } catch (error) {
       console.error("[Telegram] Platform visit verification failed:", error instanceof Error ? error.message : "unknown error");
@@ -828,7 +870,8 @@ export function registerTelegramWebhook(app: Express) {
   app.post("/api/telegram/hasad-visit", async (req, res) => {
     setPlatformVisitCors(req, res);
     const origin = req.get("origin");
-    if (origin && !HASAD_ORIGINS.has(origin)) {
+    if (origin && !TELEGRAM_VISIT_ORIGINS.has(origin)) {
+      console.warn("[Telegram] Hasad visit rejected origin:", origin.slice(0, 160));
       res.status(403).json({ ok: false });
       return;
     }
@@ -842,7 +885,8 @@ export function registerTelegramWebhook(app: Express) {
     try {
       const visit = validateTelegramWebAppInitData(initData, token);
       if (!visit) throw new Error("invalid_web_app_data");
-      await confirmTelegramHasadAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      if (process.env.BOT_STORAGE_MODE === "supabase") await confirmSupabaseBotHasadAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      else await confirmTelegramHasadAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
       res.status(200).json({ ok: true });
     } catch (error) {
       console.error("[Telegram] Hasad visit verification failed:", error instanceof Error ? error.message : "unknown error");
@@ -865,9 +909,15 @@ export function registerTelegramWebhook(app: Express) {
     }
 
     try {
+      const update = req.body as TelegramUpdate;
+      const incomingMessage = update.message ?? update.callback_query?.message;
+      const sender = createTelegramSender(token, {
+        messageThreadId: incomingMessage?.message_thread_id,
+        directMessagesTopicId: incomingMessage?.direct_messages_topic?.topic_id,
+      });
       await handleTelegramUpdate(
-        req.body as TelegramUpdate,
-        {
+        update,
+        process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : {
           hasConfirmedPlatformAccess: hasConfirmedTelegramPlatformAccess,
           hasConfirmedHasadAccess: hasConfirmedTelegramHasadAccess,
           listManagedMenuItems: () => listManagedTelegramMenuItems(false),
@@ -942,6 +992,7 @@ export function registerTelegramWebhook(app: Express) {
           getExamSessionByPoll: getTelegramExamSessionByPoll,
           cancelExamSession: cancelTelegramExamSession,
           resolveExamPoll: resolveTelegramExamPoll,
+          advanceExamWrittenQuestion: advanceTelegramExamWrittenQuestion,
           getExamResultSummary: getTelegramExamResultSummary,
           getGroupExamWaitingRound: getTelegramGroupExamWaitingRound,
           createGroupExamRound: createTelegramGroupExamRound,
@@ -955,7 +1006,7 @@ export function registerTelegramWebhook(app: Express) {
           resolveGroupExamPoll: resolveTelegramGroupExamPoll,
           getGroupExamLeaderboard: getTelegramGroupExamLeaderboard,
         },
-        createTelegramSender(token),
+        sender,
         undefined,
         createTelegramChannelMembershipChecker(token)
       );

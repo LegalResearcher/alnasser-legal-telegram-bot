@@ -1,12 +1,15 @@
 import type { LegalFolder, LegalSource, TelegramContractTemplate, TelegramContractTemplateType } from "../drizzle/schema";
 import { ALL_YEMENI_LAWS_ROOT_FOLDER_ID, FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, IMPORTANT_YEMENI_LAWS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID, LEGISLATION_ROOT_FOLDER_ID, normalizeArabicSearch } from "./db";
-import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectsMenu, examTimeMenu, examTrainingFormsMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
+import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
 import { createTelegramContractDocument } from "./telegramContractDocument";
 import { TELEGRAM_CONTRACT_TYPE_LABELS } from "./telegramContractTypes";
 import { storageGetSignedUrl } from "./storage";
 
 export const legalCategories = ["fiqh", "civil", "commercial", "procedure", "general"] as const;
 export type LegalCategory = (typeof legalCategories)[number];
+
+const TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html";
+const TELEGRAM_HASAD_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-hasad-visit.html";
 
 const importantYemeniLawsPaymentMethods = {
   karimi: { label: "كريمي", details: "رقم حساب كريمي: 3007145477" },
@@ -50,6 +53,7 @@ export type TelegramSender = {
   sendPhotoByFileId: (chatId: number, fileId: string, caption?: string) => Promise<void>;
   sendQuizPoll: (chatId: number, poll: TelegramQuizPoll) => Promise<{ pollId: string }>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
+  editMessageText?: (chatId: number, messageId: number, text: string, replyMarkup?: TelegramInlineKeyboard) => Promise<void>;
   isChatAdministrator: (chatId: number, telegramUserId: string) => Promise<boolean>;
 };
 
@@ -109,6 +113,16 @@ export type TelegramExamPollResolution = {
   question: { id: number; questionText: string; optionA: string; optionB: string; optionC: string; optionD: string; correctOption: "A" | "B" | "C" | "D"; explanation: string; hint: string | null; sortOrder: number };
   isCorrect: boolean;
   missed: boolean;
+  score: number;
+  incorrectCount: number;
+  missedCount: number;
+  nextQuestionIndex: number;
+  total: number;
+  completed: boolean;
+  elapsedSeconds: number;
+};
+
+export type TelegramWrittenExamResolution = {
   score: number;
   incorrectCount: number;
   missedCount: number;
@@ -279,6 +293,7 @@ export type TelegramLibraryStore = {
   getExamSessionByPoll: (pollId: string) => Promise<TelegramExamSessionRecord | undefined>;
   cancelExamSession: (telegramUserId: string, chatId: string) => Promise<{ subjectKey: string; sectionKey: string } | undefined>;
   resolveExamPoll: (input: { sessionId: number; telegramUserId: string; questionIndex: number; pollId: string; answer?: "A" | "B" | "C" | "D" }) => Promise<TelegramExamPollResolution | undefined>;
+  advanceExamWrittenQuestion: (input: { sessionId: number; telegramUserId: string; questionIndex: number }) => Promise<TelegramWrittenExamResolution | undefined>;
   getExamResultSummary: (sessionId: number, telegramUserId: string) => Promise<TelegramExamResultSummary | undefined>;
   getGroupExamWaitingRound: (chatId: string, subjectKey: string, sectionKey: string) => Promise<TelegramGroupExamRoundRecord | undefined>;
   createGroupExamRound: (input: { chatId: string; creatorTelegramUserId: string; subjectKey: string; sectionKey: string; timeLimitSeconds: 15 | 30 | 60 | 300 }) => Promise<{ round: TelegramGroupExamRoundRecord; created: boolean } | undefined>;
@@ -293,10 +308,30 @@ export type TelegramLibraryStore = {
   getGroupExamLeaderboard: (roundId: number) => Promise<TelegramGroupExamParticipantRecord[]>;
 };
 
+export type TelegramReplyContext = {
+  messageThreadId?: number;
+  directMessagesTopicId?: number;
+};
+
+function adaptReplyMarkupForTelegramContext(replyMarkup: TelegramInlineKeyboard | undefined, replyContext: TelegramReplyContext): TelegramInlineKeyboard | undefined {
+  if (!replyMarkup || !Number.isInteger(replyContext.directMessagesTopicId)) return replyMarkup;
+  return {
+    inline_keyboard: replyMarkup.inline_keyboard.map(row => row.map(button => {
+      if (!button.web_app) return button;
+      return {
+        text: "فتح المحادثة الخاصة لإكمال التحقق",
+        url: "https://t.me/Moieen2025Bot?start=verify",
+      };
+    })),
+  };
+}
+
 export type TelegramUpdate = {
   message?: {
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
     chat?: { id?: number; type?: string };
+    message_thread_id?: number;
+    direct_messages_topic?: { topic_id?: number };
     text?: string;
     caption?: string;
     document?: { file_id: string; file_name?: string; mime_type?: string };
@@ -307,7 +342,12 @@ export type TelegramUpdate = {
     id: string;
     data?: string;
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
-    message?: { chat?: { id?: number; type?: string } };
+    message?: {
+      chat?: { id?: number; type?: string };
+      message_id?: number;
+      message_thread_id?: number;
+      direct_messages_topic?: { topic_id?: number };
+    };
   };
   poll_answer?: {
     poll_id?: string;
@@ -367,8 +407,8 @@ const mainMenuSections = [
   { sectionKey: "legal-forms", text: "📝 نماذج وصيغ قانونية", callbackData: "legal-forms", sortOrder: 60 },
   { sectionKey: "illustrated-legal-forms", text: "🖼 نماذج مصورة وفق القوانين اليمنية", callbackData: "illustrated-legal-forms", sortOrder: 70 },
   { sectionKey: "contract-templates", text: "📄 صيغ وعقود قانونية", callbackData: "contract-templates", sortOrder: 80 },
-  { sectionKey: "exams", text: "📝 اختبارات الشريعة والقانون", callbackData: "exams", sortOrder: 90 },
-  { sectionKey: "secondary-exams", text: "🧮 اختبارات الثانوية العامة", callbackData: "secondary-exams", sortOrder: 100 },
+  { sectionKey: "exams", text: "📚 بنك أسئلة كلية الشريعة والقانون", callbackData: "exams", sortOrder: 90 },
+  { sectionKey: "secondary-exams", text: "📚 بنك أسئلة اختبارات الثانوية العامة", callbackData: "secondary-exams", sortOrder: 100 },
   { sectionKey: "latest", text: "🆕 أحدث الإضافات", callbackData: "latest", sortOrder: 110 },
   { sectionKey: "popular", text: "⭐ الأكثر طلبًا", callbackData: "popular", sortOrder: 120 },
   { sectionKey: "favorites", text: "⭐ مفضلتي", callbackData: "favorites", sortOrder: 130 },
@@ -376,26 +416,87 @@ const mainMenuSections = [
   { sectionKey: "support", text: "💬 تواصل ودعم", callbackData: "support", sortOrder: 150 },
 ] as const;
 
-function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
-  const sectionOverrides = new Map(managedSections.map(section => [section.sectionKey, section]));
-  const sectionRows = mainMenuSections
-    .map(section => ({ ...section, override: sectionOverrides.get(section.sectionKey) }))
-    .filter(section => section.override?.enabled !== false)
-    .sort((left, right) => (left.override?.sortOrder ?? left.sortOrder) - (right.override?.sortOrder ?? right.sortOrder))
-    .map(section => [{ text: section.override?.displayLabel?.trim() || section.text, callback_data: section.callbackData }]);
-  const managedRows = [...managedItems]
+function sectionOverridesMap(managedSections: TelegramManagedSectionRecord[]) {
+  return new Map(managedSections.map(section => [section.sectionKey, section]));
+}
+
+function configuredSectionButton(
+  sectionKey: string,
+  fallbackText: string,
+  callbackData: string,
+  overrides: Map<string, TelegramManagedSectionRecord>,
+): { text: string; callback_data: string } | undefined {
+  const override = overrides.get(sectionKey);
+  if (override?.enabled === false) return undefined;
+  return { text: override?.displayLabel?.trim() || fallbackText, callback_data: callbackData };
+}
+
+function managedItemsRows(managedItems: TelegramManagedMenuItemRecord[]) {
+  return [...managedItems]
     .sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id)
     .map(item => [{ text: item.label, ...(item.actionType === "url" && item.accessMode === "free" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` }) }]);
+}
+
+function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      ...sectionRows,
-      ...managedRows,
-      [{ text: "❓ مساعدة", callback_data: "help" }],
+      [{ text: "🔎 البحث القانوني", callback_data: "menu:search" }, { text: "📚 المكتبة القانونية", callback_data: "menu:library" }],
+      [{ text: "📝 بنك الأسئلة والاختبارات", callback_data: "menu:exams" }, { text: "📄 النماذج والصيغ القانونية", callback_data: "menu:documents" }],
+      [{ text: "📌 المراجع المميزة", callback_data: "menu:featured" }, { text: "🛠 الخدمات والأدوات", callback_data: "menu:services" }],
+      [{ text: "ℹ️ عن البوت والمساعدة", callback_data: "menu:help" }],
+      ...managedItemsRows(managedItems),
       [{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }],
       [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }],
-      [{ text: "ℹ️ عن المكتبة", callback_data: "about" }],
     ],
   };
+}
+
+function mainCategoryMenu(category: "search" | "library" | "exams" | "documents" | "featured" | "services" | "help", managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
+  const overrides = sectionOverridesMap(managedSections);
+  const section = (key: string, fallback: string, callback = key) => configuredSectionButton(key, fallback, callback, overrides);
+  const rows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
+  if (category === "search") {
+    rows.push([{ text: "🔎 بحث موحّد في المكتبة", callback_data: "search" }]);
+    rows.push([{ text: "📚 تصفح المكتبة", callback_data: "browse" }]);
+  } else if (category === "library") {
+    for (const value of [section("browse", "📚 تصفح المكتبة"), section("judicial", "⚖️ القواعد والمبادئ القضائية"), section("legislation", "📜 التشريعات اليمنية"), section("important-laws", "🔐 أهم القوانين اليمنية التفاعلي"), section("contract-templates", "📄 صيغ وعقود قانونية")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "exams") {
+    for (const value of [section("exams", "📝 بنك أسئلة كلية الشريعة والقانون"), section("secondary-exams", "🧮 بنك أسئلة اختبارات الثانوية العامة")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "documents") {
+    for (const value of [section("legal-forms", "📝 نماذج وصيغ قانونية"), section("illustrated-legal-forms", "🖼 نماذج مصورة وفق القوانين اليمنية")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "featured") {
+    for (const value of [section("featured", "📌 مراجع مميزة"), section("latest", "🆕 أحدث الإضافات"), section("popular", "⭐ الأكثر طلبًا"), section("favorites", "⭐ مفضلتي")]) {
+      if (value) rows.push([value]);
+    }
+  } else if (category === "services") {
+    const supportButton = section("support", "💬 تواصل ودعم");
+    if (supportButton) rows.push([supportButton]);
+    rows.push([{ text: "🎁 نظام الإحالة", callback_data: "premium:referral" }]);
+  } else {
+    rows.push([{ text: "❓ المساعدة", callback_data: "help" }], [{ text: "ℹ️ عن المكتبة", callback_data: "about" }]);
+    rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
+  }
+  rows.push([{ text: "↩️ القائمة الرئيسية", callback_data: "menu" }]);
+  return { inline_keyboard: rows };
+}
+
+function mainCategoryText(category: "search" | "library" | "exams" | "documents" | "featured" | "services" | "help") {
+  const texts = {
+    search: "🔎 البحث القانوني\n\nابحث في المصادر القانونية أو تصفح المكتبة.",
+    library: "📚 المكتبة القانونية\n\nاختر نوع المصدر القانوني المطلوب.",
+    exams: "📝 بنك الأسئلة والاختبارات\n\nاختر البنك التعليمي المطلوب.",
+    documents: "📄 النماذج والصيغ القانونية\n\nاختر نوع النموذج أو الصيغة المطلوبة.",
+    featured: "📌 المراجع والمواد المميزة\n\nاختر القسم الذي تريد استعراضه.",
+    services: "🛠 الخدمات والأدوات\n\nاختر الخدمة المطلوبة.",
+    help: "ℹ️ عن البوت والمساعدة\n\nاختر المعلومات أو وسيلة التواصل المطلوبة.",
+  } as const;
+  return texts[category];
 }
 
 function groupExamLaunchMenu(): TelegramInlineKeyboard {
@@ -420,15 +521,43 @@ function groupExamReadyMenu(roundId: number, participantCount: number): Telegram
   };
 }
 
-function individualExamResultMenu(): TelegramInlineKeyboard {
-  const sharedText = `جرّب ${CIVIL_LAW_GENERAL_2025_TITLE} عبر بوت الناصر القانوني.`;
+type IndividualExamResultMenuOptions = {
+  examTitle?: string;
+  subjectKey?: string;
+  formKey?: string;
+  levelKey?: string;
+  catalogSubjectKey?: string;
+};
+
+function individualExamResultMenu(options: IndividualExamResultMenuOptions = {}): TelegramInlineKeyboard {
+  const isImportedExam = Boolean(options.subjectKey && options.formKey && options.levelKey && options.catalogSubjectKey);
+  const sharedText = `جرّب ${options.examTitle ?? CIVIL_LAW_GENERAL_2025_TITLE} عبر بوت الناصر القانوني.`;
+  const retryCallback = isImportedExam
+    ? `exam:retry:${encodeURIComponent(options.subjectKey!)}:${encodeURIComponent(options.formKey!)}`
+    : "exam:retry";
+  const modelCallback = isImportedExam
+    ? `exam:forms:${options.levelKey}:${options.catalogSubjectKey}:1`
+    : "exam:civil";
+  const subjectCallback = isImportedExam ? `exam:level:${options.levelKey}` : "exam:levels";
   return {
     inline_keyboard: [
-      [{ text: "حاول مجددًا", callback_data: "exam:retry" }],
-      [{ text: "بدء الاختبار في مجموعة ➕", url: "https://t.me/Moieen2025Bot?startgroup=groupquiz" }],
+      [{ text: "🔁 إعادة الاختبار", callback_data: retryCallback }],
+      [{ text: "📄 اختيار نموذج آخر", callback_data: modelCallback }],
+      [{ text: "📚 اختيار مادة أخرى", callback_data: subjectCallback }],
+      [{ text: "🏠 القائمة الرئيسة", callback_data: "menu" }],
       [{ text: "مشاركة الاختبار ↪️", url: `https://t.me/share/url?url=${encodeURIComponent("https://t.me/Moieen2025Bot")}&text=${encodeURIComponent(sharedText)}` }],
     ],
   };
+}
+
+function shariaExamsIntroText(): string {
+  return [
+    "📝 اختبارات الشريعة والقانون",
+    "",
+    "بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.",
+    "",
+    "اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.",
+  ].join("\n");
 }
 
 function quizQuickCommandsText(): string {
@@ -447,7 +576,7 @@ function quizQuickCommandsText(): string {
 function platformAccessMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [{ text: "فتح منصة الناصر والتحقق", web_app: { url: "https://alnaseer.org/" } }],
+      [{ text: "فتح منصة الناصر والتحقق", web_app: { url: TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL } }],
       [{ text: "فتح المنصة في المتصفح", url: "https://alnaseer.org/" }],
       [{ text: "تحقّق من زيارة المنصة", callback_data: "platform:verify" }],
     ],
@@ -457,7 +586,7 @@ function platformAccessMenu(): TelegramInlineKeyboard {
 function hasadAccessMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [{ text: "فتح حصاد اليوم وتوثيق الزيارة", web_app: { url: "https://hasad-alyoum.com/" } }],
+      [{ text: "فتح حصاد اليوم وتوثيق الزيارة", web_app: { url: TELEGRAM_HASAD_VERIFY_WEB_APP_URL } }],
     ],
   };
 }
@@ -517,7 +646,7 @@ function channelSubscriptionMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
       ...REQUIRED_CHANNELS.map(channel => [{ text: `الاشتراك في ${channel.title}`, url: channel.url }]),
-      [{ text: "فتح منصة الناصر القانونية والتحقق", web_app: { url: "https://alnaseer.org/" } }],
+      [{ text: "فتح منصة الناصر القانونية والتحقق", web_app: { url: TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL } }],
       [{ text: "تحقّق من الاشتراك", callback_data: "channel:check" }],
     ],
   };
@@ -960,7 +1089,7 @@ async function sendContractTemplatesMenu(chatId: number, requestedPage: number, 
   }
   await sender.sendMessage(
     chatId,
-    `📄 صيغ وعقود قانونية\n\nاختر النموذج أو العقد المطلوب. كل اختيار يجهز ملف Word مستقلًا عند طلبك.\nالصفحة ${safePage} من ${totalPages} (${content.total} ملفًا).`,
+    "📄 صيغ وعقود قانونية\n\nاختر النموذج أو العقد المطلوب:",
     contractTemplatesMenu(content.templates, safePage, content.total)
   );
 }
@@ -1017,7 +1146,7 @@ async function sendContractTemplatesByType(chatId: number, contractType: Telegra
   }
   await sender.sendMessage(
     chatId,
-    `📄 ${label}\n\nاختر النموذج المطلوب.\nالصفحة ${safePage} من ${totalPages} (${content.total} نموذجًا).`,
+    `📄 ${label}\n\nاختر النموذج المطلوب:`,
     contractTemplatesByTypeMenu(content.templates, contractType, safePage, content.total)
   );
 }
@@ -1187,6 +1316,8 @@ function isReferralProtectedCallback(data: string) {
 }
 
 function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "hasad" {
+  // الاختبارات مجانية دائمًا، ويكون توثيق زيارة حصاد اليوم شرط الوصول الوحيد لها.
+  if (sectionKey === "exams" || sectionKey === "secondary-exams") return "hasad";
   const configured = managedSections.find(section => section.sectionKey === sectionKey)?.accessMode;
   if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
   return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
@@ -1399,9 +1530,9 @@ function legalFormsIntroText() {
 
 function illustratedLegalFormsIntroText() {
   return [
-    "🖼 نماذج مصورة وفق القوانين اليمنية:",
-    "فهرس تفاعلي منظم لنماذج قانونية مصورة وفق القوانين اليمنية.",
-    "اختر الاسم المطلوب ليُرسل داخل محادثتك الخاصة مع البوت.",
+    "🖼 نماذج مصورة وفق القوانين اليمنية",
+    "نماذج وصيغ قانونية مصورة وفق القوانين اليمنية.",
+    "اختر النموذج المطلوب:",
   ].join("\n\n");
 }
 
@@ -1591,10 +1722,12 @@ async function deliverPrivateDocument(chatId: number, source: LegalSource | unde
   await sender.sendMessage(chatId, TELEGRAM_USER_MESSAGES.filePreparing);
   try {
     const downloaded = await provider.download(source);
-    await sender.sendDocument(chatId, {
-      ...downloaded,
-      caption: `مستورد من مكتبة أ. معين الناصر\n${source.title}`,
-    });
+      await sender.sendDocument(chatId, {
+        ...downloaded,
+        caption: source.collection === "illustrated_legal_forms"
+          ? "مستورد من مكتبة أ. معين الناصر"
+          : `مستورد من مكتبة أ. معين الناصر\n${source.title}`,
+      });
   } catch (error) {
     const code = error instanceof FileDeliveryError ? error.code : "UNAVAILABLE";
     const message = code === "TOO_LARGE"
@@ -1820,13 +1953,9 @@ async function sendJudicialFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getJudicialFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^قواعد قضائية\s*\/\s*/, "");
-  const pathText = path ? `المسار: قواعد قضائية / ${path}` : "المسار: قواعد قضائية";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
   await sender.sendMessage(
     chatId,
-    [`قواعد قضائية — ${folder.name}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["⚖️ المبادئ والقواعد القضائية", "اختر المجال أو الملف المطلوب:"].join("\n\n"),
     judicialFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -1894,13 +2023,9 @@ async function sendLegislationFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getLegislationFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^التشريعات اليمنية\s*\/\s*/, "");
-  const pathText = path ? `المسار: التشريعات اليمنية / ${path}` : "المسار: التشريعات اليمنية";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
-  await sender.sendMessage(
+    await sender.sendMessage(
     chatId,
-    [`التشريعات اليمنية — ${folder.name}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["📜 التشريعات اليمنية", "اختر التشريع أو الملف المطلوب:"].join("\n\n"),
     legislationFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -1948,13 +2073,9 @@ async function sendLegalFormsFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getLegalFormsFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^نماذج وصيغ قانونية\s*\/\s*/, "");
-  const pathText = path ? `المسار: نماذج وصيغ قانونية / ${cleanLegalFormsDisplayName(path)}` : "المسار: نماذج وصيغ قانونية";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
-  await sender.sendMessage(
+    await sender.sendMessage(
     chatId,
-    [`نماذج وصيغ قانونية — ${cleanLegalFormsDisplayName(folder.name)}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["📝 نماذج وصيغ قانونية", "اختر النموذج أو العقد المطلوب:"].join("\n\n"),
     legalFormsFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -1975,12 +2096,12 @@ async function sendIllustratedLegalFormsFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getIllustratedLegalFormsFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^نماذج مصورة وفق القوانين اليمنية\s*\/\s*/, "");
-  const pathText = path ? `المسار: نماذج مصورة / ${cleanGenericFileDisplayName(path)}` : "المسار: نماذج مصورة";
-  const fileText = content.totalSources > 0 ? `الصفحة ${page} من ${totalPages} (${content.totalSources} عنصرًا).` : "لا توجد عناصر مباشرة هنا.";
+  const folderTitle = folder.parentDriveFolderId
+    ? `🖼 ${cleanGenericFileDisplayName(folder.name)}`
+    : "🖼 نماذج مصورة وفق القوانين اليمنية";
   await sender.sendMessage(
     chatId,
-    [`نماذج مصورة وفق القوانين اليمنية — ${cleanGenericFileDisplayName(folder.name)}`, pathText, fileText, "اختر الاسم المطلوب:"].join("\n"),
+    [folderTitle, "اختر النموذج المطلوب:"].join("\n\n"),
     illustratedLegalFormsFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -2001,10 +2122,9 @@ async function sendAllYemeniLawsFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getAllYemeniLawsFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const fileText = content.totalSources > 0 ? `الصفحة ${page} من ${totalPages} (${content.totalSources} قانونًا أو لائحة).` : "لا توجد عناصر مباشرة هنا.";
   await sender.sendMessage(
     chatId,
-    [`جميع القوانين اليمنية — ${cleanGenericFileDisplayName(folder.name)}`, fileText, "اختر الاسم المطلوب:"].join("\n"),
+    ["⚖️ جميع القوانين اليمنية", "اختر القانون أو اللائحة المطلوبة:"].join("\n\n"),
     allYemeniLawsFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -2025,13 +2145,9 @@ async function sendFeaturedReferencesFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getFeaturedReferencesFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^مراجع مميزة\s*\/\s*/, "");
-  const pathText = path ? `المسار: مراجع مميزة / ${cleanFeaturedReferencesDisplayName(path)}` : "المسار: مراجع مميزة";
-  const fileText = content.totalSources > 0 ? `الملفات: الصفحة ${page} من ${totalPages} (${content.totalSources} ملفًا).` : "لا توجد ملفات مباشرة في هذا المجلد.";
-
-  await sender.sendMessage(
+    await sender.sendMessage(
     chatId,
-    [`مراجع مميزة — ${cleanFeaturedReferencesDisplayName(folder.name)}`, pathText, `المجلدات الفرعية: ${content.folders.length}.`, fileText, "اختر مجلدًا أو ملفًا:"].join("\n"),
+    ["📌 مراجع مميزة", "اختر المرجع أو الملف المطلوب:"].join("\n\n"),
     featuredReferencesFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }
@@ -2295,6 +2411,45 @@ async function resolveNativeExamTimeout(pollId: string, store: TelegramLibrarySt
   if (outcome) await continueNativeExamRound(session, outcome, store, sender);
 }
 
+function examResultSnapshotText(snapshot: { score: number; incorrectCount: number; missedCount: number; elapsedSeconds: number }): string {
+  const total = snapshot.score + snapshot.incorrectCount + snapshot.missedCount;
+  const percentage = total > 0 ? Math.round((snapshot.score / total) * 100) : 0;
+  return total > 0
+    ? `✅ ${snapshot.score}/${total} صحيحة (${percentage}%)  •  ❌ ${snapshot.incorrectCount}  •  ⏳ ${snapshot.missedCount}  •  ⏱ ${formatExamTime(snapshot.elapsedSeconds)}`
+    : `✅ ${snapshot.score} صحيحة  •  ❌ ${snapshot.incorrectCount}  •  ⏳ ${snapshot.missedCount}  •  ⏱ ${formatExamTime(snapshot.elapsedSeconds)}`;
+}
+
+function examSetupText(subjectName: string, formName: string, questionCount: number): string {
+  return [
+    "⚙️ تجهيز الاختبار",
+    "",
+    `📚 المادة: ${subjectName}`,
+    `📄 النموذج: ${formName}`,
+    `📝 عدد الأسئلة: ${questionCount}`,
+    "",
+    "⏱ اختر الزمن المخصص لكل سؤال:",
+    "سيبدأ الاختبار بعد اختيار المدة، ولن يُرسل السؤال الأول قبل تأكيدك.",
+  ].join("\n");
+}
+
+function examReadyText(subjectName: string, formName: string, questionCount: number, timeLimitSeconds: number): string {
+  return [
+    "✅ تم إعداد الاختبار",
+    "",
+    `📚 المادة: ${subjectName}`,
+    `📄 النموذج: ${formName}`,
+    `📝 عدد الأسئلة: ${questionCount}`,
+    `⏱ الزمن: ${formatExamTime(timeLimitSeconds)} لكل سؤال`,
+    "",
+    "📌 طريقة الاختبار:",
+    "• سيظهر كل سؤال في استطلاع مستقل، ويبدأ الوقت عند ظهوره.",
+    "• ستظهر الإجابة الصحيحة تلقائيًا بعد كل إجابة، ويظهر الشرح عند توفره.",
+    "• لإيقاف المحاولة في أي وقت أرسل /stop.",
+    "",
+    "عندما تكون مستعدًا اضغط «▶️ ابدأ الآن».",
+  ].join("\n");
+}
+
 async function sendNativeExamCompletionResult(
   chatId: number,
   session: TelegramExamSessionRecord,
@@ -2305,38 +2460,46 @@ async function sendNativeExamCompletionResult(
   const summary = await store.getExamResultSummary(session.id, session.telegramUserId);
   const location = getImportedExamCatalogLocation(session.subjectKey);
   const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
-  const formName = subject
-    ? (await store.listExamForms(session.subjectKey)).find(form => form.formKey === session.sectionKey)?.formName
-    : undefined;
-  const examTitle = subject
-    ? `اختبار ${subject.name} (${formName ?? "النموذج"})`
-    : CIVIL_LAW_GENERAL_2025_TITLE;
+  const form = subject ? (await store.listExamForms(session.subjectKey)).find(item => item.formKey === session.sectionKey) : undefined;
+  const subjectName = subject?.name ?? "القانون المدني";
+  const formName = form?.formName ?? "القسم العام 2025";
+  const totalQuestions = result.score + result.incorrectCount + result.missedCount;
+  const percentage = totalQuestions > 0 ? Math.round((result.score / totalQuestions) * 100) : 0;
+  const examTitle = subject ? `اختبار ${subject.name} — ${formName}` : CIVIL_LAW_GENERAL_2025_TITLE;
   const resultLines = [
-    `🎲 اسم الاختبار: ${examTitle}`,
+    "🏁 انتهى الاختبار",
     "",
-    "📝 نتيجة هذه المحاولة:",
-    `✅ الصحيحة: ${result.score} | ❌ الخاطئة: ${result.incorrectCount} | ⏳ الفائتة: ${result.missedCount} | ⏱ الوقت: ${formatExamTime(result.elapsedSeconds)}`,
+    `📚 المادة: ${subjectName}`,
+    `📄 النموذج: ${formName}`,
+    "",
+    "📊 ملخص المحاولة",
+    `✅ الصحيحة: ${result.score}`,
+    `❌ الخاطئة: ${result.incorrectCount}`,
+    `⏳ الفائتة: ${result.missedCount}`,
+    `🎯 النتيجة: ${totalQuestions > 0 ? `${result.score}/${totalQuestions} (${percentage}%)` : `${result.score} صحيحة`}`,
+    `⏱ الوقت: ${formatExamTime(result.elapsedSeconds)}`,
   ];
-  const best = summary?.previousBest ?? result;
-  resultLines.push(
-    "",
-    "🏅 أفضل نتيجة:",
-    `✅ الصحيحة: ${best.score} | ❌ الخاطئة: ${best.incorrectCount} | ⏳ الفائتة: ${best.missedCount} | ⏱ الوقت: ${formatExamTime(best.elapsedSeconds)}`
-  );
-  const leaderboard = summary?.leaderboardResult ?? result;
-  resultLines.push(
-    "",
-    "🏆 نتيجة لائحة المتصدرين:",
-    `✅ الصحيحة: ${leaderboard.score} | ❌ الخاطئة: ${leaderboard.incorrectCount} | ⏳ الفائتة: ${leaderboard.missedCount} | ⏱ الوقت: ${formatExamTime(leaderboard.elapsedSeconds)}`
-  );
-  if (summary) {
-    resultLines.push(
-      "",
-      `📊 الترتيب: المركز ${summary.rank} من أصل ${summary.totalParticipants} (أعلى من ${summary.percentile}% من المشاركين).`
-    );
+  if (summary?.previousBest) {
+    resultLines.push("", "🏅 أفضل نتيجة سابقة لك", examResultSnapshotText(summary.previousBest));
   }
-  resultLines.push("", "يمكنك إعادة الاختبار، لكن لن يتغير ترتيبك في لائحة المتصدرين إلا إذا حسّنت أفضل نتيجة لك.");
-  await sender.sendMessage(chatId, resultLines.join("\n"), individualExamResultMenu());
+  if (summary?.leaderboardResult) {
+    resultLines.push("", "🏆 أفضل نتيجة محتسبة للترتيب", examResultSnapshotText(summary.leaderboardResult));
+  }
+  if (summary && summary.totalParticipants > 0) {
+    resultLines.push("", `📈 ترتيبك: المركز ${summary.rank} من أصل ${summary.totalParticipants} مشارك.`);
+  }
+  resultLines.push("", "يمكنك إعادة المحاولة أو اختيار نموذج ومادة أخرى من الأزرار أدناه.");
+  await sender.sendMessage(
+    chatId,
+    resultLines.join("\n"),
+    individualExamResultMenu({
+      examTitle,
+      subjectKey: subject ? session.subjectKey : undefined,
+      formKey: subject ? session.sectionKey : undefined,
+      levelKey: location?.levelKey,
+      catalogSubjectKey: location?.catalogSubjectKey,
+    })
+  );
 }
 
 async function continueNativeExamRound(
@@ -2468,6 +2631,28 @@ export async function handleTelegramUpdate(
       callbackAcknowledged = true;
       await sender.answerCallbackQuery(callback.id, text).catch(() => undefined);
     };
+    const presentCallbackPage = async (text: string, replyMarkup?: TelegramInlineKeyboard) => {
+      const messageId = callback.message?.message_id;
+      if (messageId && sender.editMessageText) {
+        try {
+          await sender.editMessageText(chatId, messageId, text, replyMarkup);
+          return;
+        } catch (error) {
+          if (error instanceof Error && /message is not modified/i.test(error.message)) return;
+        }
+      }
+      await sender.sendMessage(chatId, text, replyMarkup);
+    };
+    const pageSender: TelegramSender = {
+      ...sender,
+      sendMessage: async (targetChatId, text, replyMarkup) => {
+        if (targetChatId === chatId) {
+          await presentCallbackPage(text, replyMarkup);
+          return;
+        }
+        await sender.sendMessage(targetChatId, text, replyMarkup);
+      },
+    };
     await acknowledgeCallback();
     if (isPrivateChat(chat?.type)) {
       await store.registerSubscriber(String(chatId), telegramUserId, {
@@ -2476,7 +2661,10 @@ export async function handleTelegramUpdate(
         telegramLastName: callback.from?.last_name ?? null,
       });
     }
-    const requirements = await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
+    const isExamAccessCallback = isReferralProtectedCallback(data);
+    const requirements = isExamAccessCallback
+      ? { channels: [], platformVerified: true }
+      : await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
     if (data === "channel:check") {
       if (areChannelsSubscribed(requirements) && requirements.platformVerified) {
         await sender.sendMessage(chatId, welcomeText(), mainMenu());
@@ -2631,12 +2819,29 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, cancelled ? "⏹ تم إنهاء الجولة الجماعية. لا تُحتسب أي إجابات لاحقة." : "لا توجد جولة قابلة للإنهاء حاليًا.");
       return;
     }
-    if (data === "exam:retry") {
+    if (data === "exam:retry" || data.startsWith("exam:retry:")) {
       if (!isPrivateChat(chat?.type)) {
         await sender.sendMessage(chatId, "يمكن إعادة الاختبار من المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      await sender.sendMessage(chatId, `${CIVIL_LAW_GENERAL_2025_TITLE}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`, civilLawExamTimeMenu());
+      if (data.startsWith("exam:retry:")) {
+        const [, , encodedSubjectKey, encodedFormKey] = data.split(":");
+        const subjectKey = encodedSubjectKey ? decodeURIComponent(encodedSubjectKey) : "";
+        const formKey = encodedFormKey ? decodeURIComponent(encodedFormKey) : "";
+        const location = getImportedExamCatalogLocation(subjectKey);
+        const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
+        if (!location || !subject || !formKey) return;
+        const forms = await store.listExamForms(subjectKey);
+        const form = forms.find(item => item.formKey === formKey);
+        if (!form) return;
+        await pageSender.sendMessage(
+          chatId,
+          `🔁 إعادة اختبار ${subject.name} — ${form.formName}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`,
+          examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`)
+        );
+        return;
+      }
+      await pageSender.sendMessage(chatId, `🔁 إعادة اختبار ${CIVIL_LAW_GENERAL_2025_TITLE}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`, civilLawExamTimeMenu());
       return;
     }
     if (data.startsWith("broadcast:confirm:")) {
@@ -2738,8 +2943,14 @@ export async function handleTelegramUpdate(
       return;
     }
 
+    const categoryMatch = data.match(/^menu:(search|library|exams|documents|featured|services|help)$/);
+    if (categoryMatch) {
+      const category = categoryMatch[1] as "search" | "library" | "exams" | "documents" | "featured" | "services" | "help";
+      await presentCallbackPage(mainCategoryText(category), mainCategoryMenu(category, managedSections));
+      return;
+    }
     if (data === "menu") {
-      await sender.sendMessage(chatId, welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
+      await presentCallbackPage(welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
       return;
     }
     if (data.startsWith("managed-premium:request:")) {
@@ -2813,7 +3024,7 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "⭐ مفضلتي\n\nلا توجد مستندات محفوظة حاليًا. افتح أي نتيجة بحث واضغط «إضافة للمفضلة» لحفظها.", mainMenu());
         return;
       }
-      await sender.sendMessage(chatId, `⭐ مفضلتي\n\nلديك ${favorites.length} مستندًا محفوظًا. اضغط اسم المستند لطلبه، أو أزله من المفضلة.`, favoritesMenu(favorites));
+      await pageSender.sendMessage(chatId, `⭐ مفضلتي\n\nلديك ${favorites.length} مستندًا محفوظًا. اضغط اسم المستند لطلبه، أو أزله من المفضلة.`, favoritesMenu(favorites));
       return;
     }
     if (data.startsWith("favadd:")) {
@@ -2850,15 +3061,15 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "exams") {
-      await sender.sendMessage(chatId, quizQuickCommandsText(), civilLawExamMenu());
+      await pageSender.sendMessage(chatId, shariaExamsIntroText(), civilLawExamMenu());
       return;
     }
     if (data === "secondary-exams") {
-      await sender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nاختر المادة المطلوبة.", examSubjectsMenu("secondary"));
+      await pageSender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nنماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
       return;
     }
     if (data === "exam:levels") {
-      await sender.sendMessage(chatId, "📝 اختبارات الشريعة والقانون\n\nاختر المستوى المطلوب.", civilLawExamMenu());
+      await pageSender.sendMessage(chatId, "📝 اختبارات الشريعة والقانون\n\nاختر المستوى المطلوب.", civilLawExamMenu());
       return;
     }
     if (data === "exam:noop") return;
@@ -2895,17 +3106,17 @@ export async function handleTelegramUpdate(
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       if (importedSubjectKey) {
         const forms = await store.listExamForms(importedSubjectKey);
-        await sender.sendMessage(
+        await pageSender.sendMessage(
           chatId,
           forms.length > 0
-            ? `📕 ${subject.name}\n\nاختر نموذج الاختبار المطلوب.`
+            ? `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`
             : "لا تتوافر نماذج اختبار لهذه المادة حاليًا.",
           forms.length > 0 ? examFormsMenu(levelKey, subjectKey, forms) : examSubjectsMenu(levelKey, Number(requestedPage) || 1)
         );
         return;
       }
       const page = Number(requestedPage);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         `📚 ${getTelegramExamCatalogLevel(levelKey)?.name ?? "المستوى"} ← ${subject.name}\n\nلا توجد أسئلة مضافة لهذه المادة في البوت حاليًا.`,
         examSubjectsMenu(levelKey, Number.isInteger(page) && page > 0 ? page : 1)
@@ -2918,51 +3129,58 @@ export async function handleTelegramUpdate(
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject) return;
       const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId, `📕 ${subject.name}\n\nاختر نموذج الاختبار المطلوب.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+      await pageSender.sendMessage(chatId, `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
       return;
     }
     if (data.startsWith("exam:training:")) {
-      const [, , levelKey, subjectKey, requestedPage] = data.split(":");
-      const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
+      const [, , levelKey, subjectKey] = data.split(":");
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
-      if (!importedSubjectKey || !subject) return;
-      const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId, `🧪 ${subject.name}\n\nاختر أسئلة التدريب أو القسم المطلوب.`, examTrainingFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+      if (!subject) return;
+      await pageSender.sendMessage(
+        chatId,
+        `🧪 ${subject.name}\n\nالأسئلة التجريبية ستكون متاحة قريبًا.`,
+        {
+          inline_keyboard: [
+            [{ text: "رجوع إلى النماذج الأساسية", callback_data: `exam:subject:${levelKey}:${subjectKey}:1` }],
+            [{ text: "رجوع إلى المواد", callback_data: `exam:level:${levelKey}` }],
+          ],
+        }
+      );
       return;
     }
     if (data.startsWith("exam:form:")) {
-      const [, , levelKey, subjectKey, formKey, requestedPage] = data.split(":");
+      const [, , levelKey, subjectKey, formKeyOrSortOrder, requestedPage] = data.split(":");
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
-      if (!importedSubjectKey || !subject || !formKey) return;
+      if (!importedSubjectKey || !subject || !formKeyOrSortOrder) return;
       const forms = await store.listExamForms(importedSubjectKey);
-      const form = forms.find(item => item.formKey === formKey);
+      const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
-        await sender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+        await pageSender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
         return;
       }
       const questions = await store.listExamQuestions(importedSubjectKey, form.formKey);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         questions.length > 0
-          ? `📕 ${subject.name} — ${form.formName}\n\nيتضمن النموذج ${questions.length} سؤالًا. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
+          ? examSetupText(subject.name, form.formName, questions.length)
           : "لا تتوافر أسئلة هذا النموذج حاليًا. حاول مرة أخرى لاحقًا.",
         questions.length > 0
-          ? examTimeMenu(importedSubjectKey, form.formKey, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
+          ? examTimeMenu(importedSubjectKey, form.sortOrder, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
           : examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1)
       );
       return;
     }
     if (data === "exam:civil") {
-      await sender.sendMessage(chatId, "📙 القانون المدني\n\nاختر القسم المطلوب.", civilLawExamSectionMenu());
+      await pageSender.sendMessage(chatId, "📙 القانون المدني\n\nاختر القسم المطلوب.", civilLawExamSectionMenu());
       return;
     }
     if (data === "exam:civil:general2025") {
       const questions = await store.listExamQuestions(CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
         questions.length > 0
-          ? `${CIVIL_LAW_GENERAL_2025_TITLE}\n\nيتضمن الاختبار ${questions.length} أسئلة. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
+          ? examSetupText("القانون المدني", "القسم العام 2025", questions.length)
           : "لا تتوافر أسئلة هذا القسم حاليًا. حاول مرة أخرى لاحقًا.",
         questions.length > 0 ? civilLawExamTimeMenu() : civilLawExamSectionMenu()
       );
@@ -2973,32 +3191,26 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "يتاح الاختبار داخل المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      const [, , subjectKey, formKey, rawTimeLimit] = data.split(":");
+      const [, , subjectKey, formKeyOrSortOrder, rawTimeLimit] = data.split(":");
       const timeLimitSeconds = Number(rawTimeLimit);
       const location = getImportedExamCatalogLocation(subjectKey);
       const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
-      if (!location || !subject || !formKey || ![15, 30, 60, 300].includes(timeLimitSeconds)) return;
+      if (!location || !subject || !formKeyOrSortOrder || ![15, 30, 60, 300].includes(timeLimitSeconds)) return;
       const forms = await store.listExamForms(subjectKey);
-      const form = forms.find(item => item.formKey === formKey);
+      const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
-        await sender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
+        await pageSender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
         return;
       }
       const session = await store.startExamSession(telegramUserId, String(chatId), subjectKey, form.formKey, timeLimitSeconds as 15 | 30 | 60 | 300);
       if (!session) {
-        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.formKey, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
+        await pageSender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
         return;
       }
       const questions = await store.listExamQuestions(subjectKey, form.formKey);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
-        [
-          `🎲 استعد جيدًا لـ 'اختبار ${subject.name} — ${form.formName}'`,
-          `🖊 ${questions.length} أسئلة`,
-          `⏱ ${formatExamTime(timeLimitSeconds)} لكل سؤال`,
-          "📖 ستظهر الإجابة الصحيحة والشرح المفصل بعد كل سؤال، ويظهر التلميح عند الإجابة الخاطئة.",
-          "🏁 اضغط على الزر أدناه عندما تكون مستعدًا. لإيقاف الاختبار أرسل /stop.",
-        ].join("\n"),
+        examReadyText(subject.name, form.formName, questions.length, timeLimitSeconds),
         civilLawExamReadyMenu(session.id)
       );
       return;
@@ -3012,19 +3224,13 @@ export async function handleTelegramUpdate(
       if (![15, 30, 60, 300].includes(timeLimitSeconds)) return;
       const session = await store.startExamSession(telegramUserId, String(chatId), CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, timeLimitSeconds as 15 | 30 | 60 | 300);
       if (!session) {
-        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", civilLawExamTimeMenu());
+        await pageSender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", civilLawExamTimeMenu());
         return;
       }
       const questions = await store.listExamQuestions(CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY);
-      await sender.sendMessage(
+      await pageSender.sendMessage(
         chatId,
-        [
-          `🎲 استعد جيدًا لـ '${CIVIL_LAW_GENERAL_2025_TITLE}'`,
-          `🖊 ${questions.length} أسئلة`,
-          `⏱ ${formatExamTime(timeLimitSeconds)} لكل سؤال`,
-          "📖 ستظهر الإجابة الصحيحة والشرح المفصل بعد كل سؤال.",
-          "🏁 اضغط على الزر أدناه عندما تكون مستعدًا. لإيقاف الاختبار أرسل /stop.",
-        ].join("\n"),
+        examReadyText("القانون المدني", "القسم العام 2025", questions.length, timeLimitSeconds),
         civilLawExamReadyMenu(session.id)
       );
       return;
@@ -3033,6 +3239,24 @@ export async function handleTelegramUpdate(
       const sessionId = Number(data.slice("exam:ready:".length));
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
       await launchNativeExamQuestion(chatId, sessionId, telegramUserId, store, sender);
+      return;
+    }
+    if (data.startsWith("exam:written-next:")) {
+      const sessionId = Number(data.slice("exam:written-next:".length));
+      if (!Number.isInteger(sessionId) || sessionId < 1) return;
+      const session = await store.getExamSession(sessionId, telegramUserId);
+      if (!session || session.status !== "active") return;
+      const outcome = await store.advanceExamWrittenQuestion({
+        sessionId,
+        telegramUserId,
+        questionIndex: session.questionIndex,
+      });
+      if (!outcome) return;
+      if (outcome.completed) {
+        await sendNativeExamCompletionResult(chatId, session, outcome, store, sender);
+      } else {
+        await launchNativeExamQuestion(chatId, sessionId, telegramUserId, store, sender);
+      }
       return;
     }
     if (data.startsWith("exam:stop:")) {
@@ -3044,46 +3268,41 @@ export async function handleTelegramUpdate(
     }
     if (data === "browse") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "browse" });
-      await sender.sendMessage(chatId, browseText(), categoryMenu());
+      await pageSender.sendMessage(chatId, browseText(), categoryMenu());
       return;
     }
     if (data === "judicial") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "judicial" });
-      await sender.sendMessage(chatId, judicialIntroText());
-      await sendJudicialFolder(chatId, JUDICIAL_ROOT_FOLDER_ID, 1, store, sender);
+      await sendJudicialFolder(chatId, JUDICIAL_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "legislation") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "legislation" });
-      await sender.sendMessage(chatId, legislationIntroText());
-      await sendLegislationFolder(chatId, LEGISLATION_ROOT_FOLDER_ID, 1, store, sender);
+      await sendLegislationFolder(chatId, LEGISLATION_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "legal-forms") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "legal-forms" });
-      await sender.sendMessage(chatId, legalFormsIntroText());
-      await sendLegalFormsFolder(chatId, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendLegalFormsFolder(chatId, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "illustrated-legal-forms") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "illustrated-legal-forms" });
-      await sender.sendMessage(chatId, illustratedLegalFormsIntroText());
-      await sendIllustratedLegalFormsFolder(chatId, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendIllustratedLegalFormsFolder(chatId, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "all-yemeni-laws") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "all-yemeni-laws" });
-      await sender.sendMessage(chatId, allYemeniLawsIntroText());
-      await sendAllYemeniLawsFolder(chatId, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendAllYemeniLawsFolder(chatId, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "contract-templates") {
       await store.recordUsage(telegramUserId, "browse");
-      await sendContractTemplatesMenu(chatId, 1, store, sender);
+      await sendContractTemplatesMenu(chatId, 1, store, pageSender);
       return;
     }
     if (data === "ctypes") {
-      await sendContractTemplateTypesMenu(chatId, store, sender);
+      await sendContractTemplateTypesMenu(chatId, store, pageSender);
       return;
     }
     if (data === "ctsearch") {
@@ -3096,14 +3315,14 @@ export async function handleTelegramUpdate(
     }
     if (data.startsWith("ctemplates:")) {
       const page = Number(data.slice("ctemplates:".length));
-      await sendContractTemplatesMenu(chatId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplatesMenu(chatId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctype:")) {
       const [, rawType, rawPage] = data.split(":");
       const page = Number(rawPage ?? "1");
       if (!isTelegramContractTemplateType(rawType)) return;
-      await sendContractTemplatesByType(chatId, rawType, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplatesByType(chatId, rawType, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctresult:")) {
@@ -3111,7 +3330,7 @@ export async function handleTelegramUpdate(
       const sessionId = Number(sessionValue);
       const page = Number(pageValue ?? "1");
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
-      await sendContractTemplateSearchResults(chatId, sessionId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplateSearchResults(chatId, sessionId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctemplate:")) {
@@ -3184,18 +3403,17 @@ export async function handleTelegramUpdate(
     }
     if (data === "latest") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "latest" });
-      await sendCuratedSources(chatId, "🆕 أحدث الإضافات", await store.listRecentSources(), "menu", sender);
+      await sendCuratedSources(chatId, "🆕 أحدث الإضافات", await store.listRecentSources(), "menu", pageSender);
       return;
     }
     if (data === "popular") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "popular" });
-      await sendCuratedSources(chatId, "⭐ الملفات الأكثر طلبًا", await store.listPopularSources(), "menu", sender);
+      await sendCuratedSources(chatId, "⭐ الملفات الأكثر طلبًا", await store.listPopularSources(), "menu", pageSender);
       return;
     }
     if (data === "featured") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "featured" });
-      await sender.sendMessage(chatId, featuredReferencesIntroText());
-      await sendFeaturedReferencesFolder(chatId, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, sender);
+      await sendFeaturedReferencesFolder(chatId, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "important-laws" || data === "yemeni-laws") {
@@ -3308,7 +3526,7 @@ export async function handleTelegramUpdate(
       const category = categoryValue as LegalCategory;
       const page = Number(pageValue ?? "1");
       if (legalCategories.includes(category)) {
-        await sendSourcesForCategory(chatId, category, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendSourcesForCategory(chatId, category, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3316,7 +3534,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendJudicialFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendJudicialFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3324,7 +3542,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendLegislationFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3332,7 +3550,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendAllYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendAllYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3344,7 +3562,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3352,7 +3570,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3360,7 +3578,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendIllustratedLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendIllustratedLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3368,7 +3586,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendFeaturedReferencesFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendFeaturedReferencesFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3380,7 +3598,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3389,7 +3607,7 @@ export async function handleTelegramUpdate(
       const documentType = documentTypeValue as keyof typeof legislationDocumentTypeLabels;
       const page = Number(pageValue ?? "1");
       if (documentType in legislationDocumentTypeLabels) {
-        await sendLegislationType(chatId, documentType, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationType(chatId, documentType, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3398,7 +3616,7 @@ export async function handleTelegramUpdate(
       const year = Number(yearValue);
       const page = Number(pageValue ?? "1");
       if (Number.isInteger(year) && year >= 1900 && year <= 2200) {
-        await sendLegislationYear(chatId, year, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationYear(chatId, year, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3861,11 +4079,21 @@ async function telegramRequest(token: string, method: string, payload: Record<st
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    throw new Error(`Telegram API request failed with status ${response.status}`);
+  const responseText = await response.text();
+  let body: { ok?: boolean; result?: unknown; description?: string } = {};
+  try {
+    body = JSON.parse(responseText) as typeof body;
+  } catch {
+    // Telegram should return JSON, but preserve a safe generic error for malformed responses.
   }
-  const body = await response.json() as { ok?: boolean; result?: unknown };
-  if (!body.ok) throw new Error(`Telegram API ${method} returned an unsuccessful response`);
+  if (!response.ok) {
+    const description = typeof body.description === "string" ? `: ${body.description}` : "";
+    throw new Error(`Telegram API request failed with status ${response.status}${description}`);
+  }
+  if (!body.ok) {
+    const description = typeof body.description === "string" ? `: ${body.description}` : "";
+    throw new Error(`Telegram API ${method} returned an unsuccessful response${description}`);
+  }
   return body.result;
 }
 
@@ -3874,13 +4102,18 @@ async function telegramMultipartRequest(token: string, method: string, form: For
   if (!response.ok) throw new Error(`Telegram API request failed with status ${response.status}`);
 }
 
-export function createTelegramSender(token: string): TelegramSender {
+export function createTelegramSender(token: string, replyContext: TelegramReplyContext = {}): TelegramSender {
+  const topicPayload = {
+    ...(Number.isInteger(replyContext.messageThreadId) ? { message_thread_id: replyContext.messageThreadId } : {}),
+    ...(Number.isInteger(replyContext.directMessagesTopicId) ? { direct_messages_topic_id: replyContext.directMessagesTopicId } : {}),
+  };
   return {
     async sendMessage(chatId, text, replyMarkup) {
       await telegramRequest(token, "sendMessage", {
         chat_id: chatId,
+        ...topicPayload,
         text,
-        reply_markup: replyMarkup,
+        reply_markup: adaptReplyMarkupForTelegramContext(replyMarkup, replyContext),
       });
     },
     async sendDocument(chatId, document) {
@@ -3888,6 +4121,8 @@ export function createTelegramSender(token: string): TelegramSender {
       const fileBytes = new Uint8Array(document.data.byteLength);
       fileBytes.set(document.data);
       form.set("chat_id", String(chatId));
+      if (Number.isInteger(replyContext.messageThreadId)) form.set("message_thread_id", String(replyContext.messageThreadId));
+      if (Number.isInteger(replyContext.directMessagesTopicId)) form.set("direct_messages_topic_id", String(replyContext.directMessagesTopicId));
       form.set("caption", document.caption);
       form.set("document", new Blob([fileBytes.buffer], { type: document.contentType }), document.filename);
       await telegramMultipartRequest(token, "sendDocument", form);
@@ -3895,6 +4130,7 @@ export function createTelegramSender(token: string): TelegramSender {
     async sendDocumentByFileId(chatId, fileId, caption) {
       await telegramRequest(token, "sendDocument", {
         chat_id: chatId,
+        ...topicPayload,
         document: fileId,
         ...(caption ? { caption } : {}),
       });
@@ -3902,6 +4138,7 @@ export function createTelegramSender(token: string): TelegramSender {
     async sendPhotoByFileId(chatId, fileId, caption) {
       await telegramRequest(token, "sendPhoto", {
         chat_id: chatId,
+        ...topicPayload,
         photo: fileId,
         ...(caption ? { caption } : {}),
       });
@@ -3909,6 +4146,7 @@ export function createTelegramSender(token: string): TelegramSender {
     async sendQuizPoll(chatId, poll) {
       const result = await telegramRequest(token, "sendPoll", {
         chat_id: chatId,
+        ...topicPayload,
         question: poll.question,
         options: poll.options,
         type: "quiz",
@@ -3925,6 +4163,14 @@ export function createTelegramSender(token: string): TelegramSender {
       await telegramRequest(token, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
         ...(text ? { text, show_alert: true } : {}),
+      });
+    },
+    async editMessageText(chatId, messageId, text, replyMarkup) {
+      await telegramRequest(token, "editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        reply_markup: adaptReplyMarkupForTelegramContext(replyMarkup, replyContext),
       });
     },
     async isChatAdministrator(chatId, telegramUserId) {
