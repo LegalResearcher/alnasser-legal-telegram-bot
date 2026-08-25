@@ -43,7 +43,15 @@ const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const PLATFORM_ORIGIN = "https://alnaseer.org";
 const TELEGRAM_VERCEL_ORIGIN = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app";
 const HASAD_ORIGINS = new Set(["https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
-const TELEGRAM_VISIT_ORIGINS = new Set([PLATFORM_ORIGIN, TELEGRAM_VERCEL_ORIGIN, "https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
+const TELEGRAM_VISIT_ORIGINS = new Set([
+  PLATFORM_ORIGIN,
+  TELEGRAM_VERCEL_ORIGIN,
+  "https://www.hasad-alyoum.com",
+  "https://hasad-alyoum.com",
+  "https://web.telegram.org",
+  "https://telegram.org",
+  "null",
+]);
 const PLATFORM_SUPABASE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
 
 export function normalizeTelegramRegion(value: unknown): string | null {
@@ -860,7 +868,8 @@ export function registerTelegramWebhook(app: Express) {
   app.post("/api/telegram/hasad-visit", async (req, res) => {
     setPlatformVisitCors(req, res);
     const origin = req.get("origin");
-    if (origin && !HASAD_ORIGINS.has(origin)) {
+    if (origin && !TELEGRAM_VISIT_ORIGINS.has(origin)) {
+      console.warn("[Telegram] Hasad visit rejected origin:", origin.slice(0, 160));
       res.status(403).json({ ok: false });
       return;
     }
