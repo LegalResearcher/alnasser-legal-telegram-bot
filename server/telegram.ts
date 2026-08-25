@@ -2578,6 +2578,16 @@ export async function handleTelegramUpdate(
       }
       await sender.sendMessage(chatId, text, replyMarkup);
     };
+    const pageSender: TelegramSender = {
+      ...sender,
+      sendMessage: async (targetChatId, text, replyMarkup) => {
+        if (targetChatId === chatId) {
+          await presentCallbackPage(text, replyMarkup);
+          return;
+        }
+        await sender.sendMessage(targetChatId, text, replyMarkup);
+      },
+    };
     await acknowledgeCallback();
     if (isPrivateChat(chat?.type)) {
       await store.registerSubscriber(String(chatId), telegramUserId, {
@@ -2932,7 +2942,7 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "⭐ مفضلتي\n\nلا توجد مستندات محفوظة حاليًا. افتح أي نتيجة بحث واضغط «إضافة للمفضلة» لحفظها.", mainMenu());
         return;
       }
-      await sender.sendMessage(chatId, `⭐ مفضلتي\n\nلديك ${favorites.length} مستندًا محفوظًا. اضغط اسم المستند لطلبه، أو أزله من المفضلة.`, favoritesMenu(favorites));
+      await pageSender.sendMessage(chatId, `⭐ مفضلتي\n\nلديك ${favorites.length} مستندًا محفوظًا. اضغط اسم المستند لطلبه، أو أزله من المفضلة.`, favoritesMenu(favorites));
       return;
     }
     if (data.startsWith("favadd:")) {
@@ -2969,15 +2979,15 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "exams") {
-      await sender.sendMessage(chatId, shariaExamsIntroText(), civilLawExamMenu());
+      await pageSender.sendMessage(chatId, shariaExamsIntroText(), civilLawExamMenu());
       return;
     }
     if (data === "secondary-exams") {
-      await sender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nنماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
+      await pageSender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nنماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
       return;
     }
     if (data === "exam:levels") {
-      await sender.sendMessage(chatId, "📝 اختبارات الشريعة والقانون\n\nاختر المستوى المطلوب.", civilLawExamMenu());
+      await pageSender.sendMessage(chatId, "📝 اختبارات الشريعة والقانون\n\nاختر المستوى المطلوب.", civilLawExamMenu());
       return;
     }
     if (data === "exam:noop") return;
@@ -3188,41 +3198,41 @@ export async function handleTelegramUpdate(
     }
     if (data === "browse") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "browse" });
-      await sender.sendMessage(chatId, browseText(), categoryMenu());
+      await pageSender.sendMessage(chatId, browseText(), categoryMenu());
       return;
     }
     if (data === "judicial") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "judicial" });
-      await sendJudicialFolder(chatId, JUDICIAL_ROOT_FOLDER_ID, 1, store, sender);
+      await sendJudicialFolder(chatId, JUDICIAL_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "legislation") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "legislation" });
-      await sendLegislationFolder(chatId, LEGISLATION_ROOT_FOLDER_ID, 1, store, sender);
+      await sendLegislationFolder(chatId, LEGISLATION_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "legal-forms") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "legal-forms" });
-      await sendLegalFormsFolder(chatId, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendLegalFormsFolder(chatId, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "illustrated-legal-forms") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "illustrated-legal-forms" });
-      await sendIllustratedLegalFormsFolder(chatId, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendIllustratedLegalFormsFolder(chatId, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "all-yemeni-laws") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "all-yemeni-laws" });
-      await sendAllYemeniLawsFolder(chatId, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendAllYemeniLawsFolder(chatId, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "contract-templates") {
       await store.recordUsage(telegramUserId, "browse");
-      await sendContractTemplatesMenu(chatId, 1, store, sender);
+      await sendContractTemplatesMenu(chatId, 1, store, pageSender);
       return;
     }
     if (data === "ctypes") {
-      await sendContractTemplateTypesMenu(chatId, store, sender);
+      await sendContractTemplateTypesMenu(chatId, store, pageSender);
       return;
     }
     if (data === "ctsearch") {
@@ -3235,14 +3245,14 @@ export async function handleTelegramUpdate(
     }
     if (data.startsWith("ctemplates:")) {
       const page = Number(data.slice("ctemplates:".length));
-      await sendContractTemplatesMenu(chatId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplatesMenu(chatId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctype:")) {
       const [, rawType, rawPage] = data.split(":");
       const page = Number(rawPage ?? "1");
       if (!isTelegramContractTemplateType(rawType)) return;
-      await sendContractTemplatesByType(chatId, rawType, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplatesByType(chatId, rawType, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctresult:")) {
@@ -3250,7 +3260,7 @@ export async function handleTelegramUpdate(
       const sessionId = Number(sessionValue);
       const page = Number(pageValue ?? "1");
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
-      await sendContractTemplateSearchResults(chatId, sessionId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplateSearchResults(chatId, sessionId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctemplate:")) {
@@ -3323,17 +3333,17 @@ export async function handleTelegramUpdate(
     }
     if (data === "latest") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "latest" });
-      await sendCuratedSources(chatId, "🆕 أحدث الإضافات", await store.listRecentSources(), "menu", sender);
+      await sendCuratedSources(chatId, "🆕 أحدث الإضافات", await store.listRecentSources(), "menu", pageSender);
       return;
     }
     if (data === "popular") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "popular" });
-      await sendCuratedSources(chatId, "⭐ الملفات الأكثر طلبًا", await store.listPopularSources(), "menu", sender);
+      await sendCuratedSources(chatId, "⭐ الملفات الأكثر طلبًا", await store.listPopularSources(), "menu", pageSender);
       return;
     }
     if (data === "featured") {
       await store.recordUsage(telegramUserId, "browse", { sectionKey: "featured" });
-      await sendFeaturedReferencesFolder(chatId, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, sender);
+      await sendFeaturedReferencesFolder(chatId, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "important-laws" || data === "yemeni-laws") {
@@ -3446,7 +3456,7 @@ export async function handleTelegramUpdate(
       const category = categoryValue as LegalCategory;
       const page = Number(pageValue ?? "1");
       if (legalCategories.includes(category)) {
-        await sendSourcesForCategory(chatId, category, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendSourcesForCategory(chatId, category, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3454,7 +3464,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendJudicialFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendJudicialFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3462,7 +3472,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendLegislationFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3470,7 +3480,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendAllYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendAllYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3482,7 +3492,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3490,7 +3500,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3498,7 +3508,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendIllustratedLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendIllustratedLegalFormsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3506,7 +3516,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendFeaturedReferencesFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendFeaturedReferencesFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3518,7 +3528,7 @@ export async function handleTelegramUpdate(
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendImportantYemeniLawsFolder(chatId, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3527,7 +3537,7 @@ export async function handleTelegramUpdate(
       const documentType = documentTypeValue as keyof typeof legislationDocumentTypeLabels;
       const page = Number(pageValue ?? "1");
       if (documentType in legislationDocumentTypeLabels) {
-        await sendLegislationType(chatId, documentType, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationType(chatId, documentType, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -3536,7 +3546,7 @@ export async function handleTelegramUpdate(
       const year = Number(yearValue);
       const page = Number(pageValue ?? "1");
       if (Number.isInteger(year) && year >= 1900 && year <= 2200) {
-        await sendLegislationYear(chatId, year, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationYear(chatId, year, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }

@@ -4970,6 +4970,16 @@ async function handleTelegramUpdate(update, store, sender, documentProvider = { 
       }
       await sender.sendMessage(chatId2, text3, replyMarkup);
     };
+    const pageSender = {
+      ...sender,
+      sendMessage: async (targetChatId, text3, replyMarkup) => {
+        if (targetChatId === chatId2) {
+          await presentCallbackPage(text3, replyMarkup);
+          return;
+        }
+        await sender.sendMessage(targetChatId, text3, replyMarkup);
+      }
+    };
     await acknowledgeCallback();
     if (isPrivateChat(chat?.type)) {
       await store.registerSubscriber(String(chatId2), telegramUserId2, {
@@ -5336,7 +5346,7 @@ ${referralHistoryText(history)}`, referralMenu());
         await sender.sendMessage(chatId2, "\u2B50 \u0645\u0641\u0636\u0644\u062A\u064A\n\n\u0644\u0627 \u062A\u0648\u062C\u062F \u0645\u0633\u062A\u0646\u062F\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629 \u062D\u0627\u0644\u064A\u064B\u0627. \u0627\u0641\u062A\u062D \u0623\u064A \u0646\u062A\u064A\u062C\u0629 \u0628\u062D\u062B \u0648\u0627\u0636\u063A\u0637 \xAB\u0625\u0636\u0627\u0641\u0629 \u0644\u0644\u0645\u0641\u0636\u0644\u0629\xBB \u0644\u062D\u0641\u0638\u0647\u0627.", mainMenu());
         return;
       }
-      await sender.sendMessage(chatId2, `\u2B50 \u0645\u0641\u0636\u0644\u062A\u064A
+      await pageSender.sendMessage(chatId2, `\u2B50 \u0645\u0641\u0636\u0644\u062A\u064A
 
 \u0644\u062F\u064A\u0643 ${favorites.length} \u0645\u0633\u062A\u0646\u062F\u064B\u0627 \u0645\u062D\u0641\u0648\u0638\u064B\u0627. \u0627\u0636\u063A\u0637 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062A\u0646\u062F \u0644\u0637\u0644\u0628\u0647\u060C \u0623\u0648 \u0623\u0632\u0644\u0647 \u0645\u0646 \u0627\u0644\u0645\u0641\u0636\u0644\u0629.`, favoritesMenu(favorites));
       return;
@@ -5373,15 +5383,15 @@ ${referralHistoryText(history)}`, referralMenu());
       return;
     }
     if (data === "exams") {
-      await sender.sendMessage(chatId2, shariaExamsIntroText(), civilLawExamMenu());
+      await pageSender.sendMessage(chatId2, shariaExamsIntroText(), civilLawExamMenu());
       return;
     }
     if (data === "secondary-exams") {
-      await sender.sendMessage(chatId2, "\u{1F9EE} \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u0629\n\n\u0646\u0645\u0627\u0630\u062C \u0623\u0648\u0627\u0626\u0644 \u0627\u0644\u062C\u0645\u0647\u0648\u0631\u064A\u0629 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0644\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A \u0644\u0644\u0639\u0627\u0645 \u0627\u0644\u062F\u0631\u0627\u0633\u064A 2025\u0645\u20142026\u0645\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.", secondaryLevelsMenu());
+      await pageSender.sendMessage(chatId2, "\u{1F9EE} \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u0629\n\n\u0646\u0645\u0627\u0630\u062C \u0623\u0648\u0627\u0626\u0644 \u0627\u0644\u062C\u0645\u0647\u0648\u0631\u064A\u0629 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0644\u0644\u0635\u0641 \u0627\u0644\u062B\u0627\u0644\u062B \u062B\u0627\u0646\u0648\u064A \u0644\u0644\u0639\u0627\u0645 \u0627\u0644\u062F\u0631\u0627\u0633\u064A 2025\u0645\u20142026\u0645\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.", secondaryLevelsMenu());
       return;
     }
     if (data === "exam:levels") {
-      await sender.sendMessage(chatId2, "\u{1F4DD} \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0648\u0627\u0644\u0642\u0627\u0646\u0648\u0646\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.", civilLawExamMenu());
+      await pageSender.sendMessage(chatId2, "\u{1F4DD} \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0648\u0627\u0644\u0642\u0627\u0646\u0648\u0646\n\n\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.", civilLawExamMenu());
       return;
     }
     if (data === "exam:noop") return;
@@ -5600,41 +5610,41 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data === "browse") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "browse" });
-      await sender.sendMessage(chatId2, browseText(), categoryMenu());
+      await pageSender.sendMessage(chatId2, browseText(), categoryMenu());
       return;
     }
     if (data === "judicial") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "judicial" });
-      await sendJudicialFolder(chatId2, JUDICIAL_ROOT_FOLDER_ID, 1, store, sender);
+      await sendJudicialFolder(chatId2, JUDICIAL_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "legislation") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "legislation" });
-      await sendLegislationFolder(chatId2, LEGISLATION_ROOT_FOLDER_ID, 1, store, sender);
+      await sendLegislationFolder(chatId2, LEGISLATION_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "legal-forms") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "legal-forms" });
-      await sendLegalFormsFolder(chatId2, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendLegalFormsFolder(chatId2, LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "illustrated-legal-forms") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "illustrated-legal-forms" });
-      await sendIllustratedLegalFormsFolder(chatId2, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendIllustratedLegalFormsFolder(chatId2, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "all-yemeni-laws") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "all-yemeni-laws" });
-      await sendAllYemeniLawsFolder(chatId2, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, sender);
+      await sendAllYemeniLawsFolder(chatId2, ALL_YEMENI_LAWS_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "contract-templates") {
       await store.recordUsage(telegramUserId2, "browse");
-      await sendContractTemplatesMenu(chatId2, 1, store, sender);
+      await sendContractTemplatesMenu(chatId2, 1, store, pageSender);
       return;
     }
     if (data === "ctypes") {
-      await sendContractTemplateTypesMenu(chatId2, store, sender);
+      await sendContractTemplateTypesMenu(chatId2, store, pageSender);
       return;
     }
     if (data === "ctsearch") {
@@ -5647,14 +5657,14 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data.startsWith("ctemplates:")) {
       const page = Number(data.slice("ctemplates:".length));
-      await sendContractTemplatesMenu(chatId2, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplatesMenu(chatId2, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctype:")) {
       const [, rawType, rawPage] = data.split(":");
       const page = Number(rawPage ?? "1");
       if (!isTelegramContractTemplateType(rawType)) return;
-      await sendContractTemplatesByType(chatId2, rawType, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplatesByType(chatId2, rawType, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctresult:")) {
@@ -5662,7 +5672,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const sessionId = Number(sessionValue);
       const page = Number(pageValue ?? "1");
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
-      await sendContractTemplateSearchResults(chatId2, sessionId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+      await sendContractTemplateSearchResults(chatId2, sessionId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       return;
     }
     if (data.startsWith("ctemplate:")) {
@@ -5735,17 +5745,17 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data === "latest") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "latest" });
-      await sendCuratedSources(chatId2, "\u{1F195} \u0623\u062D\u062F\u062B \u0627\u0644\u0625\u0636\u0627\u0641\u0627\u062A", await store.listRecentSources(), "menu", sender);
+      await sendCuratedSources(chatId2, "\u{1F195} \u0623\u062D\u062F\u062B \u0627\u0644\u0625\u0636\u0627\u0641\u0627\u062A", await store.listRecentSources(), "menu", pageSender);
       return;
     }
     if (data === "popular") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "popular" });
-      await sendCuratedSources(chatId2, "\u2B50 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0623\u0643\u062B\u0631 \u0637\u0644\u0628\u064B\u0627", await store.listPopularSources(), "menu", sender);
+      await sendCuratedSources(chatId2, "\u2B50 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0623\u0643\u062B\u0631 \u0637\u0644\u0628\u064B\u0627", await store.listPopularSources(), "menu", pageSender);
       return;
     }
     if (data === "featured") {
       await store.recordUsage(telegramUserId2, "browse", { sectionKey: "featured" });
-      await sendFeaturedReferencesFolder(chatId2, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, sender);
+      await sendFeaturedReferencesFolder(chatId2, FEATURED_REFERENCES_ROOT_FOLDER_ID, 1, store, pageSender);
       return;
     }
     if (data === "important-laws" || data === "yemeni-laws") {
@@ -5858,7 +5868,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const category = categoryValue;
       const page = Number(pageValue ?? "1");
       if (legalCategories.includes(category)) {
-        await sendSourcesForCategory(chatId2, category, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendSourcesForCategory(chatId2, category, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5866,7 +5876,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendJudicialFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendJudicialFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5874,7 +5884,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendLegislationFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5882,7 +5892,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendAllYemeniLawsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendAllYemeniLawsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5894,7 +5904,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendImportantYemeniLawsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendImportantYemeniLawsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5902,7 +5912,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendLegalFormsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegalFormsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5910,7 +5920,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendIllustratedLegalFormsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendIllustratedLegalFormsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5918,7 +5928,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendFeaturedReferencesFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendFeaturedReferencesFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5930,7 +5940,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const [, folderId, pageValue] = data.split(":");
       const page = Number(pageValue ?? "1");
       if (folderId) {
-        await sendImportantYemeniLawsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendImportantYemeniLawsFolder(chatId2, folderId, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5939,7 +5949,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const documentType = documentTypeValue;
       const page = Number(pageValue ?? "1");
       if (documentType in legislationDocumentTypeLabels) {
-        await sendLegislationType(chatId2, documentType, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationType(chatId2, documentType, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
@@ -5948,7 +5958,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const year = Number(yearValue);
       const page = Number(pageValue ?? "1");
       if (Number.isInteger(year) && year >= 1900 && year <= 2200) {
-        await sendLegislationYear(chatId2, year, Number.isInteger(page) && page > 0 ? page : 1, store, sender);
+        await sendLegislationYear(chatId2, year, Number.isInteger(page) && page > 0 ? page : 1, store, pageSender);
       }
       return;
     }
