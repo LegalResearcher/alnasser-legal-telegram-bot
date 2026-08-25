@@ -1035,7 +1035,9 @@ describe("Telegram library conversation", () => {
 
     await callback("secondary-menu", "secondary-exams");
     const sectionsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(messages.at(-1)?.text).toContain("اختبارات الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("🧮 اختبارات الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م");
+    expect(messages.at(-1)?.text).toContain("اختر القسم المطلوب.");
     expect(sectionsMenu).toContain("exam:level:secondary-literary");
     expect(sectionsMenu).toContain("exam:level:secondary-scientific");
     expect(sectionsMenu).not.toContain("exam:subject:secondary:");

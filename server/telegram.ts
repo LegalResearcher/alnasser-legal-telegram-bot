@@ -2897,7 +2897,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "secondary-exams") {
-      await sender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
+      await sender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nنماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
       return;
     }
     if (data === "exam:levels") {
