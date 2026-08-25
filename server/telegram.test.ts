@@ -807,7 +807,9 @@ describe("Telegram library conversation", () => {
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
     await handleTelegramUpdate({ callback_query: { id: "exam-free-hasad", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("اختر المادة من القائمة أدناه");
+    expect(response?.text).toContain("📝 اختبارات الشريعة والقانون");
+    expect(response?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.");
+    expect(response?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
@@ -1152,10 +1154,12 @@ describe("Telegram library conversation", () => {
     );
 
     await callback("exam-menu", "exams");
-    expect(messages[0]?.text).toContain("اختبارات الشريعة والقانون");
-    expect(messages[0]?.text).toContain("/newquiz");
-    expect(messages[0]?.text).toContain("/quizzes");
-    expect(messages[0]?.text).toContain("/stop");
+    expect(messages[0]?.text).toContain("📝 اختبارات الشريعة والقانون");
+    expect(messages[0]?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية");
+    expect(messages[0]?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(messages[0]?.text).not.toContain("/newquiz");
+    expect(messages[0]?.text).not.toContain("/quizzes");
+    expect(messages[0]?.text).not.toContain("/stop");
     expect(messages[0]?.text).not.toContain("/help");
     expect(messages[0]?.text).not.toContain("/lang");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("exam:level:l1");

@@ -469,6 +469,16 @@ function individualExamResultMenu(): TelegramInlineKeyboard {
   };
 }
 
+function shariaExamsIntroText(): string {
+  return [
+    "📝 اختبارات الشريعة والقانون",
+    "",
+    "بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.",
+    "",
+    "اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.",
+  ].join("\n");
+}
+
 function quizQuickCommandsText(): string {
   return [
     "📝 اختبارات الشريعة والقانون",
@@ -2893,7 +2903,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "exams") {
-      await sender.sendMessage(chatId, quizQuickCommandsText(), civilLawExamMenu());
+      await sender.sendMessage(chatId, shariaExamsIntroText(), civilLawExamMenu());
       return;
     }
     if (data === "secondary-exams") {
