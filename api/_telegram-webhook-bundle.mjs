@@ -6379,11 +6379,16 @@ async function telegramMultipartRequest(token, method, form) {
   const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", body: form });
   if (!response.ok) throw new Error(`Telegram API request failed with status ${response.status}`);
 }
-function createTelegramSender(token) {
+function createTelegramSender(token, replyContext = {}) {
+  const topicPayload = {
+    ...Number.isInteger(replyContext.messageThreadId) ? { message_thread_id: replyContext.messageThreadId } : {},
+    ...Number.isInteger(replyContext.directMessagesTopicId) ? { direct_messages_topic_id: replyContext.directMessagesTopicId } : {}
+  };
   return {
     async sendMessage(chatId, text2, replyMarkup) {
       await telegramRequest(token, "sendMessage", {
         chat_id: chatId,
+        ...topicPayload,
         text: text2,
         reply_markup: replyMarkup
       });
@@ -6393,6 +6398,8 @@ function createTelegramSender(token) {
       const fileBytes = new Uint8Array(document.data.byteLength);
       fileBytes.set(document.data);
       form.set("chat_id", String(chatId));
+      if (Number.isInteger(replyContext.messageThreadId)) form.set("message_thread_id", String(replyContext.messageThreadId));
+      if (Number.isInteger(replyContext.directMessagesTopicId)) form.set("direct_messages_topic_id", String(replyContext.directMessagesTopicId));
       form.set("caption", document.caption);
       form.set("document", new Blob([fileBytes.buffer], { type: document.contentType }), document.filename);
       await telegramMultipartRequest(token, "sendDocument", form);
@@ -6400,6 +6407,7 @@ function createTelegramSender(token) {
     async sendDocumentByFileId(chatId, fileId, caption) {
       await telegramRequest(token, "sendDocument", {
         chat_id: chatId,
+        ...topicPayload,
         document: fileId,
         ...caption ? { caption } : {}
       });
@@ -6407,6 +6415,7 @@ function createTelegramSender(token) {
     async sendPhotoByFileId(chatId, fileId, caption) {
       await telegramRequest(token, "sendPhoto", {
         chat_id: chatId,
+        ...topicPayload,
         photo: fileId,
         ...caption ? { caption } : {}
       });
@@ -6414,6 +6423,7 @@ function createTelegramSender(token) {
     async sendQuizPoll(chatId, poll) {
       const result = await telegramRequest(token, "sendPoll", {
         chat_id: chatId,
+        ...topicPayload,
         question: poll.question,
         options: poll.options,
         type: "quiz",
@@ -8254,8 +8264,14 @@ function registerTelegramWebhook(app2) {
       return;
     }
     try {
+      const update = req.body;
+      const incomingMessage = update.message ?? update.callback_query?.message;
+      const sender = createTelegramSender(token, {
+        messageThreadId: incomingMessage?.message_thread_id,
+        directMessagesTopicId: incomingMessage?.direct_messages_topic?.topic_id
+      });
       await handleTelegramUpdate(
-        req.body,
+        update,
         process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : {
           hasConfirmedPlatformAccess: hasConfirmedTelegramPlatformAccess,
           hasConfirmedHasadAccess: hasConfirmedTelegramHasadAccess,
@@ -8345,7 +8361,7 @@ function registerTelegramWebhook(app2) {
           resolveGroupExamPoll: resolveTelegramGroupExamPoll,
           getGroupExamLeaderboard: getTelegramGroupExamLeaderboard
         },
-        createTelegramSender(token),
+        sender,
         void 0,
         createTelegramChannelMembershipChecker(token)
       );

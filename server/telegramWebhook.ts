@@ -897,8 +897,14 @@ export function registerTelegramWebhook(app: Express) {
     }
 
     try {
+      const update = req.body as TelegramUpdate;
+      const incomingMessage = update.message ?? update.callback_query?.message;
+      const sender = createTelegramSender(token, {
+        messageThreadId: incomingMessage?.message_thread_id,
+        directMessagesTopicId: incomingMessage?.direct_messages_topic?.topic_id,
+      });
       await handleTelegramUpdate(
-        req.body as TelegramUpdate,
+        update,
         process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : {
           hasConfirmedPlatformAccess: hasConfirmedTelegramPlatformAccess,
           hasConfirmedHasadAccess: hasConfirmedTelegramHasadAccess,
@@ -988,7 +994,7 @@ export function registerTelegramWebhook(app: Express) {
           resolveGroupExamPoll: resolveTelegramGroupExamPoll,
           getGroupExamLeaderboard: getTelegramGroupExamLeaderboard,
         },
-        createTelegramSender(token),
+        sender,
         undefined,
         createTelegramChannelMembershipChecker(token)
       );

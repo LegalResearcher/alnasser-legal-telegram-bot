@@ -304,10 +304,17 @@ export type TelegramLibraryStore = {
   getGroupExamLeaderboard: (roundId: number) => Promise<TelegramGroupExamParticipantRecord[]>;
 };
 
+export type TelegramReplyContext = {
+  messageThreadId?: number;
+  directMessagesTopicId?: number;
+};
+
 export type TelegramUpdate = {
   message?: {
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
     chat?: { id?: number; type?: string };
+    message_thread_id?: number;
+    direct_messages_topic?: { topic_id?: number };
     text?: string;
     caption?: string;
     document?: { file_id: string; file_name?: string; mime_type?: string };
@@ -318,7 +325,11 @@ export type TelegramUpdate = {
     id: string;
     data?: string;
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
-    message?: { chat?: { id?: number; type?: string } };
+    message?: {
+      chat?: { id?: number; type?: string };
+      message_thread_id?: number;
+      direct_messages_topic?: { topic_id?: number };
+    };
   };
   poll_answer?: {
     poll_id?: string;
@@ -3913,11 +3924,16 @@ async function telegramMultipartRequest(token: string, method: string, form: For
   if (!response.ok) throw new Error(`Telegram API request failed with status ${response.status}`);
 }
 
-export function createTelegramSender(token: string): TelegramSender {
+export function createTelegramSender(token: string, replyContext: TelegramReplyContext = {}): TelegramSender {
+  const topicPayload = {
+    ...(Number.isInteger(replyContext.messageThreadId) ? { message_thread_id: replyContext.messageThreadId } : {}),
+    ...(Number.isInteger(replyContext.directMessagesTopicId) ? { direct_messages_topic_id: replyContext.directMessagesTopicId } : {}),
+  };
   return {
     async sendMessage(chatId, text, replyMarkup) {
       await telegramRequest(token, "sendMessage", {
         chat_id: chatId,
+        ...topicPayload,
         text,
         reply_markup: replyMarkup,
       });
@@ -3927,6 +3943,8 @@ export function createTelegramSender(token: string): TelegramSender {
       const fileBytes = new Uint8Array(document.data.byteLength);
       fileBytes.set(document.data);
       form.set("chat_id", String(chatId));
+      if (Number.isInteger(replyContext.messageThreadId)) form.set("message_thread_id", String(replyContext.messageThreadId));
+      if (Number.isInteger(replyContext.directMessagesTopicId)) form.set("direct_messages_topic_id", String(replyContext.directMessagesTopicId));
       form.set("caption", document.caption);
       form.set("document", new Blob([fileBytes.buffer], { type: document.contentType }), document.filename);
       await telegramMultipartRequest(token, "sendDocument", form);
@@ -3934,6 +3952,7 @@ export function createTelegramSender(token: string): TelegramSender {
     async sendDocumentByFileId(chatId, fileId, caption) {
       await telegramRequest(token, "sendDocument", {
         chat_id: chatId,
+        ...topicPayload,
         document: fileId,
         ...(caption ? { caption } : {}),
       });
@@ -3941,6 +3960,7 @@ export function createTelegramSender(token: string): TelegramSender {
     async sendPhotoByFileId(chatId, fileId, caption) {
       await telegramRequest(token, "sendPhoto", {
         chat_id: chatId,
+        ...topicPayload,
         photo: fileId,
         ...(caption ? { caption } : {}),
       });
@@ -3948,6 +3968,7 @@ export function createTelegramSender(token: string): TelegramSender {
     async sendQuizPoll(chatId, poll) {
       const result = await telegramRequest(token, "sendPoll", {
         chat_id: chatId,
+        ...topicPayload,
         question: poll.question,
         options: poll.options,
         type: "quiz",

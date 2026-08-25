@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LegalFolder, LegalSource, TelegramContractTemplate } from "../drizzle/schema";
 import { approximateArabicMatchScore, fallbackJudicialSearchResults, normalizeArabicSearch } from "./db";
-import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
+import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, createTelegramSender, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
 import { examPollOptionText, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 
 const sampleSource: LegalSource = {
@@ -2492,5 +2492,30 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(commandCalls[0]?.payload.commands)).not.toContain("broadcast");
     expect(commandCalls[1]?.payload.commands).toEqual([...BOT_COMMANDS, ...OWNER_COMMANDS]);
     expect(commandCalls[1]?.payload.scope).toEqual({ type: "chat", chat_id: Number(process.env.TELEGRAM_OWNER_ID) });
+  });
+});
+
+describe("Telegram reply topics", () => {
+  it("يمرر topic identifiers إلى sendMessage عند الرد داخل قناة أو موضوع خاص", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await createTelegramSender("اختبار", { directMessagesTopicId: 123456789 }).sendMessage(99, "رسالة");
+      await createTelegramSender("اختبار", { messageThreadId: 42 }).sendMessage(99, "موضوع");
+      await createTelegramSender("اختبار").sendMessage(99, "عادي");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requests[0]).toMatchObject({ chat_id: 99, direct_messages_topic_id: 123456789 });
+    expect(requests[0]).not.toHaveProperty("message_thread_id");
+    expect(requests[1]).toMatchObject({ chat_id: 99, message_thread_id: 42 });
+    expect(requests[1]).not.toHaveProperty("direct_messages_topic_id");
+    expect(requests[2]).toEqual({ chat_id: 99, text: "عادي", reply_markup: undefined });
   });
 });
