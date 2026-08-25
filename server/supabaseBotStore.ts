@@ -441,6 +441,108 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
   return store;
 }
 
+function mapManagedMenuItem(row: any): TelegramManagedMenuItemRecord {
+  return { id: Number(row.id), label: String(row.label ?? ""), actionType: row.action_type, actionValue: String(row.action_value ?? ""), rowIndex: Number(row.row_index ?? 0), sortOrder: Number(row.sort_order ?? 0), accessMode: row.access_mode };
+}
+function mapManagedSection(row: any): TelegramManagedSectionRecord {
+  return { sectionKey: String(row.section_key), displayLabel: String(row.display_label ?? ""), enabled: Boolean(row.enabled), accessMode: row.access_mode, sortOrder: Number(row.sort_order ?? 0) };
+}
+function mapManagedMessage(row: any): TelegramManagedMessageRecord {
+  return { messageKey: row.message_key, content: String(row.content ?? "") };
+}
+
+export async function listSupabaseBotManagedMenuItems(includeDisabled = false): Promise<TelegramManagedMenuItemRecord[]> {
+  let query = getClient().from("bot_managed_menu_items").select("id,label,action_type,action_value,row_index,sort_order,access_mode,enabled").order("row_index", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }).limit(200);
+  if (!includeDisabled) query = query.eq("enabled", true);
+  const { data, error } = await query;
+  throwIfError(error, "list managed menu items");
+  return ((data ?? []) as any[]).map(mapManagedMenuItem);
+}
+
+export async function createSupabaseBotManagedMenuItem(input: any, adminUserId: string): Promise<TelegramManagedMenuItemRecord | undefined> {
+  const label = typeof input?.label === "string" ? input.label.trim().slice(0, 255) : "";
+  const actionType = input?.actionType;
+  const actionValue = typeof input?.actionValue === "string" ? input.actionValue.trim().slice(0, 4000) : "";
+  if (!label || !["url", "message", "file"].includes(actionType) || !actionValue) return undefined;
+  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
+  const { data, error } = await getClient().from("bot_managed_menu_items").insert(payload).select("id,label,action_type,action_value,row_index,sort_order,access_mode,enabled").limit(1).maybeSingle();
+  throwIfError(error, "create managed menu item");
+  if (!data) return undefined;
+  await recordSupabaseBotAdminAudit(adminUserId, "create", "managed_menu_item", Number((data as any).id), payload);
+  return mapManagedMenuItem(data);
+}
+
+export async function updateSupabaseBotManagedMenuItem(id: number, input: any, adminUserId: string): Promise<TelegramManagedMenuItemRecord | undefined> {
+  if (!Number.isInteger(id) || id < 1) return undefined;
+  const patch: any = {};
+  if (typeof input?.label === "string" && input.label.trim()) patch.label = input.label.trim().slice(0, 255);
+  if (["url", "message", "file"].includes(input?.actionType)) patch.action_type = input.actionType;
+  if (typeof input?.actionValue === "string" && input.actionValue.trim()) patch.action_value = input.actionValue.trim().slice(0, 4000);
+  if (Number.isInteger(input?.rowIndex)) patch.row_index = input.rowIndex;
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  if (["free", "premium", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
+  if (typeof input?.enabled === "boolean") patch.enabled = input.enabled;
+  if (Object.keys(patch).length === 0) return undefined;
+  patch.updated_at = new Date().toISOString();
+  const { data, error } = await getClient().from("bot_managed_menu_items").update(patch).eq("id", id).select("id,label,action_type,action_value,row_index,sort_order,access_mode,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update managed menu item");
+  if (!data) return undefined;
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "managed_menu_item", id, patch);
+  return mapManagedMenuItem(data);
+}
+
+export async function deleteSupabaseBotManagedMenuItem(id: number, adminUserId: string): Promise<boolean> {
+  const { data, error } = await getClient().from("bot_managed_menu_items").delete().eq("id", id).select("id");
+  throwIfError(error, "delete managed menu item");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(adminUserId, "delete", "managed_menu_item", id, {});
+  return true;
+}
+
+export async function listSupabaseBotManagedSections(): Promise<TelegramManagedSectionRecord[]> {
+  const { data, error } = await getClient().from("bot_managed_sections").select("section_key,display_label,enabled,access_mode,sort_order").order("sort_order", { ascending: true }).limit(100);
+  throwIfError(error, "list managed sections");
+  return ((data ?? []) as any[]).map(mapManagedSection);
+}
+export async function updateSupabaseBotManagedSection(sectionKey: string, input: any, adminUserId: string): Promise<TelegramManagedSectionRecord | undefined> {
+  const key = sectionKey.trim().slice(0, 64);
+  if (!key) return undefined;
+  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: new Date().toISOString() };
+  const { data, error } = await getClient().from("bot_managed_sections").upsert(payload, { onConflict: "section_key" }).select("section_key,display_label,enabled,access_mode,sort_order").limit(1).maybeSingle();
+  throwIfError(error, "update managed section");
+  if (!data) return undefined;
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "managed_section", key, payload);
+  return mapManagedSection(data);
+}
+export async function listSupabaseBotManagedMessages(): Promise<TelegramManagedMessageRecord[]> {
+  const { data, error } = await getClient().from("bot_managed_messages").select("message_key,content").order("message_key", { ascending: true }).limit(20);
+  throwIfError(error, "list managed messages");
+  return ((data ?? []) as any[]).map(mapManagedMessage);
+}
+export async function updateSupabaseBotManagedMessage(messageKey: string, content: unknown, adminUserId: string): Promise<TelegramManagedMessageRecord | undefined> {
+  if (!["welcome", "about", "help"].includes(messageKey) || typeof content !== "string" || !content.trim()) return undefined;
+  const payload = { message_key: messageKey, content: content.trim().slice(0, 4000), updated_at: new Date().toISOString() };
+  const { data, error } = await getClient().from("bot_managed_messages").upsert(payload, { onConflict: "message_key" }).select("message_key,content").limit(1).maybeSingle();
+  throwIfError(error, "update managed message");
+  if (!data) return undefined;
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "managed_message", messageKey, payload);
+  return mapManagedMessage(data);
+}
+export async function listSupabaseBotBroadcasts(limit = 20): Promise<any[]> {
+  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
+  throwIfError(error, "list broadcasts");
+  return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
+}
+export async function listSupabaseBotAdminAuditLogs(limit = 100): Promise<any[]> {
+  const { data, error } = await getClient().from("bot_admin_audit_logs").select("id,admin_user_id,action,entity_type,entity_id,details,created_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(200, limit)));
+  throwIfError(error, "list admin audit logs");
+  return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), adminUserId: row.admin_user_id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, details: row.details, createdAt: dateValue(row.created_at) }));
+}
+export async function recordSupabaseBotAdminAudit(adminUserId: string, action: string, entityType: string, entityId: number | string | null, details: Record<string, unknown> = {}): Promise<void> {
+  const { error } = await getClient().from("bot_admin_audit_logs").insert({ admin_user_id: adminUserId, action, entity_type: entityType, entity_id: entityId === null ? null : String(entityId), details });
+  throwIfError(error, "record admin audit");
+}
+
 export async function confirmSupabaseBotPlatformAccess(telegramUserId: string, region?: string | null): Promise<void> {
   const { error } = await getClient().from("bot_platform_access").upsert({ telegram_user_id: telegramUserId, confirmed_at: new Date().toISOString(), web_app_verified_at: new Date().toISOString(), region: region ?? null }, { onConflict: "telegram_user_id" });
   throwIfError(error, "confirm platform access");
