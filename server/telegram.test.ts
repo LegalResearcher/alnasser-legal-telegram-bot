@@ -1275,9 +1275,10 @@ describe("Telegram library conversation", () => {
     expect(annualUsulMenu).not.toContain("القسم الأول");
     expect(annualUsulMenu).toContain("🧪 أسئلة تجريبية");
     await callback("usul-training", "exam:training:l1:l1-usul:1");
+    expect(messages.at(-1)?.text).toContain("الأسئلة التجريبية ستكون متاحة قريبًا");
     const usulTrainingMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(usulTrainingMenu).not.toContain("2025 الموازي");
-    expect(usulTrainingMenu).toContain("القسم الأول");
+    expect(usulTrainingMenu).toContain("رجوع إلى النماذج الأساسية");
+    expect(usulTrainingMenu).not.toContain("القسم الأول");
     await callback("usul-form", "exam:form:l1:l1-usul:106:1");
     expect(messages.at(-1)?.text).toContain("الموازي 2025");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_usul_fiqh:106:15");
@@ -1308,9 +1309,10 @@ describe("Telegram library conversation", () => {
     expect(annualCriminologyMenu).not.toContain("المختلط 2025");
     expect(annualCriminologyMenu).toContain("🧪 أسئلة تجريبية");
     await callback("criminology-training", "exam:training:l1:l1-criminology:1");
+    expect(messages.at(-1)?.text).toContain("الأسئلة التجريبية ستكون متاحة قريبًا");
     const criminologyTrainingMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(criminologyTrainingMenu).toContain("القسم الأول");
-    expect(criminologyTrainingMenu).not.toContain("2022 العام");
+    expect(criminologyTrainingMenu).toContain("رجوع إلى النماذج الأساسية");
+    expect(criminologyTrainingMenu).not.toContain("القسم الأول");
     await callback("criminology-form", "exam:form:l1:l1-criminology:general_2022:1");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:l1_criminology:100:15");
     await callback("criminology-time", "exam:time:l1_criminology:general_2022:30");

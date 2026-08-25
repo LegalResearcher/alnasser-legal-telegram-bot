@@ -1,6 +1,6 @@
 import type { LegalFolder, LegalSource, TelegramContractTemplate, TelegramContractTemplateType } from "../drizzle/schema";
 import { ALL_YEMENI_LAWS_ROOT_FOLDER_ID, FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, IMPORTANT_YEMENI_LAWS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID, LEGISLATION_ROOT_FOLDER_ID, normalizeArabicSearch } from "./db";
-import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, examTrainingFormsMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
+import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
 import { createTelegramContractDocument } from "./telegramContractDocument";
 import { TELEGRAM_CONTRACT_TYPE_LABELS } from "./telegramContractTypes";
 import { storageGetSignedUrl } from "./storage";
@@ -2965,12 +2965,19 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data.startsWith("exam:training:")) {
-      const [, , levelKey, subjectKey, requestedPage] = data.split(":");
-      const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
+      const [, , levelKey, subjectKey] = data.split(":");
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
-      if (!importedSubjectKey || !subject) return;
-      const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId, `🧪 ${subject.name}\n\nاختر أسئلة التدريب أو القسم المطلوب.`, examTrainingFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+      if (!subject) return;
+      await sender.sendMessage(
+        chatId,
+        `🧪 ${subject.name}\n\nالأسئلة التجريبية ستكون متاحة قريبًا.`,
+        {
+          inline_keyboard: [
+            [{ text: "رجوع إلى النماذج الأساسية", callback_data: `exam:subject:${levelKey}:${subjectKey}:1` }],
+            [{ text: "رجوع إلى المواد", callback_data: `exam:level:${levelKey}` }],
+          ],
+        }
+      );
       return;
     }
     if (data.startsWith("exam:form:")) {

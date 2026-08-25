@@ -3052,16 +3052,6 @@ function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
   const availableForms = officialAnnualForms(forms);
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
-function examTrainingFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
-  return pagedFormsMenu(
-    levelKey,
-    subjectKey,
-    experimentalForms(forms).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
-    requestedPage,
-    "exam:training",
-    false
-  );
-}
 function civilLawExamSectionMenu() {
   return {
     inline_keyboard: [
@@ -5459,14 +5449,21 @@ ${referralHistoryText(history)}`, referralMenu());
       return;
     }
     if (data.startsWith("exam:training:")) {
-      const [, , levelKey, subjectKey, requestedPage] = data.split(":");
-      const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
+      const [, , levelKey, subjectKey] = data.split(":");
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
-      if (!importedSubjectKey || !subject) return;
-      const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId2, `\u{1F9EA} ${subject.name}
+      if (!subject) return;
+      await sender.sendMessage(
+        chatId2,
+        `\u{1F9EA} ${subject.name}
 
-\u0627\u062E\u062A\u0631 \u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0623\u0648 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.`, examTrainingFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+\u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0633\u062A\u0643\u0648\u0646 \u0645\u062A\u0627\u062D\u0629 \u0642\u0631\u064A\u0628\u064B\u0627.`,
+        {
+          inline_keyboard: [
+            [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629", callback_data: `exam:subject:${levelKey}:${subjectKey}:1` }],
+            [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0645\u0648\u0627\u062F", callback_data: `exam:level:${levelKey}` }]
+          ]
+        }
+      );
       return;
     }
     if (data.startsWith("exam:form:")) {
