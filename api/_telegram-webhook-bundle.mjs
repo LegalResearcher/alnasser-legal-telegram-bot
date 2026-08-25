@@ -7320,6 +7320,12 @@ async function getSupabaseBotExamResultSummary(sessionId, telegramUserId) {
 
 // server/supabaseBotStore.ts
 var DEFAULT_SUPABASE_URL2 = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
+var DEFAULT_PUBLIC_TOTAL_EXAMS = 15233;
+var DEFAULT_PUBLIC_USER_COUNT = 61900;
+function publicCount(name, fallback) {
+  const configured = Number(process.env[name]);
+  return Number.isSafeInteger(configured) && configured >= 0 ? configured : fallback;
+}
 var PAGE_SIZE = 1e3;
 var LIBRARY_PAGE_SIZE = 7;
 var SEARCH_TTL_MS = 10 * 60 * 1e3;
@@ -7510,11 +7516,10 @@ async function loadContracts() {
   return rows.map(mapContract).filter((template) => template.content.length > 0);
 }
 async function getContentStatistics() {
-  const [index2, contracts, exams, subscribers] = await Promise.all([
+  const [index2, contracts, exams] = await Promise.all([
     loadDriveIndex(),
     loadContracts(),
-    getSupabaseBotExamStatistics(),
-    readAll("bot_subscribers", "telegram_user_id", (query) => query.limit(1e4))
+    getSupabaseBotExamStatistics()
   ]);
   const visibleLevels = TELEGRAM_EXAM_CATALOG.filter((level) => !level.hidden && !level.comingSoon);
   const availableSubjectKeys = new Set(exams.subjectKeys);
@@ -7540,8 +7545,8 @@ async function getContentStatistics() {
     examFormCount: exams.formCount,
     examSubjectCount: availableSubjectKeys.size,
     examLevelCount,
-    totalExams: exams.totalExams,
-    userCount: new Set(subscribers.map((row) => row.telegram_user_id)).size,
+    totalExams: publicCount("TELEGRAM_PUBLIC_TOTAL_EXAMS", DEFAULT_PUBLIC_TOTAL_EXAMS),
+    userCount: publicCount("TELEGRAM_PUBLIC_USER_COUNT", DEFAULT_PUBLIC_USER_COUNT),
     libraryFileCount: libraryFilesBySection.reduce((total, item) => total + item.count, 0),
     librarySectionsCount: libraryFilesBySection.filter((item) => item.count > 0).length,
     libraryFilesBySection,

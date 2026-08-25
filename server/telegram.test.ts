@@ -321,8 +321,8 @@ function createStore(
       examFormCount: 42,
       examSubjectCount: 9,
       examLevelCount: 3,
-      totalExams: 318,
-      userCount: 15397,
+      totalExams: 15233,
+      userCount: 61900,
       libraryFileCount: 240,
       librarySectionsCount: 8,
       libraryFilesBySection: [{ label: "نماذج وصيغ قانونية", count: 217 }, { label: "نماذج مصورة", count: 17 }],
@@ -759,8 +759,8 @@ describe("Telegram library conversation", () => {
         examFormCount: 42,
         examSubjectCount: 9,
         examLevelCount: 3,
-        totalExams: 318,
-        userCount: 15397,
+        totalExams: 15233,
+        userCount: 61900,
         libraryFileCount: 240,
         librarySectionsCount: 8,
         libraryFilesBySection: [{ label: "نماذج وصيغ قانونية", count: 217 }],
@@ -775,8 +775,8 @@ describe("Telegram library conversation", () => {
     await handleTelegramUpdate({ callback_query: { id: "open-stats", data: "stats", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
     expect(messages).toHaveLength(0);
     expect(editedMessages.at(-1)?.text).toContain("📊 إحصاءات البوت");
-    expect(editedMessages.at(-1)?.text).toContain("١٥٬٣٩٧ مستخدمًا");
-    expect(editedMessages.at(-1)?.text).toContain("✅ الاختبارات المنجزة: ٣١٨");
+    expect(editedMessages.at(-1)?.text).toContain("٦١٬٩٠٠ مستخدمًا");
+    expect(editedMessages.at(-1)?.text).toContain("✅ الاختبارات المنجزة: ١٥٬٢٣٣");
     expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("stats:refresh");
 
     await handleTelegramUpdate({ callback_query: { id: "refresh-stats", data: "stats:refresh", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
