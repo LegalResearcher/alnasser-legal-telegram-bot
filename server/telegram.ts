@@ -1225,6 +1225,8 @@ function isReferralProtectedCallback(data: string) {
 }
 
 function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "hasad" {
+  // الاختبارات مجانية دائمًا، ويكون توثيق زيارة حصاد اليوم شرط الوصول الوحيد لها.
+  if (sectionKey === "exams" || sectionKey === "secondary-exams") return "hasad";
   const configured = managedSections.find(section => section.sectionKey === sectionKey)?.accessMode;
   if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
   return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
@@ -2514,7 +2516,10 @@ export async function handleTelegramUpdate(
         telegramLastName: callback.from?.last_name ?? null,
       });
     }
-    const requirements = await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
+    const isExamAccessCallback = isReferralProtectedCallback(data);
+    const requirements = isExamAccessCallback
+      ? { channels: [], platformVerified: true }
+      : await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
     if (data === "channel:check") {
       if (areChannelsSubscribed(requirements) && requirements.platformVerified) {
         await sender.sendMessage(chatId, welcomeText(), mainMenu());

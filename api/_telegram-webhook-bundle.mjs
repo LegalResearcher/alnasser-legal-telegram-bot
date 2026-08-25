@@ -3940,6 +3940,7 @@ function isReferralProtectedCallback(data) {
   return data === "exams" || data === "secondary-exams" || data.startsWith("exam:");
 }
 function managedSectionAccessMode(managedSections, sectionKey) {
+  if (sectionKey === "exams" || sectionKey === "secondary-exams") return "hasad";
   const configured = managedSections.find((section) => section.sectionKey === sectionKey)?.accessMode;
   if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
   return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
@@ -4986,7 +4987,8 @@ async function handleTelegramUpdate(update, store, sender, documentProvider = { 
         telegramLastName: callback.from?.last_name ?? null
       });
     }
-    const requirements2 = await getAccessRequirementStatus(telegramUserId2, store, membershipChecker);
+    const isExamAccessCallback = isReferralProtectedCallback(data);
+    const requirements2 = isExamAccessCallback ? { channels: [], platformVerified: true } : await getAccessRequirementStatus(telegramUserId2, store, membershipChecker);
     if (data === "channel:check") {
       if (areChannelsSubscribed(requirements2) && requirements2.platformVerified) {
         await sender.sendMessage(chatId2, welcomeText(), mainMenu());

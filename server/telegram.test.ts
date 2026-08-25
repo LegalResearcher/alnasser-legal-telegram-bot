@@ -798,34 +798,24 @@ describe("Telegram library conversation", () => {
     expect(messages.at(-1)?.text).toContain("توثيق زيارة واحدة لموقع حصاد اليوم");
   });
 
-  it("يعرض لاختبارات الشريعة والقانون رسالة مستقلة مع الإحالة والاشتراك المدفوع", async () => {
+  it("يفتح اختبارات الشريعة والقانون مجانًا بعد توثيق زيارة حصاد اليوم", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
-    await handleTelegramUpdate({ callback_query: { id: "exam-support", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    await handleTelegramUpdate({ callback_query: { id: "exam-free-hasad", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("دعم اختياري");
-    expect(response?.text).toContain("من دون تحديد مبلغ");
-    expect(response?.text).toContain("5 إحالات مؤهلة");
-    expect(response?.text).toContain("اختبارات الشريعة والقانون");
-    expect(response?.text).not.toContain("اختبارات الثانوية العامة");
-    expect(response?.text).not.toMatch(/3000|300٠/);
-    expect(JSON.stringify(response?.replyMarkup)).toContain("premium:referral");
-    expect(JSON.stringify(response?.replyMarkup)).toContain("premium:request:sharia_exams");
-
-    await handleTelegramUpdate({ callback_query: { id: "exam-payment", data: "premium:request:sharia_exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
-    expect(messages.at(-1)?.text).toContain("اختر طريقة التحويل التي استخدمتها");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("3007145477");
-    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("488281");
+    expect(response?.text).toContain("اختر المادة من القائمة أدناه");
+    expect(response?.text).not.toContain("دعم اختياري");
+    expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
 
-  it("يفصل رسالة اختبارات الثانوية العامة عن اختبارات الشريعة والقانون", async () => {
+  it("يفتح اختبارات الثانوية العامة مجانًا بعد توثيق زيارة حصاد اليوم", async () => {
     const { sender, messages } = createSender();
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
-    await handleTelegramUpdate({ callback_query: { id: "secondary-support", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    await handleTelegramUpdate({ callback_query: { id: "secondary-free-hasad", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
     expect(response?.text).toContain("اختبارات الثانوية العامة");
-    expect(response?.text).not.toContain("اختبارات الشريعة والقانون");
-    expect(JSON.stringify(response?.replyMarkup)).toContain("premium:request:secondary_exams");
+    expect(response?.text).not.toContain("دعم اختياري");
+    expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
 
   it("يفتح قسم الاختبارات مباشرة عند تحويله إداريًا إلى الوصول المجاني", async () => {
