@@ -8,6 +8,8 @@ import { storageGetSignedUrl } from "./storage";
 export const legalCategories = ["fiqh", "civil", "commercial", "procedure", "general"] as const;
 export type LegalCategory = (typeof legalCategories)[number];
 
+const TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html";
+
 const importantYemeniLawsPaymentMethods = {
   karimi: { label: "كريمي", details: "رقم حساب كريمي: 3007145477" },
   jeeb: { label: "محفظة جيب", details: "رقم حساب جيب: 488281" },
@@ -482,7 +484,7 @@ function quizQuickCommandsText(): string {
 function platformAccessMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      [{ text: "فتح منصة الناصر والتحقق", web_app: { url: "https://alnaseer.org/" } }],
+      [{ text: "فتح منصة الناصر والتحقق", web_app: { url: TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL } }],
       [{ text: "فتح المنصة في المتصفح", url: "https://alnaseer.org/" }],
       [{ text: "تحقّق من زيارة المنصة", callback_data: "platform:verify" }],
     ],
@@ -552,7 +554,7 @@ function channelSubscriptionMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
       ...REQUIRED_CHANNELS.map(channel => [{ text: `الاشتراك في ${channel.title}`, url: channel.url }]),
-      [{ text: "فتح منصة الناصر القانونية والتحقق", web_app: { url: "https://alnaseer.org/" } }],
+      [{ text: "فتح منصة الناصر القانونية والتحقق", web_app: { url: TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL } }],
       [{ text: "تحقّق من الاشتراك", callback_data: "channel:check" }],
     ],
   };

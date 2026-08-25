@@ -3219,6 +3219,7 @@ function classifyTelegramContractTemplate(fileName) {
 
 // server/telegram.ts
 var legalCategories = ["fiqh", "civil", "commercial", "procedure", "general"];
+var TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html";
 var importantYemeniLawsPaymentMethods = {
   karimi: { label: "\u0643\u0631\u064A\u0645\u064A", details: "\u0631\u0642\u0645 \u062D\u0633\u0627\u0628 \u0643\u0631\u064A\u0645\u064A: 3007145477" },
   jeeb: { label: "\u0645\u062D\u0641\u0638\u0629 \u062C\u064A\u0628", details: "\u0631\u0642\u0645 \u062D\u0633\u0627\u0628 \u062C\u064A\u0628: 488281" }
@@ -3379,7 +3380,7 @@ function channelSubscriptionMenu() {
   return {
     inline_keyboard: [
       ...REQUIRED_CHANNELS.map((channel) => [{ text: `\u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0641\u064A ${channel.title}`, url: channel.url }]),
-      [{ text: "\u0641\u062A\u062D \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629 \u0648\u0627\u0644\u062A\u062D\u0642\u0642", web_app: { url: "https://alnaseer.org/" } }],
+      [{ text: "\u0641\u062A\u062D \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629 \u0648\u0627\u0644\u062A\u062D\u0642\u0642", web_app: { url: TELEGRAM_PLATFORM_VERIFY_WEB_APP_URL } }],
       [{ text: "\u062A\u062D\u0642\u0651\u0642 \u0645\u0646 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643", callback_data: "channel:check" }]
     ]
   };
@@ -7495,8 +7496,9 @@ async function confirmSupabaseBotHasadAccess(telegramUserId, region) {
 // server/telegramWebhook.ts
 var TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 var PLATFORM_ORIGIN = "https://alnaseer.org";
+var TELEGRAM_VERCEL_ORIGIN = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app";
 var HASAD_ORIGINS = /* @__PURE__ */ new Set(["https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
-var TELEGRAM_VISIT_ORIGINS = /* @__PURE__ */ new Set([PLATFORM_ORIGIN, "https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
+var TELEGRAM_VISIT_ORIGINS = /* @__PURE__ */ new Set([PLATFORM_ORIGIN, TELEGRAM_VERCEL_ORIGIN, "https://www.hasad-alyoum.com", "https://hasad-alyoum.com"]);
 var PLATFORM_SUPABASE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
 function normalizeTelegramRegion(value) {
   if (typeof value !== "string") return null;
@@ -8219,7 +8221,7 @@ function registerTelegramWebhook(app2) {
   app2.post("/api/telegram/platform-visit", async (req, res) => {
     setPlatformVisitCors(req, res);
     const origin = req.get("origin");
-    if (origin && origin !== "https://alnaseer.org") {
+    if (origin && !TELEGRAM_VISIT_ORIGINS.has(origin)) {
       res.status(403).json({ ok: false });
       return;
     }

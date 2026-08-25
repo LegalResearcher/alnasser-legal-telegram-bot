@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>توثيق زيارة منصة الناصر</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #071226; color: #f8fafc; }
+      main { width: min(92vw, 440px); box-sizing: border-box; padding: 32px 24px; text-align: center; border: 1px solid #24466f; border-radius: 24px; background: #0c1d38; box-shadow: 0 18px 50px #0007; }
+      h1 { margin: 0 0 18px; font-size: 24px; }
+      p { margin: 0 0 24px; line-height: 1.9; color: #cbd5e1; }
+      .ok { color: #5eead4; }
+      .error { color: #fda4af; }
+      a { display: inline-block; padding: 13px 22px; border-radius: 999px; background: #1684e8; color: white; text-decoration: none; font-weight: 700; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>توثيق زيارة منصة الناصر</h1>
+      <p id="status">جارٍ التحقق من الزيارة…</p>
+      <a id="open-platform" href="https://alnaseer.org/" hidden>فتح منصة الناصر</a>
+    </main>
+    <script>
+      (() => {
+        const status = document.getElementById('status');
+        const openPlatform = document.getElementById('open-platform');
+        const webApp = window.Telegram && window.Telegram.WebApp;
+        const setStatus = (text, className) => {
+          status.textContent = text;
+          status.className = className || '';
+        };
+        if (!webApp || !webApp.initData) {
+          setStatus('افتح هذه الصفحة من زر التحقق داخل بوت الناصر في Telegram.', 'error');
+          return;
+        }
+        webApp.ready();
+        fetch('/api/telegram/platform-visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: webApp.initData, region: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+        })
+          .then(response => {
+            if (!response.ok) throw new Error('verification-failed');
+            setStatus('تم توثيق زيارتك بنجاح. يمكنك الآن فتح منصة الناصر.', 'ok');
+            openPlatform.hidden = false;
+            setTimeout(() => { window.location.href = 'https://alnaseer.org/'; }, 900);
+          })
+          .catch(() => setStatus('تعذر توثيق الزيارة. أغلق الصفحة وافتحها من زر التحقق داخل البوت مرة أخرى.', 'error'));
+      })();
+    </script>
+  </body>
+</html>

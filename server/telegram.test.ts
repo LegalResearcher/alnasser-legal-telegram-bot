@@ -1419,11 +1419,11 @@ describe("Telegram library conversation", () => {
     const firstGateMarkup = JSON.stringify(messages[0]?.replyMarkup);
     expect(firstGateMarkup).toContain("https://t.me/muen2025");
     expect(firstGateMarkup).toContain("https://t.me/hasadalyoum");
-    expect(firstGateMarkup).toContain('"web_app":{"url":"https://alnaseer.org/"}');
+    expect(firstGateMarkup).toContain('"web_app":{"url":"https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html"}');
     expect(firstGateMarkup).toContain("فتح منصة الناصر القانونية والتحقق");
     expect(firstGateMarkup).toContain("channel:check");
     expect(firstGateMarkup.indexOf("https://t.me/muen2025")).toBeLessThan(firstGateMarkup.indexOf("https://t.me/hasadalyoum"));
-    expect(firstGateMarkup.indexOf("https://t.me/hasadalyoum")).toBeLessThan(firstGateMarkup.indexOf('"web_app":{"url":"https://alnaseer.org/"}'));
+    expect(firstGateMarkup.indexOf("https://t.me/hasadalyoum")).toBeLessThan(firstGateMarkup.indexOf('"web_app":{"url":"https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html"}'));
 
     subscriptions["@hasadalyoum"] = true;
     await handleTelegramUpdate(
@@ -1966,7 +1966,7 @@ describe("Telegram library conversation", () => {
     expect(messages[0]?.text).toContain("✅ قناة منصة الناصر القانونية (@muen2025): مكتمل");
     expect(messages[0]?.text).toContain("✅ قناة حصاد اليوم الإخباري (@hasadalyoum): مكتمل");
     expect(messages[0]?.text).toContain("❌ منصة الناصر القانونية: لم تتم الزيارة أو لم يُتحقق منها بعد");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"web_app":{"url":"https://alnaseer.org/"}');
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain('"web_app":{"url":"https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/telegram-platform-visit.html"}');
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("https://t.me/muen2025");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("https://t.me/hasadalyoum");
 
