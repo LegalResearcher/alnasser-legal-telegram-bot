@@ -1449,9 +1449,9 @@ function legalFormsIntroText() {
 
 function illustratedLegalFormsIntroText() {
   return [
-    "🖼 نماذج مصورة وفق القوانين اليمنية:",
-    "فهرس تفاعلي منظم لنماذج قانونية مصورة وفق القوانين اليمنية.",
-    "اختر الاسم المطلوب ليُرسل داخل محادثتك الخاصة مع البوت.",
+    "🖼 نماذج مصورة وفق القوانين اليمنية",
+    "نماذج وصيغ قانونية مصورة وفق القوانين اليمنية.",
+    "اختر النموذج المطلوب:",
   ].join("\n\n");
 }
 
@@ -2027,12 +2027,12 @@ async function sendIllustratedLegalFormsFolder(
   const page = Math.min(Math.max(1, requestedPage), totalPages);
   const content = page === requestedPage ? initial : await store.getIllustratedLegalFormsFolderContents(folderId, page);
   const folder = content.folder ?? initial.folder;
-  const path = folder.path.replace(/^نماذج مصورة وفق القوانين اليمنية\s*\/\s*/, "");
-  const pathText = path ? `المسار: نماذج مصورة / ${cleanGenericFileDisplayName(path)}` : "المسار: نماذج مصورة";
-  const fileText = content.totalSources > 0 ? `الصفحة ${page} من ${totalPages} (${content.totalSources} عنصرًا).` : "لا توجد عناصر مباشرة هنا.";
+  const folderTitle = folder.parentDriveFolderId
+    ? `🖼 ${cleanGenericFileDisplayName(folder.name)}`
+    : "🖼 نماذج مصورة وفق القوانين اليمنية";
   await sender.sendMessage(
     chatId,
-    [`نماذج مصورة وفق القوانين اليمنية — ${cleanGenericFileDisplayName(folder.name)}`, pathText, fileText, "اختر الاسم المطلوب:"].join("\n"),
+    [folderTitle, "اختر النموذج المطلوب:"].join("\n\n"),
     illustratedLegalFormsFolderMenu(content.folders, content.sources, folder, page, totalPages)
   );
 }

@@ -1654,7 +1654,9 @@ describe("Telegram library conversation", () => {
       provider
     );
     expect(messages[0]?.text).toContain("نماذج مصورة وفق القوانين اليمنية");
-    expect(messages[1]?.text).toContain("17 عنصرًا");
+    expect(messages[1]?.text).toContain("اختر النموذج المطلوب");
+    expect(messages[1]?.text).not.toContain("المسار:");
+    expect(messages[1]?.text).not.toContain("17 عنصرًا");
     expect(JSON.stringify(messages[1]?.replyMarkup)).toContain("استئناف");
     expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("استئناف.pdf");
     expect(JSON.stringify(messages[1]?.replyMarkup)).not.toContain("ملف:");
