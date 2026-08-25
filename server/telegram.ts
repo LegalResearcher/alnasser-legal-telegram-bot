@@ -457,6 +457,7 @@ function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSec
       [{ text: "🔎 البحث القانوني", callback_data: "menu:search" }, { text: "📚 المكتبة القانونية", callback_data: "menu:library" }],
       [{ text: "📝 بنك الأسئلة والاختبارات", callback_data: "menu:exams" }, { text: "📄 النماذج والصيغ القانونية", callback_data: "menu:documents" }],
       [{ text: "📌 المراجع المميزة", callback_data: "menu:featured" }, { text: "🛠 الخدمات والأدوات", callback_data: "menu:services" }],
+      [{ text: "📊 إحصاءات البوت", callback_data: "stats" }],
       [{ text: "ℹ️ عن البوت والمساعدة", callback_data: "menu:help" }],
       ...managedItemsRows(managedItems),
       [{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }],
@@ -494,7 +495,6 @@ function mainCategoryMenu(category: "search" | "library" | "exams" | "documents"
     rows.push([{ text: "🎁 نظام الإحالة", callback_data: "premium:referral" }]);
   } else {
     rows.push([{ text: "❓ المساعدة", callback_data: "help" }], [{ text: "ℹ️ عن المكتبة", callback_data: "about" }]);
-    rows.push([{ text: "📊 إحصاءات البوت", callback_data: "stats" }]);
     rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
   }
   rows.push([{ text: "↩️ القائمة الرئيسية", callback_data: "menu" }]);
@@ -1962,6 +1962,8 @@ function contentStatisticsText(stats: TelegramContentStatistics): string {
     "📊 إحصاءات البوت",
     "",
     "مؤشرات المحتوى والخدمات المتاحة حاليًا",
+    "",
+    `👤 ${number(stats.userCount)} مستخدمًا  •  ✅ ${number(stats.totalExams)} اختبارًا`,
     "",
     "🧠 بنك الأسئلة والاختبارات",
     "━━━━━━━━━━━━━━",

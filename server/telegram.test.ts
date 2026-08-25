@@ -738,6 +738,7 @@ describe("Telegram library conversation", () => {
     expect(keyboard).toContain("📄 النماذج والصيغ القانونية");
     expect(keyboard).toContain("📌 المراجع المميزة");
     expect(keyboard).toContain("🛠 الخدمات والأدوات");
+    expect(keyboard).toContain("📊 إحصاءات البوت");
     expect(keyboard).toContain("menu:library");
     expect(keyboard).toContain("menu:exams");
     expect(keyboard).not.toContain("📚 تصفح المكتبة");
@@ -770,8 +771,6 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ callback_query: { id: "open-help", data: "menu:help", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
     expect(editedMessages.at(-1)?.messageId).toBe(88);
-    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain('"callback_data":"stats"');
-
     await handleTelegramUpdate({ callback_query: { id: "open-stats", data: "stats", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
     expect(messages).toHaveLength(0);
     expect(editedMessages.at(-1)?.text).toContain("📊 إحصاءات البوت");
