@@ -4279,7 +4279,7 @@ async function deliverPrivateDocument(chatId, source, sender, provider) {
     const downloaded = await provider.download(source);
     await sender.sendDocument(chatId, {
       ...downloaded,
-      caption: `\u0645\u0633\u062A\u0648\u0631\u062F \u0645\u0646 \u0645\u0643\u062A\u0628\u0629 \u0623. \u0645\u0639\u064A\u0646 \u0627\u0644\u0646\u0627\u0635\u0631
+      caption: source.collection === "illustrated_legal_forms" ? "\u0645\u0633\u062A\u0648\u0631\u062F \u0645\u0646 \u0645\u0643\u062A\u0628\u0629 \u0623. \u0645\u0639\u064A\u0646 \u0627\u0644\u0646\u0627\u0635\u0631" : `\u0645\u0633\u062A\u0648\u0631\u062F \u0645\u0646 \u0645\u0643\u062A\u0628\u0629 \u0623. \u0645\u0639\u064A\u0646 \u0627\u0644\u0646\u0627\u0635\u0631
 ${source.title}`
     });
   } catch (error) {

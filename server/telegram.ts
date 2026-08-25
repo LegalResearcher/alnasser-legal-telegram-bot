@@ -1641,10 +1641,12 @@ async function deliverPrivateDocument(chatId: number, source: LegalSource | unde
   await sender.sendMessage(chatId, TELEGRAM_USER_MESSAGES.filePreparing);
   try {
     const downloaded = await provider.download(source);
-    await sender.sendDocument(chatId, {
-      ...downloaded,
-      caption: `مستورد من مكتبة أ. معين الناصر\n${source.title}`,
-    });
+      await sender.sendDocument(chatId, {
+        ...downloaded,
+        caption: source.collection === "illustrated_legal_forms"
+          ? "مستورد من مكتبة أ. معين الناصر"
+          : `مستورد من مكتبة أ. معين الناصر\n${source.title}`,
+      });
   } catch (error) {
     const code = error instanceof FileDeliveryError ? error.code : "UNAVAILABLE";
     const message = code === "TOO_LARGE"

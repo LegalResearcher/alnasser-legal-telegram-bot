@@ -1668,7 +1668,7 @@ describe("Telegram library conversation", () => {
       provider
     );
     expect(requestedSources[0]?.id).toBe(illustratedLegalFormsSource.id);
-    expect(documents).toEqual([{ chatId: 12, filename: illustratedLegalFormsSource.title, caption: `مستورد من مكتبة أ. معين الناصر\n${illustratedLegalFormsSource.title}` }]);
+    expect(documents).toEqual([{ chatId: 12, filename: illustratedLegalFormsSource.title, caption: "مستورد من مكتبة أ. معين الناصر" }]);
   });
 
   it("يعرض جميع القوانين اليمنية بأسماء مقروءة ويبحث فيها ويسلمها في المحادثة الخاصة فقط", async () => {
