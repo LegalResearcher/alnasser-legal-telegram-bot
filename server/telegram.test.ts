@@ -2505,17 +2505,29 @@ describe("Telegram reply topics", () => {
     }) as typeof fetch;
 
     try {
-      await createTelegramSender("اختبار", { directMessagesTopicId: 123456789 }).sendMessage(99, "رسالة");
+      await createTelegramSender("اختبار", { directMessagesTopicId: 123456789 }).sendMessage(99, "رسالة", {
+        inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]],
+      });
       await createTelegramSender("اختبار", { messageThreadId: 42 }).sendMessage(99, "موضوع");
-      await createTelegramSender("اختبار").sendMessage(99, "عادي");
+      await createTelegramSender("اختبار").sendMessage(99, "عادي", {
+        inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]],
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
 
-    expect(requests[0]).toMatchObject({ chat_id: 99, direct_messages_topic_id: 123456789 });
+    expect(requests[0]).toMatchObject({
+      chat_id: 99,
+      direct_messages_topic_id: 123456789,
+      reply_markup: { inline_keyboard: [[{ text: "فتح", url: "https://alnaseer.org/" }]] },
+    });
     expect(requests[0]).not.toHaveProperty("message_thread_id");
     expect(requests[1]).toMatchObject({ chat_id: 99, message_thread_id: 42 });
     expect(requests[1]).not.toHaveProperty("direct_messages_topic_id");
-    expect(requests[2]).toEqual({ chat_id: 99, text: "عادي", reply_markup: undefined });
+    expect(requests[2]).toMatchObject({
+      chat_id: 99,
+      text: "عادي",
+      reply_markup: { inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]] },
+    });
   });
 });

@@ -309,6 +309,16 @@ export type TelegramReplyContext = {
   directMessagesTopicId?: number;
 };
 
+function adaptReplyMarkupForTelegramContext(replyMarkup: TelegramInlineKeyboard | undefined, replyContext: TelegramReplyContext): TelegramInlineKeyboard | undefined {
+  if (!replyMarkup || !Number.isInteger(replyContext.directMessagesTopicId)) return replyMarkup;
+  return {
+    inline_keyboard: replyMarkup.inline_keyboard.map(row => row.map(button => {
+      if (!button.web_app) return button;
+      return { text: button.text, url: button.web_app.url };
+    })),
+  };
+}
+
 export type TelegramUpdate = {
   message?: {
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
@@ -3935,7 +3945,7 @@ export function createTelegramSender(token: string, replyContext: TelegramReplyC
         chat_id: chatId,
         ...topicPayload,
         text,
-        reply_markup: replyMarkup,
+        reply_markup: adaptReplyMarkupForTelegramContext(replyMarkup, replyContext),
       });
     },
     async sendDocument(chatId, document) {

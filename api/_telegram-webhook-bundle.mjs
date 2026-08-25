@@ -3230,6 +3230,15 @@ var categoryLabels = {
   procedure: "\u{1F4D7} \u0627\u0644\u0642\u0627\u0646\u0648\u0646 \u0627\u0644\u062C\u0646\u0627\u0626\u064A",
   general: "\u{1F4D1} \u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u0639\u0645\u0644 \u0648\u0627\u0644\u0623\u062D\u0648\u0627\u0644 \u0627\u0644\u0634\u062E\u0635\u064A\u0629"
 };
+function adaptReplyMarkupForTelegramContext(replyMarkup, replyContext) {
+  if (!replyMarkup || !Number.isInteger(replyContext.directMessagesTopicId)) return replyMarkup;
+  return {
+    inline_keyboard: replyMarkup.inline_keyboard.map((row) => row.map((button) => {
+      if (!button.web_app) return button;
+      return { text: button.text, url: button.web_app.url };
+    }))
+  };
+}
 var BOT_COMMANDS = [
   { command: "start", description: "\u0628\u062F\u0621 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0628\u0648\u062A \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A" },
   { command: "search", description: "\u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0645\u0648\u062D\u062F \u0641\u064A \u0627\u0644\u0645\u0635\u0627\u062F\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629" },
@@ -6390,7 +6399,7 @@ function createTelegramSender(token, replyContext = {}) {
         chat_id: chatId,
         ...topicPayload,
         text: text2,
-        reply_markup: replyMarkup
+        reply_markup: adaptReplyMarkupForTelegramContext(replyMarkup, replyContext)
       });
     },
     async sendDocument(chatId, document) {
