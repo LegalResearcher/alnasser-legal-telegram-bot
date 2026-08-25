@@ -3890,11 +3890,21 @@ async function telegramRequest(token: string, method: string, payload: Record<st
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    throw new Error(`Telegram API request failed with status ${response.status}`);
+  const responseText = await response.text();
+  let body: { ok?: boolean; result?: unknown; description?: string } = {};
+  try {
+    body = JSON.parse(responseText) as typeof body;
+  } catch {
+    // Telegram should return JSON, but preserve a safe generic error for malformed responses.
   }
-  const body = await response.json() as { ok?: boolean; result?: unknown };
-  if (!body.ok) throw new Error(`Telegram API ${method} returned an unsuccessful response`);
+  if (!response.ok) {
+    const description = typeof body.description === "string" ? `: ${body.description}` : "";
+    throw new Error(`Telegram API request failed with status ${response.status}${description}`);
+  }
+  if (!body.ok) {
+    const description = typeof body.description === "string" ? `: ${body.description}` : "";
+    throw new Error(`Telegram API ${method} returned an unsuccessful response${description}`);
+  }
   return body.result;
 }
 

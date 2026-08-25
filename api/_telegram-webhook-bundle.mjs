@@ -6359,11 +6359,20 @@ async function telegramRequest(token, method, payload) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload)
   });
-  if (!response.ok) {
-    throw new Error(`Telegram API request failed with status ${response.status}`);
+  const responseText = await response.text();
+  let body = {};
+  try {
+    body = JSON.parse(responseText);
+  } catch {
   }
-  const body = await response.json();
-  if (!body.ok) throw new Error(`Telegram API ${method} returned an unsuccessful response`);
+  if (!response.ok) {
+    const description = typeof body.description === "string" ? `: ${body.description}` : "";
+    throw new Error(`Telegram API request failed with status ${response.status}${description}`);
+  }
+  if (!body.ok) {
+    const description = typeof body.description === "string" ? `: ${body.description}` : "";
+    throw new Error(`Telegram API ${method} returned an unsuccessful response${description}`);
+  }
   return body.result;
 }
 async function telegramMultipartRequest(token, method, form) {
