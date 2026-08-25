@@ -8353,15 +8353,25 @@ function registerTelegramWebhook(app2) {
 var app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-registerTelegramWebhook(app);
-void synchronizeTelegramConfiguration({
-  token: process.env.TELEGRAM_BOT_TOKEN,
-  webhookUrl: process.env.TELEGRAM_WEBHOOK_URL,
-  webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET
-}).catch((error) => {
-  const message = error instanceof Error ? error.message : "unknown error";
-  console.error("[Telegram] Vercel configuration synchronization failed:", message);
+var telegramConfigurationPromise;
+function ensureTelegramConfiguration() {
+  if (!telegramConfigurationPromise) {
+    telegramConfigurationPromise = synchronizeTelegramConfiguration({
+      token: process.env.TELEGRAM_BOT_TOKEN,
+      webhookUrl: process.env.TELEGRAM_WEBHOOK_URL,
+      webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.error("[Telegram] Vercel configuration synchronization failed:", message);
+    });
+  }
+  return telegramConfigurationPromise;
+}
+app.use(async (_req, _res, next) => {
+  await ensureTelegramConfiguration();
+  next();
 });
+registerTelegramWebhook(app);
 var vercelTelegramEntrypoint_default = app;
 export {
   vercelTelegramEntrypoint_default as default
