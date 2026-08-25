@@ -40,6 +40,22 @@ pnpm test
 pnpm check
 ```
 
+## لقطة الامتحانات لمرة واحدة
+
+يقرأ المشغّل جميع مستويات الشريعة والقانون والقسمين الأدبي والعلمي من Supabase ويكتب نسخة مستقلة في جداول الامتحانات المحلية في قاعدة البوت. قبل أي كتابة، شغّل الفحص الجاف الآتي؛ فهو يعرض الأعداد والمطابقة لكل مادة ولا يتطلب اتصالًا بقاعدة البوت:
+
+```bash
+COREPACK_ENABLE_PROJECT_SPEC=0 pnpm exec tsx scripts/run_full_supabase_exam_sync.mjs --dry-run
+```
+
+بعد مراجعة التقرير فقط، يُشغّل الاستيراد لمرة واحدة من بيئة آمنة تحتوي `DATABASE_URL` و`SUPABASE_ANON_KEY`:
+
+```bash
+COREPACK_ENABLE_PROJECT_SPEC=0 pnpm exec tsx scripts/run_full_supabase_exam_sync.mjs
+```
+
+لا يُشغّل مسار المزامنة الدوري تلقائيًا؛ يجب إبقاء `ENABLE_SUPABASE_EXAM_SYNC_JOB=false` أو غير مضبوط. بعد نجاح اللقطة والتحقق من أعداد قاعدة البوت، يعمل البوت من الجداول المحلية دون قراءة أسئلة Supabase عند تفاعل المستخدم.
+
 ## متغيرات البيئة
 
 استخدم ملف [`env.example`](env.example) كمرجع لأسماء المتغيرات المطلوبة. أهمها `DATABASE_URL` و`JWT_SECRET` و`TELEGRAM_BOT_TOKEN` و`TELEGRAM_WEBHOOK_SECRET` ومفاتيح Supabase/OAuth.

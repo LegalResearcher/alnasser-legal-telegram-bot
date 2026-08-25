@@ -17,7 +17,7 @@ import { hasManagedTelegramMenuItemPremiumAccess } from "./db";
 import { beginScheduledTelegramBroadcast, getScheduledTelegramBroadcast, scheduleTelegramBroadcast } from "./db";
 import { createHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { sdk } from "./_core/sdk";
-import { cancelTelegramExamSession, getTelegramExamSession, getTelegramExamSessionByPoll, listTelegramExamForms, listTelegramExamQuestions, resolveTelegramExamPoll, setTelegramExamActivePoll, startTelegramExamSession } from "./telegramExamDb";
+import { advanceTelegramExamWrittenQuestion, cancelTelegramExamSession, getTelegramExamSession, getTelegramExamSessionByPoll, listTelegramExamForms, listTelegramExamQuestions, resolveTelegramExamPoll, setTelegramExamActivePoll, startTelegramExamSession } from "./telegramExamDb";
 import { activateTelegramGroupExamRound, cancelTelegramGroupExamRound, createTelegramGroupExamRound, getTelegramGroupExamLeaderboard, getTelegramGroupExamRound, getTelegramGroupExamRoundByPoll, getTelegramGroupExamWaitingRound, joinTelegramGroupExamRound, recordTelegramGroupExamAnswer, resolveTelegramGroupExamPoll, setTelegramGroupExamActivePoll } from "./telegramGroupExamDb";
 import { getTelegramExamResultSummary } from "./telegramExamResults";
 import { createTelegramChannelMembershipChecker, createTelegramSender, handleTelegramUpdate, type TelegramUpdate } from "./telegram";
@@ -942,6 +942,7 @@ export function registerTelegramWebhook(app: Express) {
           getExamSessionByPoll: getTelegramExamSessionByPoll,
           cancelExamSession: cancelTelegramExamSession,
           resolveExamPoll: resolveTelegramExamPoll,
+          advanceExamWrittenQuestion: advanceTelegramExamWrittenQuestion,
           getExamResultSummary: getTelegramExamResultSummary,
           getGroupExamWaitingRound: getTelegramGroupExamWaitingRound,
           createGroupExamRound: createTelegramGroupExamRound,

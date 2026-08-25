@@ -24,7 +24,10 @@ async function startServer() {
   registerTelegramWebhook(app);
   registerTelegramSubscriptionReminder(app);
   registerTelegramReferralQualifier(app);
-  registerSupabaseExamSyncJob(app);
+  // مزامنة الاختبارات مهمة لمرة واحدة فقط؛ لا تُفعّل في الإنتاج إلا أثناء عملية Snapshot صريحة.
+  if (process.env.ENABLE_SUPABASE_EXAM_SYNC_JOB === "true") {
+    registerSupabaseExamSyncJob(app);
+  }
   // tRPC API
   app.use(
     "/api/trpc",

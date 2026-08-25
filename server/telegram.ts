@@ -1,6 +1,6 @@
 import type { LegalFolder, LegalSource, TelegramContractTemplate, TelegramContractTemplateType } from "../drizzle/schema";
 import { ALL_YEMENI_LAWS_ROOT_FOLDER_ID, FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, IMPORTANT_YEMENI_LAWS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID, LEGISLATION_ROOT_FOLDER_ID, normalizeArabicSearch } from "./db";
-import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectsMenu, examTimeMenu, examTrainingFormsMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
+import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, examTrainingFormsMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
 import { createTelegramContractDocument } from "./telegramContractDocument";
 import { TELEGRAM_CONTRACT_TYPE_LABELS } from "./telegramContractTypes";
 import { storageGetSignedUrl } from "./storage";
@@ -109,6 +109,16 @@ export type TelegramExamPollResolution = {
   question: { id: number; questionText: string; optionA: string; optionB: string; optionC: string; optionD: string; correctOption: "A" | "B" | "C" | "D"; explanation: string; hint: string | null; sortOrder: number };
   isCorrect: boolean;
   missed: boolean;
+  score: number;
+  incorrectCount: number;
+  missedCount: number;
+  nextQuestionIndex: number;
+  total: number;
+  completed: boolean;
+  elapsedSeconds: number;
+};
+
+export type TelegramWrittenExamResolution = {
   score: number;
   incorrectCount: number;
   missedCount: number;
@@ -279,6 +289,7 @@ export type TelegramLibraryStore = {
   getExamSessionByPoll: (pollId: string) => Promise<TelegramExamSessionRecord | undefined>;
   cancelExamSession: (telegramUserId: string, chatId: string) => Promise<{ subjectKey: string; sectionKey: string } | undefined>;
   resolveExamPoll: (input: { sessionId: number; telegramUserId: string; questionIndex: number; pollId: string; answer?: "A" | "B" | "C" | "D" }) => Promise<TelegramExamPollResolution | undefined>;
+  advanceExamWrittenQuestion: (input: { sessionId: number; telegramUserId: string; questionIndex: number }) => Promise<TelegramWrittenExamResolution | undefined>;
   getExamResultSummary: (sessionId: number, telegramUserId: string) => Promise<TelegramExamResultSummary | undefined>;
   getGroupExamWaitingRound: (chatId: string, subjectKey: string, sectionKey: string) => Promise<TelegramGroupExamRoundRecord | undefined>;
   createGroupExamRound: (input: { chatId: string; creatorTelegramUserId: string; subjectKey: string; sectionKey: string; timeLimitSeconds: 15 | 30 | 60 | 300 }) => Promise<{ round: TelegramGroupExamRoundRecord; created: boolean } | undefined>;
@@ -2854,7 +2865,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "secondary-exams") {
-      await sender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nاختر المادة المطلوبة.", examSubjectsMenu("secondary"));
+      await sender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
       return;
     }
     if (data === "exam:levels") {
@@ -2898,7 +2909,7 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(
           chatId,
           forms.length > 0
-            ? `📕 ${subject.name}\n\nاختر نموذج الاختبار المطلوب.`
+            ? `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`
             : "لا تتوافر نماذج اختبار لهذه المادة حاليًا.",
           forms.length > 0 ? examFormsMenu(levelKey, subjectKey, forms) : examSubjectsMenu(levelKey, Number(requestedPage) || 1)
         );
@@ -2918,7 +2929,7 @@ export async function handleTelegramUpdate(
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject) return;
       const forms = await store.listExamForms(importedSubjectKey);
-      await sender.sendMessage(chatId, `📕 ${subject.name}\n\nاختر نموذج الاختبار المطلوب.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
+      await sender.sendMessage(chatId, `📕 ${examSubjectHeading(levelKey, subject)}\n\nاختر نموذج الاختبار المطلوب.`, examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
       return;
     }
     if (data.startsWith("exam:training:")) {
@@ -2931,12 +2942,12 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data.startsWith("exam:form:")) {
-      const [, , levelKey, subjectKey, formKey, requestedPage] = data.split(":");
+      const [, , levelKey, subjectKey, formKeyOrSortOrder, requestedPage] = data.split(":");
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
-      if (!importedSubjectKey || !subject || !formKey) return;
+      if (!importedSubjectKey || !subject || !formKeyOrSortOrder) return;
       const forms = await store.listExamForms(importedSubjectKey);
-      const form = forms.find(item => item.formKey === formKey);
+      const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
         await sender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1));
         return;
@@ -2945,10 +2956,10 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(
         chatId,
         questions.length > 0
-          ? `📕 ${subject.name} — ${form.formName}\n\nيتضمن النموذج ${questions.length} سؤالًا. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
+          ? `📕 ${examSubjectHeading(levelKey, subject)} — ${form.formName}\n\nيتضمن النموذج ${questions.length} سؤالًا. اختر المدة المخصصة لكل سؤال قبل بدء الجولة.`
           : "لا تتوافر أسئلة هذا النموذج حاليًا. حاول مرة أخرى لاحقًا.",
         questions.length > 0
-          ? examTimeMenu(importedSubjectKey, form.formKey, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
+          ? examTimeMenu(importedSubjectKey, form.sortOrder, `exam:forms:${levelKey}:${subjectKey}:${requestedPage || 1}`)
           : examFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1)
       );
       return;
@@ -2973,20 +2984,20 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, "يتاح الاختبار داخل المحادثة الخاصة مع البوت فقط.", mainMenu());
         return;
       }
-      const [, , subjectKey, formKey, rawTimeLimit] = data.split(":");
+      const [, , subjectKey, formKeyOrSortOrder, rawTimeLimit] = data.split(":");
       const timeLimitSeconds = Number(rawTimeLimit);
       const location = getImportedExamCatalogLocation(subjectKey);
       const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
-      if (!location || !subject || !formKey || ![15, 30, 60, 300].includes(timeLimitSeconds)) return;
+      if (!location || !subject || !formKeyOrSortOrder || ![15, 30, 60, 300].includes(timeLimitSeconds)) return;
       const forms = await store.listExamForms(subjectKey);
-      const form = forms.find(item => item.formKey === formKey);
+      const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
         await sender.sendMessage(chatId, "تعذر العثور على هذا النموذج. اختر نموذجًا من القائمة.", examFormsMenu(location.levelKey, location.catalogSubjectKey, forms));
         return;
       }
       const session = await store.startExamSession(telegramUserId, String(chatId), subjectKey, form.formKey, timeLimitSeconds as 15 | 30 | 60 | 300);
       if (!session) {
-        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.formKey, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
+        await sender.sendMessage(chatId, "تعذر تجهيز الاختبار حاليًا. حاول مرة أخرى لاحقًا.", examTimeMenu(subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`));
         return;
       }
       const questions = await store.listExamQuestions(subjectKey, form.formKey);
@@ -3033,6 +3044,24 @@ export async function handleTelegramUpdate(
       const sessionId = Number(data.slice("exam:ready:".length));
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
       await launchNativeExamQuestion(chatId, sessionId, telegramUserId, store, sender);
+      return;
+    }
+    if (data.startsWith("exam:written-next:")) {
+      const sessionId = Number(data.slice("exam:written-next:".length));
+      if (!Number.isInteger(sessionId) || sessionId < 1) return;
+      const session = await store.getExamSession(sessionId, telegramUserId);
+      if (!session || session.status !== "active") return;
+      const outcome = await store.advanceExamWrittenQuestion({
+        sessionId,
+        telegramUserId,
+        questionIndex: session.questionIndex,
+      });
+      if (!outcome) return;
+      if (outcome.completed) {
+        await sendNativeExamCompletionResult(chatId, session, outcome, store, sender);
+      } else {
+        await launchNativeExamQuestion(chatId, sessionId, telegramUserId, store, sender);
+      }
       return;
     }
     if (data.startsWith("exam:stop:")) {

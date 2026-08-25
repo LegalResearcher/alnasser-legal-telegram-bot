@@ -15,6 +15,7 @@ const importedSubjectKeys: Record<string, string> = {
   "l1:l1-usul": USUL_FIQH_EXAM_SUBJECT_KEY,
   "l1:l1-criminology": "l1_criminology",
   "l4:l4-civil-law": CIVIL_LAW_EXAM_SUBJECT_KEY,
+  // مفاتيح التوافق مع النسخة القديمة من كتالوج الثانوية.
   "secondary:math": "exam_secondary_math",
   "secondary:history": "exam_secondary_history",
   "secondary:arabic": "exam_secondary_arabic",
@@ -24,6 +25,22 @@ const importedSubjectKeys: Record<string, string> = {
   "secondary:islamic": "exam_secondary_islamic",
   "secondary:english": "exam_secondary_english",
   "secondary:chemistry": "exam_secondary_chemistry",
+  // النسخة الجديدة: كل قسم ثانوي له مفاتيح مستقلة حتى لا تختلط النماذج.
+  "secondary-literary:history": "exam_secondary_literary_history",
+  "secondary-literary:geography": "exam_secondary_literary_geography",
+  "secondary-literary:philosophy": "exam_secondary_literary_philosophy",
+  "secondary-literary:islamic": "exam_secondary_literary_islamic",
+  "secondary-literary:arabic": "exam_secondary_literary_arabic",
+  "secondary-literary:quran": "exam_secondary_literary_quran",
+  "secondary-literary:english": "exam_secondary_literary_english",
+  "secondary-literary:math": "exam_secondary_literary_math",
+  "secondary-scientific:quran": "exam_secondary_scientific_quran",
+  "secondary-scientific:islamic": "exam_secondary_scientific_islamic",
+  "secondary-scientific:arabic": "exam_secondary_scientific_arabic",
+  "secondary-scientific:english": "exam_secondary_scientific_english",
+  "secondary-scientific:biology": "exam_secondary_scientific_biology",
+  "secondary-scientific:physics": "exam_secondary_scientific_physics",
+  "secondary-scientific:chemistry": "exam_secondary_scientific_chemistry",
 };
 
 export function getImportedExamSubjectKey(levelKey: string, catalogSubjectKey: string): string | undefined {
@@ -55,6 +72,7 @@ export type TelegramExamCatalogLevel = {
   name: string;
   subjects: TelegramExamCatalogSubject[];
   comingSoon?: boolean;
+  hidden?: boolean;
 };
 
 // هذا الفهرس يعكس ترتيب المستويات والمواد المعتمد في منصة الناصر. لا يتضمن استيراد أي أسئلة.
@@ -136,8 +154,10 @@ export const TELEGRAM_EXAM_CATALOG: TelegramExamCatalogLevel[] = [
     ],
   },
   {
+    // كتالوج قديم محفوظ للتوافق مع الرسائل السابقة، ولا يظهر في القائمة الجديدة.
     key: "secondary",
     name: "اختبارات الثانوية العامة",
+    hidden: true,
     subjects: [
       { key: "math", name: "الرياضيات", hasQuestions: true },
       { key: "history", name: "التاريخ", hasQuestions: true },
@@ -147,6 +167,33 @@ export const TELEGRAM_EXAM_CATALOG: TelegramExamCatalogLevel[] = [
       { key: "philosophy", name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true },
       { key: "islamic", name: "التربية الإسلامية", hasQuestions: true },
       { key: "english", name: "اللغة الإنجليزية", hasQuestions: true },
+      { key: "chemistry", name: "الكيمياء", hasQuestions: true },
+    ],
+  },
+  {
+    key: "secondary-literary",
+    name: "ثالث ثانوي – القسم الأدبي",
+    subjects: [
+      { key: "history", name: "التاريخ", hasQuestions: true },
+      { key: "geography", name: "الجغرافيا", hasQuestions: true },
+      { key: "philosophy", name: "الفلسفة والمنطق وعلم النفس", hasQuestions: true },
+      { key: "islamic", name: "التربية الإسلامية", hasQuestions: true },
+      { key: "arabic", name: "اللغة العربية", hasQuestions: true },
+      { key: "quran", name: "القرآن الكريم", hasQuestions: true },
+      { key: "english", name: "اللغة الإنجليزية", hasQuestions: true },
+      { key: "math", name: "الرياضيات", hasQuestions: true },
+    ],
+  },
+  {
+    key: "secondary-scientific",
+    name: "ثالث ثانوي – القسم العلمي",
+    subjects: [
+      { key: "quran", name: "القرآن الكريم", hasQuestions: true },
+      { key: "islamic", name: "التربية الإسلامية", hasQuestions: true },
+      { key: "arabic", name: "اللغة العربية", hasQuestions: true },
+      { key: "english", name: "اللغة الإنجليزية", hasQuestions: true },
+      { key: "biology", name: "الأحياء", hasQuestions: true },
+      { key: "physics", name: "الفيزياء", hasQuestions: true },
       { key: "chemistry", name: "الكيمياء", hasQuestions: true },
     ],
   },
@@ -167,7 +214,7 @@ export function getTelegramExamCatalogSubject(levelKey: string, subjectKey: stri
 }
 
 export function examSubjectHeading(levelKey: string, subject: TelegramExamCatalogSubject): string {
-  if (levelKey !== "secondary") return subject.name;
+  if (!levelKey.startsWith("secondary-")) return subject.name;
   const academicYear = subject.key === "math" || subject.key === "history" ? "2023م" : "2025—2026م";
   return `نماذج أوائل الجمهورية اليمنية مادة ${subject.name} للعام الدراسي ${academicYear}`;
 }
@@ -176,10 +223,23 @@ export function civilLawExamMenu(): TelegramInlineKeyboard {
   return examLevelsMenu();
 }
 
+export function secondaryLevelsMenu(): TelegramInlineKeyboard {
+  return {
+    inline_keyboard: [
+      ...TELEGRAM_EXAM_CATALOG
+        .filter(level => level.key.startsWith("secondary-") && !level.hidden)
+        .map(level => [{ text: level.name, callback_data: `exam:level:${level.key}` }]),
+      [{ text: "القائمة الرئيسة", callback_data: "menu" }],
+    ],
+  };
+}
+
 export function examLevelsMenu(): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
-      ...TELEGRAM_EXAM_CATALOG.map(level => [{ text: level.name, callback_data: `exam:level:${level.key}` }]),
+      ...TELEGRAM_EXAM_CATALOG
+        .filter(level => !level.hidden && !level.key.startsWith("secondary-"))
+        .map(level => [{ text: level.name, callback_data: `exam:level:${level.key}` }]),
       [{ text: "القائمة الرئيسة", callback_data: "menu" }],
     ],
   };
@@ -255,7 +315,7 @@ function pagedFormsMenu(
   const rows: TelegramInlineKeyboard["inline_keyboard"] = pageForms.map(form => [
     {
       text: `${isAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " ⏳" : ""}`,
-      callback_data: `exam:form:${levelKey}:${subjectKey}:${form.sortOrder}:${page}`,
+      callback_data: `exam:form:${levelKey}:${subjectKey}:${form.sortOrder ?? form.formKey}:${page}`,
     },
   ]);
   if (totalPages > 1) {
@@ -310,16 +370,16 @@ export function civilLawExamTimeMenu(): TelegramInlineKeyboard {
   };
 }
 
-export function examTimeMenu(levelKey: string, subjectKey: string, formSortOrder: number, backCallback: string): TelegramInlineKeyboard {
+export function examTimeMenu(subjectKey: string, formKeyOrSortOrder: string | number, backCallback: string): TelegramInlineKeyboard {
   return {
     inline_keyboard: [
       [
-        { text: "15 ثانية لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:15` },
-        { text: "30 ثانية لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:30` },
+        { text: "15 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:15` },
+        { text: "30 ثانية لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:30` },
       ],
       [
-        { text: "دقيقة لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:60` },
-        { text: "5 دقائق لكل سؤال", callback_data: `exam:time:${levelKey}:${subjectKey}:${formSortOrder}:300` },
+        { text: "دقيقة لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:60` },
+        { text: "5 دقائق لكل سؤال", callback_data: `exam:time:${subjectKey}:${formKeyOrSortOrder}:300` },
       ],
       [{ text: "رجوع إلى النماذج", callback_data: backCallback }],
     ],
