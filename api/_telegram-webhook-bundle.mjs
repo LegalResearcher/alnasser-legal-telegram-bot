@@ -3309,7 +3309,7 @@ var mainMenuSections = [
   { sectionKey: "legal-forms", text: "\u{1F4DD} \u0646\u0645\u0627\u0630\u062C \u0648\u0635\u064A\u063A \u0642\u0627\u0646\u0648\u0646\u064A\u0629", callbackData: "legal-forms", sortOrder: 60 },
   { sectionKey: "illustrated-legal-forms", text: "\u{1F5BC} \u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629 \u0648\u0641\u0642 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629", callbackData: "illustrated-legal-forms", sortOrder: 70 },
   { sectionKey: "contract-templates", text: "\u{1F4C4} \u0635\u064A\u063A \u0648\u0639\u0642\u0648\u062F \u0642\u0627\u0646\u0648\u0646\u064A\u0629", callbackData: "contract-templates", sortOrder: 80 },
-  { sectionKey: "exams", text: "\u{1F4DD} \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0648\u0627\u0644\u0642\u0627\u0646\u0648\u0646", callbackData: "exams", sortOrder: 90 },
+  { sectionKey: "exams", text: "\u{1F4DA} \u0628\u0646\u0643 \u0623\u0633\u0626\u0644\u0629 \u0643\u0644\u064A\u0629 \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0648\u0627\u0644\u0642\u0627\u0646\u0648\u0646", callbackData: "exams", sortOrder: 90 },
   { sectionKey: "secondary-exams", text: "\u{1F9EE} \u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u062B\u0627\u0646\u0648\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u0629", callbackData: "secondary-exams", sortOrder: 100 },
   { sectionKey: "latest", text: "\u{1F195} \u0623\u062D\u062F\u062B \u0627\u0644\u0625\u0636\u0627\u0641\u0627\u062A", callbackData: "latest", sortOrder: 110 },
   { sectionKey: "popular", text: "\u2B50 \u0627\u0644\u0623\u0643\u062B\u0631 \u0637\u0644\u0628\u064B\u0627", callbackData: "popular", sortOrder: 120 },

@@ -723,7 +723,7 @@ describe("Telegram library conversation", () => {
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("callback_data\":\"legislation");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("🔎 بحث موحّد");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("🆕 أحدث الإضافات");
-    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📝 اختبارات الشريعة والقانون");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("📚 بنك أسئلة كلية الشريعة والقانون");
     expect(JSON.stringify(messages[0]?.replyMarkup)).not.toContain("📚 القوانين اليمنية فهرس تفاعلي");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("أهم القوانين اليمنية التفاعلي");
     expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("callback_data\":\"important-laws");
@@ -945,7 +945,7 @@ describe("Telegram library conversation", () => {
     const keyboard = JSON.stringify(messages[0]?.replyMarkup);
     expect(keyboard).toContain("مكتبة الناصر");
     expect(keyboard).not.toContain("اختبارات الثانوية العامة");
-    expect(keyboard.indexOf("📝 اختبارات الشريعة والقانون")).toBeLessThan(keyboard.indexOf("مكتبة الناصر"));
+    expect(keyboard.indexOf("📚 بنك أسئلة كلية الشريعة والقانون")).toBeLessThan(keyboard.indexOf("مكتبة الناصر"));
   });
 
   it("يسجل مفتاح القسم عند فتح قسم التشريعات لدعم التحليلات المجمعة", async () => {
