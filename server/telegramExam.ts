@@ -277,9 +277,11 @@ export function examSubjectsMenu(levelKey: string, requestedPage = 1): TelegramI
 type ExamFormMenuItem = { formKey: string; formName: string; sortOrder?: number; questionCount?: number };
 
 function isAnnualExamForm(form: ExamFormMenuItem): boolean {
-  if (/^Model_/i.test(form.formKey)) return false;
+  // بعض بيانات الشريعة تستخدم Model_1 للنموذج السنوي «الموازي2025»،
+  // بينما Model_2 وما بعده أقسام تدريبية بلا سنة دراسية.
+  if (/^Model_/i.test(form.formKey) && !/20\d{2}/.test(form.formName)) return false;
   if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey)) return true;
-  return /\b20\d{2}\b/.test(form.formName);
+  return /20\d{2}/.test(form.formName);
 }
 
 function annualFormSort(left: ExamFormMenuItem, right: ExamFormMenuItem): number {
@@ -331,7 +333,11 @@ function pagedFormsMenu(
 }
 
 export function examFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {
-  return pagedFormsMenu(levelKey, subjectKey, forms.filter(isAnnualExamForm).sort(annualFormSort), requestedPage, "exam:forms", forms.some(form => !isAnnualExamForm(form)));
+  // لا نخفي النماذج التي لا تحمل سنة في القائمة الرئيسية؛ فمواد القانون
+  // تستخدم أسماء مثل «القسم الأول» و«الملكية الجزء الأول» للنماذج الأصلية.
+  // تبقى قائمة «الأسئلة التجريبية» متاحة عبر الزر المنفصل للتوافق مع التدفق السابق.
+  const availableForms = [...forms].sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.formName.localeCompare(right.formName, "ar"));
+  return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", forms.some(form => !isAnnualExamForm(form)));
 }
 
 export function examTrainingFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {

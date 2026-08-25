@@ -2961,19 +2961,9 @@ function examSubjectsMenu(levelKey, requestedPage = 1) {
   return { inline_keyboard: rows };
 }
 function isAnnualExamForm(form) {
-  if (/^Model_/i.test(form.formKey)) return false;
+  if (/^Model_/i.test(form.formKey) && !/20\d{2}/.test(form.formName)) return false;
   if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(form.formKey)) return true;
-  return /\b20\d{2}\b/.test(form.formName);
-}
-function annualFormSort(left, right) {
-  if (/^secondary_[a-z0-9_]+_model_\d+$/i.test(left.formKey) || /^secondary_[a-z0-9_]+_model_\d+$/i.test(right.formKey)) {
-    return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
-  }
-  const leftYear = Number(left.formName.match(/20\d{2}/)?.[0] ?? 9999);
-  const rightYear = Number(right.formName.match(/20\d{2}/)?.[0] ?? 9999);
-  if (leftYear !== rightYear) return leftYear - rightYear;
-  const priority = (name) => name.includes("\u0627\u0644\u0639\u0627\u0645") ? 1 : name.includes("\u0627\u0644\u0645\u0648\u0627\u0632\u064A") ? 2 : name.includes("\u0627\u0644\u0645\u062E\u062A\u0644\u0637") ? 3 : 4;
-  return priority(left.formName) - priority(right.formName) || left.formName.localeCompare(right.formName, "ar");
+  return /20\d{2}/.test(form.formName);
 }
 function annualFormDisplayName(form) {
   const year = form.formName.match(/20\d{2}/)?.[0];
@@ -3004,7 +2994,8 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
   return { inline_keyboard: rows };
 }
 function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
-  return pagedFormsMenu(levelKey, subjectKey, forms.filter(isAnnualExamForm).sort(annualFormSort), requestedPage, "exam:forms", forms.some((form) => !isAnnualExamForm(form)));
+  const availableForms = [...forms].sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.formName.localeCompare(right.formName, "ar"));
+  return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", forms.some((form) => !isAnnualExamForm(form)));
 }
 function examTrainingFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
   return pagedFormsMenu(
