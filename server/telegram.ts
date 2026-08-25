@@ -406,7 +406,7 @@ const mainMenuSections = [
   { sectionKey: "illustrated-legal-forms", text: "🖼 نماذج مصورة وفق القوانين اليمنية", callbackData: "illustrated-legal-forms", sortOrder: 70 },
   { sectionKey: "contract-templates", text: "📄 صيغ وعقود قانونية", callbackData: "contract-templates", sortOrder: 80 },
   { sectionKey: "exams", text: "📚 بنك أسئلة كلية الشريعة والقانون", callbackData: "exams", sortOrder: 90 },
-  { sectionKey: "secondary-exams", text: "🧮 اختبارات الثانوية العامة", callbackData: "secondary-exams", sortOrder: 100 },
+  { sectionKey: "secondary-exams", text: "📚 بنك أسئلة اختبارات الثانوية العامة", callbackData: "secondary-exams", sortOrder: 100 },
   { sectionKey: "latest", text: "🆕 أحدث الإضافات", callbackData: "latest", sortOrder: 110 },
   { sectionKey: "popular", text: "⭐ الأكثر طلبًا", callbackData: "popular", sortOrder: 120 },
   { sectionKey: "favorites", text: "⭐ مفضلتي", callbackData: "favorites", sortOrder: 130 },

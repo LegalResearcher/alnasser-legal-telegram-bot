@@ -944,7 +944,7 @@ describe("Telegram library conversation", () => {
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
     const keyboard = JSON.stringify(messages[0]?.replyMarkup);
     expect(keyboard).toContain("مكتبة الناصر");
-    expect(keyboard).not.toContain("اختبارات الثانوية العامة");
+    expect(keyboard).not.toContain("📚 بنك أسئلة اختبارات الثانوية العامة");
     expect(keyboard.indexOf("📚 بنك أسئلة كلية الشريعة والقانون")).toBeLessThan(keyboard.indexOf("مكتبة الناصر"));
   });
 
