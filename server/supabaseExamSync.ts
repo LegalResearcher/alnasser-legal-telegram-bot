@@ -16,7 +16,7 @@ export function levelKeyForSupabaseLevelOrder(order: number): string | undefined
   return LEVEL_KEY_BY_ORDER[order];
 }
 
-const SECONDARY_SOURCE_SUBJECT_NAMES: Record<string, string[]> = {
+export const SECONDARY_SOURCE_SUBJECT_NAMES: Record<string, string[]> = {
   "secondary-literary": [
     "التاريخ",
     "الجغرافيا",
@@ -38,7 +38,7 @@ const SECONDARY_SOURCE_SUBJECT_NAMES: Record<string, string[]> = {
   ],
 };
 
-function normalizedArabicLabel(value: string): string {
+export function normalizedArabicLabel(value: string): string {
   return value.normalize("NFKC").replace(/[ًٌٍَُِّْـ]/g, "").replace(/[إأآ]/g, "ا").replace(/\s+/g, " ").trim();
 }
 const ANNUAL_FORM_TYPES: Record<string, { key: string; name: string; priority: number }> = {

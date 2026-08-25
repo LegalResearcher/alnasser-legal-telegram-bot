@@ -22,6 +22,7 @@ import { activateTelegramGroupExamRound, cancelTelegramGroupExamRound, createTel
 import { getTelegramExamResultSummary } from "./telegramExamResults";
 import { createTelegramChannelMembershipChecker, createTelegramSender, handleTelegramUpdate, type TelegramUpdate } from "./telegram";
 import { validateTelegramWebAppInitData, verifyAndRecordTelegramPlatformVisit } from "./telegramPlatformVisit";
+import { confirmSupabaseBotHasadAccess, confirmSupabaseBotPlatformAccess, createSupabaseBotStore } from "./supabaseBotStore";
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 const PLATFORM_ORIGIN = "https://alnaseer.org";
@@ -817,7 +818,8 @@ export function registerTelegramWebhook(app: Express) {
 
     try {
       const visit = await verifyAndRecordTelegramPlatformVisit(initData, token);
-      await confirmTelegramPlatformAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      if (process.env.BOT_STORAGE_MODE === "supabase") await confirmSupabaseBotPlatformAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      else await confirmTelegramPlatformAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
       res.status(200).json({ ok: true });
     } catch (error) {
       console.error("[Telegram] Platform visit verification failed:", error instanceof Error ? error.message : "unknown error");
@@ -842,7 +844,8 @@ export function registerTelegramWebhook(app: Express) {
     try {
       const visit = validateTelegramWebAppInitData(initData, token);
       if (!visit) throw new Error("invalid_web_app_data");
-      await confirmTelegramHasadAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      if (process.env.BOT_STORAGE_MODE === "supabase") await confirmSupabaseBotHasadAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
+      else await confirmTelegramHasadAccess(visit.telegramUserId, normalizeTelegramRegion(req.body?.region));
       res.status(200).json({ ok: true });
     } catch (error) {
       console.error("[Telegram] Hasad visit verification failed:", error instanceof Error ? error.message : "unknown error");
@@ -867,7 +870,7 @@ export function registerTelegramWebhook(app: Express) {
     try {
       await handleTelegramUpdate(
         req.body as TelegramUpdate,
-        {
+        process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : {
           hasConfirmedPlatformAccess: hasConfirmedTelegramPlatformAccess,
           hasConfirmedHasadAccess: hasConfirmedTelegramHasadAccess,
           listManagedMenuItems: () => listManagedTelegramMenuItems(false),
