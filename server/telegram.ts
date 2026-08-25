@@ -1,6 +1,6 @@
 import type { LegalFolder, LegalSource, TelegramContractTemplate, TelegramContractTemplateType } from "../drizzle/schema";
 import { ALL_YEMENI_LAWS_ROOT_FOLDER_ID, FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, IMPORTANT_YEMENI_LAWS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID, LEGISLATION_ROOT_FOLDER_ID, normalizeArabicSearch } from "./db";
-import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
+import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey,   optionLabel, optionText, sendExamQuestion, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 import { createTelegramContractDocument } from "./telegramContractDocument";
 import { TELEGRAM_CONTRACT_TYPE_LABELS } from "./telegramContractTypes";
 import { storageGetSignedUrl } from "./storage";
@@ -91,6 +91,19 @@ export type TelegramManagedSectionRecord = {
 export type TelegramManagedMessageRecord = {
   messageKey: "welcome" | "about" | "help";
   content: string;
+};
+
+export type TelegramContentStatistics = {
+  questionCount: number;
+  examFormCount: number;
+  examSubjectCount: number;
+  examLevelCount: number;
+  totalExams: number;
+  userCount: number;
+  libraryFileCount: number;
+  librarySectionsCount: number;
+  libraryFilesBySection: Array<{ label: string; count: number }>;
+  lastUpdatedAt: Date;
 };
 
 export type TelegramExamSessionRecord = {
@@ -202,6 +215,7 @@ export type TelegramLibraryStore = {
   recordUsage: (telegramUserId: string, eventType: "browse" | "search" | "document_request" | "support_request", options?: { query?: string; sourceId?: number; sectionKey?: string }) => Promise<void>;
   createSupportRequest: (telegramUserId: string, chatId: string, message: string) => Promise<void>;
   getOwnerStatistics: () => Promise<{ totalEvents: number; totalSupportRequests: number; topQueries: Array<{ query: string; count: number }> }>;
+  getContentStatistics?: () => Promise<TelegramContentStatistics>;
   listNewSupportRequests: () => Promise<Array<{ id: number; message: string; createdAt: Date }>>;
   registerSubscriber: (
     chatId: string,
@@ -480,6 +494,7 @@ function mainCategoryMenu(category: "search" | "library" | "exams" | "documents"
     rows.push([{ text: "🎁 نظام الإحالة", callback_data: "premium:referral" }]);
   } else {
     rows.push([{ text: "❓ المساعدة", callback_data: "help" }], [{ text: "ℹ️ عن المكتبة", callback_data: "about" }]);
+    rows.push([{ text: "📊 إحصاءات البوت", callback_data: "stats" }]);
     rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
   }
   rows.push([{ text: "↩️ القائمة الرئيسية", callback_data: "menu" }]);
@@ -1896,6 +1911,81 @@ function ownerStatisticsText(stats: { totalEvents: number; totalSupportRequests:
   ].join("\n");
 }
 
+const contentStatisticsCache = new WeakMap<TelegramLibraryStore, { value: TelegramContentStatistics; expiresAt: number }>();
+
+async function getBotContentStatistics(store: TelegramLibraryStore, forceRefresh = false): Promise<TelegramContentStatistics> {
+  const cached = contentStatisticsCache.get(store);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+  if (!store.getContentStatistics) {
+    const visibleLevels = TELEGRAM_EXAM_CATALOG.filter(level => !level.hidden && !level.comingSoon);
+    const subjects = visibleLevels.flatMap(level => level.subjects.filter(subject => subject.hasQuestions).map(subject => ({ levelKey: level.key, subject })));
+    const forms = await Promise.all(subjects.map(async ({ levelKey, subject }) => {
+      const importedKey = getImportedExamSubjectKey(levelKey, subject.key);
+      return importedKey ? store.listExamForms(importedKey) : [];
+    }));
+    const formRows = forms.flat();
+    const questionCount = formRows.reduce((total, form) => total + Number(form.questionCount ?? 0), 0);
+    const libraryFilesBySection = [{ label: "المكتبة القانونية", count: 0 }];
+    const value: TelegramContentStatistics = {
+      questionCount,
+      examFormCount: formRows.length,
+      examSubjectCount: new Set(subjects.map(({ subject }) => subject.key)).size,
+      examLevelCount: new Set(subjects.map(({ levelKey }) => levelKey)).size,
+      totalExams: 0,
+      userCount: 0,
+      libraryFileCount: 0,
+      librarySectionsCount: 0,
+      libraryFilesBySection,
+      lastUpdatedAt: new Date(),
+    };
+    contentStatisticsCache.set(store, { value, expiresAt: Date.now() + 5 * 60_000 });
+    return value;
+  }
+  const value = await store.getContentStatistics();
+  contentStatisticsCache.set(store, { value, expiresAt: Date.now() + 5 * 60_000 });
+  return value;
+}
+
+function contentStatisticsMenu(): TelegramInlineKeyboard {
+  return {
+    inline_keyboard: [
+      [{ text: "🔄 تحديث الإحصاءات", callback_data: "stats:refresh" }],
+      [{ text: "🏠 القائمة الرئيسة", callback_data: "menu" }],
+    ],
+  };
+}
+
+function contentStatisticsText(stats: TelegramContentStatistics): string {
+  const number = (value: number) => value.toLocaleString("ar-YE");
+  const libraryLines = stats.libraryFilesBySection.filter(item => item.count > 0).map(item => `▫️ ${item.label}: ${number(item.count)}`);
+  return [
+    "📊 إحصاءات البوت",
+    "",
+    "مؤشرات المحتوى والخدمات المتاحة حاليًا",
+    "",
+    "🧠 بنك الأسئلة والاختبارات",
+    "━━━━━━━━━━━━━━",
+    `📝 الأسئلة المؤتمتة: ${number(stats.questionCount)}`,
+    `🎓 المستويات التعليمية: ${number(stats.examLevelCount)}`,
+    `📚 المواد المتاحة: ${number(stats.examSubjectCount)}`,
+    `📄 نماذج الاختبارات: ${number(stats.examFormCount)}`,
+    `✅ الاختبارات المنجزة: ${number(stats.totalExams)}`,
+    "",
+    "📚 المكتبة القانونية",
+    "━━━━━━━━━━━━━━",
+    `📦 إجمالي الملفات: ${number(stats.libraryFileCount)}`,
+    `🗂 الأقسام المتاحة: ${number(stats.librarySectionsCount)}`,
+    ...(libraryLines.length > 0 ? libraryLines : ["▫️ يجري تحديث تفاصيل المكتبة حاليًا."]),
+    "",
+    "👥 المستخدمون",
+    "━━━━━━━━━━━━━━",
+    `👤 ${number(stats.userCount)} مستخدمًا`,
+    "",
+    `🔄 آخر تحديث: ${stats.lastUpdatedAt.toLocaleString("ar-YE", { dateStyle: "medium", timeStyle: "short" })}`,
+    "الأرقام تتحدث تلقائيًا من بيانات البوت.",
+  ].join("\n");
+}
+
 export function isTelegramOwner(telegramUserId: string, ownerTelegramId = process.env.TELEGRAM_OWNER_ID) {
   return Boolean(ownerTelegramId) && telegramUserId === ownerTelegramId;
 }
@@ -2951,6 +3041,14 @@ export async function handleTelegramUpdate(
     }
     if (data === "menu") {
       await presentCallbackPage(welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
+      return;
+    }
+    if (data === "stats" || data === "stats:refresh") {
+      try {
+        await presentCallbackPage(contentStatisticsText(await getBotContentStatistics(store, data === "stats:refresh")), contentStatisticsMenu());
+      } catch {
+        await presentCallbackPage("📊 إحصاءات البوت\n\nتعذر تحديث المؤشرات حاليًا. اضغط «تحديث الإحصاءات» للمحاولة مجددًا.", contentStatisticsMenu());
+      }
       return;
     }
     if (data.startsWith("managed-premium:request:")) {

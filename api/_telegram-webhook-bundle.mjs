@@ -3345,6 +3345,7 @@ function mainCategoryMenu(category, managedSections = []) {
     rows.push([{ text: "\u{1F381} \u0646\u0638\u0627\u0645 \u0627\u0644\u0625\u062D\u0627\u0644\u0629", callback_data: "premium:referral" }]);
   } else {
     rows.push([{ text: "\u2753 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629", callback_data: "help" }], [{ text: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callback_data: "about" }]);
+    rows.push([{ text: "\u{1F4CA} \u0625\u062D\u0635\u0627\u0621\u0627\u062A \u0627\u0644\u0628\u0648\u062A", callback_data: "stats" }]);
     rows.push([{ text: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://alnaseer.org/" }], [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }]);
   }
   rows.push([{ text: "\u21A9\uFE0F \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629", callback_data: "menu" }]);
@@ -4411,6 +4412,77 @@ function ownerStatisticsText(stats) {
     queries
   ].join("\n");
 }
+var contentStatisticsCache = /* @__PURE__ */ new WeakMap();
+async function getBotContentStatistics(store, forceRefresh = false) {
+  const cached = contentStatisticsCache.get(store);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+  if (!store.getContentStatistics) {
+    const visibleLevels = TELEGRAM_EXAM_CATALOG.filter((level) => !level.hidden && !level.comingSoon);
+    const subjects = visibleLevels.flatMap((level) => level.subjects.filter((subject) => subject.hasQuestions).map((subject) => ({ levelKey: level.key, subject })));
+    const forms = await Promise.all(subjects.map(async ({ levelKey, subject }) => {
+      const importedKey = getImportedExamSubjectKey(levelKey, subject.key);
+      return importedKey ? store.listExamForms(importedKey) : [];
+    }));
+    const formRows = forms.flat();
+    const questionCount = formRows.reduce((total, form) => total + Number(form.questionCount ?? 0), 0);
+    const libraryFilesBySection = [{ label: "\u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", count: 0 }];
+    const value2 = {
+      questionCount,
+      examFormCount: formRows.length,
+      examSubjectCount: new Set(subjects.map(({ subject }) => subject.key)).size,
+      examLevelCount: new Set(subjects.map(({ levelKey }) => levelKey)).size,
+      totalExams: 0,
+      userCount: 0,
+      libraryFileCount: 0,
+      librarySectionsCount: 0,
+      libraryFilesBySection,
+      lastUpdatedAt: /* @__PURE__ */ new Date()
+    };
+    contentStatisticsCache.set(store, { value: value2, expiresAt: Date.now() + 5 * 6e4 });
+    return value2;
+  }
+  const value = await store.getContentStatistics();
+  contentStatisticsCache.set(store, { value, expiresAt: Date.now() + 5 * 6e4 });
+  return value;
+}
+function contentStatisticsMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: "\u{1F504} \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0625\u062D\u0635\u0627\u0621\u0627\u062A", callback_data: "stats:refresh" }],
+      [{ text: "\u{1F3E0} \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u0629", callback_data: "menu" }]
+    ]
+  };
+}
+function contentStatisticsText(stats) {
+  const number = (value) => value.toLocaleString("ar-YE");
+  const libraryLines = stats.libraryFilesBySection.filter((item) => item.count > 0).map((item) => `\u25AB\uFE0F ${item.label}: ${number(item.count)}`);
+  return [
+    "\u{1F4CA} \u0625\u062D\u0635\u0627\u0621\u0627\u062A \u0627\u0644\u0628\u0648\u062A",
+    "",
+    "\u0645\u0624\u0634\u0631\u0627\u062A \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0648\u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0627\u0644\u0645\u062A\u0627\u062D\u0629 \u062D\u0627\u0644\u064A\u064B\u0627",
+    "",
+    "\u{1F9E0} \u0628\u0646\u0643 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A",
+    "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+    `\u{1F4DD} \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u0645\u0624\u062A\u0645\u062A\u0629: ${number(stats.questionCount)}`,
+    `\u{1F393} \u0627\u0644\u0645\u0633\u062A\u0648\u064A\u0627\u062A \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A\u0629: ${number(stats.examLevelCount)}`,
+    `\u{1F4DA} \u0627\u0644\u0645\u0648\u0627\u062F \u0627\u0644\u0645\u062A\u0627\u062D\u0629: ${number(stats.examSubjectCount)}`,
+    `\u{1F4C4} \u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A: ${number(stats.examFormCount)}`,
+    `\u2705 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0646\u062C\u0632\u0629: ${number(stats.totalExams)}`,
+    "",
+    "\u{1F4DA} \u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629",
+    "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+    `\u{1F4E6} \u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u0645\u0644\u0641\u0627\u062A: ${number(stats.libraryFileCount)}`,
+    `\u{1F5C2} \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u0627\u0644\u0645\u062A\u0627\u062D\u0629: ${number(stats.librarySectionsCount)}`,
+    ...libraryLines.length > 0 ? libraryLines : ["\u25AB\uFE0F \u064A\u062C\u0631\u064A \u062A\u062D\u062F\u064A\u062B \u062A\u0641\u0627\u0635\u064A\u0644 \u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u062D\u0627\u0644\u064A\u064B\u0627."],
+    "",
+    "\u{1F465} \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646",
+    "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+    `\u{1F464} ${number(stats.userCount)} \u0645\u0633\u062A\u062E\u062F\u0645\u064B\u0627`,
+    "",
+    `\u{1F504} \u0622\u062E\u0631 \u062A\u062D\u062F\u064A\u062B: ${stats.lastUpdatedAt.toLocaleString("ar-YE", { dateStyle: "medium", timeStyle: "short" })}`,
+    "\u0627\u0644\u0623\u0631\u0642\u0627\u0645 \u062A\u062A\u062D\u062F\u062B \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0645\u0646 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0628\u0648\u062A."
+  ].join("\n");
+}
 function isTelegramOwner(telegramUserId, ownerTelegramId = process.env.TELEGRAM_OWNER_ID) {
   return Boolean(ownerTelegramId) && telegramUserId === ownerTelegramId;
 }
@@ -5334,6 +5406,14 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data === "menu") {
       await presentCallbackPage(welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
+      return;
+    }
+    if (data === "stats" || data === "stats:refresh") {
+      try {
+        await presentCallbackPage(contentStatisticsText(await getBotContentStatistics(store, data === "stats:refresh")), contentStatisticsMenu());
+      } catch {
+        await presentCallbackPage("\u{1F4CA} \u0625\u062D\u0635\u0627\u0621\u0627\u062A \u0627\u0644\u0628\u0648\u062A\n\n\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0624\u0634\u0631\u0627\u062A \u062D\u0627\u0644\u064A\u064B\u0627. \u0627\u0636\u063A\u0637 \xAB\u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0625\u062D\u0635\u0627\u0621\u0627\u062A\xBB \u0644\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u064B\u0627.", contentStatisticsMenu());
+      }
       return;
     }
     if (data.startsWith("managed-premium:request:")) {
@@ -7087,6 +7167,25 @@ async function insertResultIfCompleted(client, session, result) {
   });
   assertNoSupabaseError(error, "save result");
 }
+async function getSupabaseBotExamStatistics() {
+  const client = getSupabase();
+  const [formsResult, questionsResult, subjectsResult, platformStatsResult, examSummaryResult] = await Promise.all([
+    client.from("bot_exam_forms").select("id", { count: "exact", head: true }).eq("is_active", true),
+    client.from("bot_exam_questions").select("id", { count: "exact", head: true }).eq("is_active", true),
+    client.from("bot_exam_forms").select("subject_key").eq("is_active", true).limit(1e3),
+    client.from("platform_stats").select("total_exams").eq("id", 1).limit(1).maybeSingle(),
+    client.rpc("get_exam_results_summary")
+  ]);
+  assertNoSupabaseError(formsResult.error, "count forms");
+  assertNoSupabaseError(questionsResult.error, "count questions");
+  assertNoSupabaseError(subjectsResult.error, "list exam subjects");
+  assertNoSupabaseError(platformStatsResult.error, "read platform exam stats");
+  assertNoSupabaseError(examSummaryResult.error, "read exam results summary");
+  const subjectKeys = Array.from(new Set((subjectsResult.data ?? []).map((row) => row.subject_key).filter((key) => Boolean(key))));
+  const archivedExams = Number(platformStatsResult.data?.total_exams ?? 0);
+  const currentExams = Number(examSummaryResult.data?.total ?? 0);
+  return { formCount: Number(formsResult.count ?? 0), questionCount: Number(questionsResult.count ?? 0), subjectKeys, totalExams: archivedExams + currentExams };
+}
 async function listSupabaseBotExamForms(subjectKey) {
   const client = getSupabase();
   const { data, error } = await client.from("bot_exam_forms").select("form_key,form_name,sort_order").eq("subject_key", subjectKey).eq("is_active", true).order("sort_order", { ascending: true }).order("id", { ascending: true }).limit(100);
@@ -7410,6 +7509,45 @@ async function loadContracts() {
   const rows = await readAll("legal_documents", "id,file_name,display_order,is_premium,content", (query) => query.eq("category", "contract_template").order("display_order", { ascending: true }).order("id", { ascending: true }));
   return rows.map(mapContract).filter((template) => template.content.length > 0);
 }
+async function getContentStatistics() {
+  const [index2, contracts, exams, subscribers] = await Promise.all([
+    loadDriveIndex(),
+    loadContracts(),
+    getSupabaseBotExamStatistics(),
+    readAll("bot_subscribers", "telegram_user_id", (query) => query.limit(1e4))
+  ]);
+  const visibleLevels = TELEGRAM_EXAM_CATALOG.filter((level) => !level.hidden && !level.comingSoon);
+  const availableSubjectKeys = new Set(exams.subjectKeys);
+  const examLevelCount = visibleLevels.filter((level) => level.subjects.some((subject) => {
+    const importedKey = getImportedExamSubjectKey(level.key, subject.key);
+    return importedKey ? availableSubjectKeys.has(importedKey) : false;
+  })).length;
+  const fileCounts = /* @__PURE__ */ new Map();
+  for (const item of index2.sourceRows) fileCounts.set(item.collection, (fileCounts.get(item.collection) ?? 0) + 1);
+  const sections = [
+    { label: "\u0627\u0644\u0642\u0648\u0627\u0639\u062F \u0648\u0627\u0644\u0645\u0628\u0627\u062F\u0626 \u0627\u0644\u0642\u0636\u0627\u0626\u064A\u0629", collection: "judicial" },
+    { label: "\u0627\u0644\u062A\u0634\u0631\u064A\u0639\u0627\u062A \u0627\u0644\u064A\u0645\u0646\u064A\u0629", collection: "legislation" },
+    { label: "\u0623\u0647\u0645 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0627\u0644\u062A\u0641\u0627\u0639\u0644\u064A", collection: "important_yemeni_laws" },
+    { label: "\u062C\u0645\u064A\u0639 \u0627\u0644\u0642\u0648\u0627\u0646\u064A\u0646 \u0627\u0644\u064A\u0645\u0646\u064A\u0629", collection: "all_yemeni_laws" },
+    { label: "\u0646\u0645\u0627\u0630\u062C \u0648\u0635\u064A\u063A \u0642\u0627\u0646\u0648\u0646\u064A\u0629", collection: "legal_forms", staticCount: 217 },
+    { label: "\u0646\u0645\u0627\u0630\u062C \u0645\u0635\u0648\u0631\u0629", collection: "illustrated_legal_forms", staticCount: 17 },
+    { label: "\u0645\u0631\u0627\u062C\u0639 \u0645\u0645\u064A\u0632\u0629", collection: "featured_references", staticCount: 217 },
+    { label: "\u0635\u064A\u063A \u0648\u0639\u0642\u0648\u062F \u0642\u0627\u0646\u0648\u0646\u064A\u0629", collection: void 0, staticCount: contracts.length }
+  ];
+  const libraryFilesBySection = sections.map((section) => ({ label: section.label, count: section.staticCount ?? fileCounts.get(section.collection) ?? 0 }));
+  return {
+    questionCount: exams.questionCount,
+    examFormCount: exams.formCount,
+    examSubjectCount: availableSubjectKeys.size,
+    examLevelCount,
+    totalExams: exams.totalExams,
+    userCount: new Set(subscribers.map((row) => row.telegram_user_id)).size,
+    libraryFileCount: libraryFilesBySection.reduce((total, item) => total + item.count, 0),
+    librarySectionsCount: libraryFilesBySection.filter((item) => item.count > 0).length,
+    libraryFilesBySection,
+    lastUpdatedAt: /* @__PURE__ */ new Date()
+  };
+}
 async function clearSearch(chatId) {
   const { error } = await getClient().from("bot_search_sessions").delete().eq("chat_id", chatId);
   throwIfError(error, "clear search sessions");
@@ -7570,6 +7708,7 @@ function createSupabaseBotStore() {
       for (const event of events) if (event.query) queryCounts.set(event.query, (queryCounts.get(event.query) ?? 0) + 1);
       return { totalEvents: events.length, totalSupportRequests: supports.length, topQueries: Array.from(queryCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([query, count3]) => ({ query, count: count3 })) };
     },
+    getContentStatistics,
     listNewSupportRequests: async () => {
       const { data, error } = await getClient().from("bot_support_requests").select("id,message,created_at").eq("status", "new").order("created_at", { ascending: true }).limit(20);
       throwIfError(error, "list support requests");

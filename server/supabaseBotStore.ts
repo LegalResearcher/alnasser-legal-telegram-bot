@@ -11,6 +11,7 @@ import {
   YEMENI_LAWS_ROOT_FOLDER_ID,
 } from "./db";
 import { classifyTelegramContractTemplate } from "./telegramContractTypes";
+import { getImportedExamSubjectKey, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 import { getIllustratedLegalFormSource, getIllustratedLegalFormsFolderContents as getStaticIllustratedLegalFormsFolderContents } from "./illustratedLegalFormsCatalog";
 import { getLegalFormSource, getLegalFormsFolderContents as getStaticLegalFormsFolderContents } from "./legalFormsCatalog";
 import type {
@@ -25,11 +26,13 @@ import type {
   TelegramManagedMenuItemRecord,
   TelegramManagedMessageRecord,
   TelegramManagedSectionRecord,
+  TelegramContentStatistics,
 } from "./telegram";
 import {
   advanceSupabaseBotExamWrittenQuestion,
   cancelSupabaseBotExamSession,
   getSupabaseBotExamResultSummary,
+  getSupabaseBotExamStatistics,
   getSupabaseBotExamSession,
   getSupabaseBotExamSessionByPoll,
   listSupabaseBotExamForms,
@@ -254,6 +257,46 @@ async function loadContracts(): Promise<TelegramContractTemplate[]> {
   return rows.map(mapContract).filter(template => template.content.length > 0);
 }
 
+async function getContentStatistics(): Promise<TelegramContentStatistics> {
+  const [index, contracts, exams, subscribers] = await Promise.all([
+    loadDriveIndex(),
+    loadContracts(),
+    getSupabaseBotExamStatistics(),
+    readAll<{ telegram_user_id: string }>("bot_subscribers", "telegram_user_id", query => query.limit(10000)),
+  ]);
+  const visibleLevels = TELEGRAM_EXAM_CATALOG.filter(level => !level.hidden && !level.comingSoon);
+  const availableSubjectKeys = new Set(exams.subjectKeys);
+  const examLevelCount = visibleLevels.filter(level => level.subjects.some(subject => {
+    const importedKey = getImportedExamSubjectKey(level.key, subject.key);
+    return importedKey ? availableSubjectKeys.has(importedKey) : false;
+  })).length;
+  const fileCounts = new Map<SourceCollection, number>();
+  for (const item of index.sourceRows) fileCounts.set(item.collection, (fileCounts.get(item.collection) ?? 0) + 1);
+  const sections = [
+    { label: "القواعد والمبادئ القضائية", collection: "judicial" as const },
+    { label: "التشريعات اليمنية", collection: "legislation" as const },
+    { label: "أهم القوانين اليمنية التفاعلي", collection: "important_yemeni_laws" as const },
+    { label: "جميع القوانين اليمنية", collection: "all_yemeni_laws" as const },
+    { label: "نماذج وصيغ قانونية", collection: "legal_forms" as const, staticCount: 217 },
+    { label: "نماذج مصورة", collection: "illustrated_legal_forms" as const, staticCount: 17 },
+    { label: "مراجع مميزة", collection: "featured_references" as const, staticCount: 217 },
+    { label: "صيغ وعقود قانونية", collection: undefined, staticCount: contracts.length },
+  ];
+  const libraryFilesBySection = sections.map(section => ({ label: section.label, count: section.staticCount ?? fileCounts.get(section.collection!) ?? 0 }));
+  return {
+    questionCount: exams.questionCount,
+    examFormCount: exams.formCount,
+    examSubjectCount: availableSubjectKeys.size,
+    examLevelCount,
+    totalExams: exams.totalExams,
+    userCount: new Set(subscribers.map(row => row.telegram_user_id)).size,
+    libraryFileCount: libraryFilesBySection.reduce((total, item) => total + item.count, 0),
+    librarySectionsCount: libraryFilesBySection.filter(item => item.count > 0).length,
+    libraryFilesBySection,
+    lastUpdatedAt: new Date(),
+  };
+}
+
 async function clearSearch(chatId: string) {
   const { error } = await getClient().from("bot_search_sessions").delete().eq("chat_id", chatId);
   throwIfError(error, "clear search sessions");
@@ -383,6 +426,7 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     recordUsage: async (telegramUserId, eventType, options) => { const { error } = await getClient().from("bot_usage_events").insert({ telegram_user_id: telegramUserId, event_type: eventType, section_key: options?.sectionKey ?? null, query: options?.query?.slice(0, 255) ?? null, source_id: options?.sourceId ?? null }); throwIfError(error, "record usage"); },
     createSupportRequest: async (telegramUserId, chatId, message) => { const { error } = await getClient().from("bot_support_requests").insert({ telegram_user_id: telegramUserId, chat_id: chatId, message: message.trim().slice(0, 2000) }); throwIfError(error, "create support request"); },
     getOwnerStatistics: async () => { const events = await readAll<{ telegram_user_id: string; event_type: string; query: string | null }>("bot_usage_events", "telegram_user_id,event_type,query", query => query.order("created_at", { ascending: false }).limit(10000)); const supports = await readAll<{ id: number }>("bot_support_requests", "id", query => query.limit(10000)); const queryCounts = new Map<string, number>(); for (const event of events) if (event.query) queryCounts.set(event.query, (queryCounts.get(event.query) ?? 0) + 1); return { totalEvents: events.length, totalSupportRequests: supports.length, topQueries: Array.from(queryCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([query, count]) => ({ query, count })) }; },
+    getContentStatistics,
     listNewSupportRequests: async () => { const { data, error } = await getClient().from("bot_support_requests").select("id,message,created_at").eq("status", "new").order("created_at", { ascending: true }).limit(20); throwIfError(error, "list support requests"); return ((data ?? []) as Array<{ id: number; message: string; created_at: string }>).map(row => ({ id: Number(row.id), message: row.message, createdAt: dateValue(row.created_at) })); },
     registerSubscriber: async (chatId, telegramUserId, profile) => { const { error } = await getClient().from("bot_subscribers").upsert({ chat_id: chatId, telegram_user_id: telegramUserId, telegram_username: profile?.telegramUsername ?? null, telegram_first_name: profile?.telegramFirstName ?? null, telegram_last_name: profile?.telegramLastName ?? null, last_seen_at: new Date().toISOString() }, { onConflict: "chat_id" }); throwIfError(error, "register subscriber"); return true; },
     listSubscriberChatIds: async () => { const rows = await readAll<{ chat_id: string }>("bot_subscribers", "chat_id", query => query.order("chat_id", { ascending: true }).limit(10000)); return rows.map(row => row.chat_id); },

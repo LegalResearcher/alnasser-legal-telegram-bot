@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LegalFolder, LegalSource, TelegramContractTemplate } from "../drizzle/schema";
+import type { TelegramContentStatistics } from "./telegram";
 import { approximateArabicMatchScore, fallbackJudicialSearchResults, normalizeArabicSearch } from "./db";
 import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, createTelegramSender, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
 import { examPollOptionText, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
@@ -231,7 +232,7 @@ const laborContractTemplate: TelegramContractTemplate = {
 function createStore(
   platformConfirmed = true,
   initialImportantLawsAccess = false,
-  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message" | "file"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" | "hasad" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free" | "premium" | "hasad"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectionReason: string | null }>; secondaryQuranWrittenQuestion?: boolean } = {}
+  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message" | "file"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" | "hasad" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free" | "premium" | "hasad"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; contentStatistics?: TelegramContentStatistics; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectionReason: string | null }>; secondaryQuranWrittenQuestion?: boolean } = {}
 ): TelegramLibraryStore {
   let confirmed = platformConfirmed;
   const hasadConfirmed = options.hasadConfirmed ?? true;
@@ -315,6 +316,18 @@ function createStore(
     recordUsage: async (_telegramUserId, eventType, usageOptions) => { options.onUsage?.(eventType, usageOptions); },
     createSupportRequest: async () => undefined,
     getOwnerStatistics: async () => ({ totalEvents: 3, totalSupportRequests: 1, topQueries: [{ query: "مدني", count: 2 }] }),
+    getContentStatistics: async () => options.contentStatistics ?? {
+      questionCount: 1250,
+      examFormCount: 42,
+      examSubjectCount: 9,
+      examLevelCount: 3,
+      totalExams: 318,
+      userCount: 15397,
+      libraryFileCount: 240,
+      librarySectionsCount: 8,
+      libraryFilesBySection: [{ label: "نماذج وصيغ قانونية", count: 217 }, { label: "نماذج مصورة", count: 17 }],
+      lastUpdatedAt: new Date("2026-08-26T20:00:00.000Z"),
+    },
     listNewSupportRequests: async () => [],
     registerSubscriber: async chatId => {
       const firstUse = !registeredSubscriberChatIds.has(chatId);
@@ -736,6 +749,39 @@ describe("Telegram library conversation", () => {
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
     expect(messages[1]?.text).toContain("مرحباً بك في بوت الناصر القانوني");
     expect(messages[1]?.text).not.toContain("منصة معرفية وتعليمية بإشراف أ. معين الناصر");
+  });
+
+  it("يعرض إحصاءات البوت وعدد المستخدمين بصيغة بارزة ويحدث الرسالة نفسها", async () => {
+    const { sender, messages, editedMessages } = createSender();
+    const store = createStore(true, false, {
+      contentStatistics: {
+        questionCount: 1250,
+        examFormCount: 42,
+        examSubjectCount: 9,
+        examLevelCount: 3,
+        totalExams: 318,
+        userCount: 15397,
+        libraryFileCount: 240,
+        librarySectionsCount: 8,
+        libraryFilesBySection: [{ label: "نماذج وصيغ قانونية", count: 217 }],
+        lastUpdatedAt: new Date("2026-08-26T20:00:00.000Z"),
+      },
+    });
+
+    await handleTelegramUpdate({ callback_query: { id: "open-help", data: "menu:help", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
+    expect(editedMessages.at(-1)?.messageId).toBe(88);
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain('"callback_data":"stats"');
+
+    await handleTelegramUpdate({ callback_query: { id: "open-stats", data: "stats", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
+    expect(messages).toHaveLength(0);
+    expect(editedMessages.at(-1)?.text).toContain("📊 إحصاءات البوت");
+    expect(editedMessages.at(-1)?.text).toContain("١٥٬٣٩٧ مستخدمًا");
+    expect(editedMessages.at(-1)?.text).toContain("✅ الاختبارات المنجزة: ٣١٨");
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("stats:refresh");
+
+    await handleTelegramUpdate({ callback_query: { id: "refresh-stats", data: "stats:refresh", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
+    expect(editedMessages).toHaveLength(3);
+    expect(editedMessages.at(-1)?.messageId).toBe(88);
   });
 
   it("يسجل رابط الإحالة في أول بدء ويشرح متابعة الإحالات للمستخدم", async () => {
