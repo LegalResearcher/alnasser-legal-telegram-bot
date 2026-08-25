@@ -1,5 +1,5 @@
 import express from "express";
-import { registerTelegramWebhook } from "../../server/telegramWebhook.ts";
+import { registerTelegramWebhook } from "./telegramWebhook.ts";
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
