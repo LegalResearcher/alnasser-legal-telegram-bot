@@ -775,7 +775,7 @@ describe("Telegram library conversation", () => {
     expect(messages).toHaveLength(0);
     expect(editedMessages.at(-1)?.text).toContain("📊 إحصاءات البوت");
     expect(editedMessages.at(-1)?.text).toContain("٦١٬٩٠٠ مستخدمًا");
-    expect(editedMessages.at(-1)?.text).toContain("✅ الاختبارات المنجزة: ١٥٬٢٣٣");
+    expect(editedMessages.at(-1)?.text).toContain("✅ ١٥٬٢٣٣ اختبارًا منجزًا");
     expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("stats:refresh");
 
     await handleTelegramUpdate({ callback_query: { id: "refresh-stats", data: "stats:refresh", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
