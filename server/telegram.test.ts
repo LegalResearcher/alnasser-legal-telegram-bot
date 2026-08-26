@@ -783,6 +783,26 @@ describe("Telegram library conversation", () => {
     expect(editedMessages.at(-1)?.messageId).toBe(88);
   });
 
+  it("يعرض أوصاف بنوك الاختبارات المعتمدة في القوائم الثلاث", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore();
+
+    await handleTelegramUpdate({ callback_query: { id: "general-exams-description", data: "menu:exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("📝 بنك الأسئلة والاختبارات الشامل");
+    expect(messages.at(-1)?.text).toContain("المرجع الرقمي المعتمد والمصمم وفقاً لنماذج الامتحانات النهائية للأعوام السابقة.");
+    expect(messages.at(-1)?.text).toContain("الرجاء اختيار البنك التعليمي المطلوب للبدء.");
+
+    await handleTelegramUpdate({ callback_query: { id: "sharia-exams-description", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون");
+    expect(messages.at(-1)?.text).toContain("بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون عبر المستويات الدراسية الأربعة");
+    expect(messages.at(-1)?.text).toContain("يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.");
+
+    await handleTelegramUpdate({ callback_query: { id: "secondary-exams-description", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("📝 بنك التقييم الذكي لشهادة الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("بنك اختبارات رقمي مؤتمت موجه لطلاب الثالث الثانوي  (بفرعية العلمي والأدبي)");
+    expect(messages.at(-1)?.text).toContain("يرجى اختيار الفرع أو المادة الدراسية من القائمة أدناه، أو استخدام الأمر المباشر.");
+  });
+
   it("يسجل رابط الإحالة في أول بدء ويشرح متابعة الإحالات للمستخدم", async () => {
     const referrals: Array<{ referrer: string; referee: string; chat: string }> = [];
     const { sender, messages } = createSender();
@@ -857,9 +877,9 @@ describe("Telegram library conversation", () => {
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
     await handleTelegramUpdate({ callback_query: { id: "exam-free-hasad", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("📝 اختبارات الشريعة والقانون");
-    expect(response?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.");
-    expect(response?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(response?.text).toContain("📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون");
+    expect(response?.text).toContain("بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون عبر المستويات الدراسية الأربعة");
+    expect(response?.text).toContain("يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
@@ -869,7 +889,7 @@ describe("Telegram library conversation", () => {
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
     await handleTelegramUpdate({ callback_query: { id: "secondary-free-hasad", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("اختبارات الثانوية العامة");
+    expect(response?.text).toContain("بنك التقييم الذكي لشهادة الثانوية العامة");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
@@ -883,7 +903,7 @@ describe("Telegram library conversation", () => {
     });
     await handleTelegramUpdate({ callback_query: { id: "exam-free", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("اختر المادة من القائمة");
+    expect(response?.text).toContain("يرجى اختيار المادة الدراسية");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(JSON.stringify(response?.replyMarkup)).not.toContain("premium:request:sharia_exams");
   });
@@ -1092,9 +1112,9 @@ describe("Telegram library conversation", () => {
 
     await callback("secondary-menu", "secondary-exams");
     const sectionsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(messages.at(-1)?.text).toContain("🧮 اختبارات الثانوية العامة");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م");
-    expect(messages.at(-1)?.text).toContain("اختر القسم المطلوب.");
+    expect(messages.at(-1)?.text).toContain("📝 بنك التقييم الذكي لشهادة الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("نماذج اختبارات أوائل الجمهورية اليمنية للعام الدراسي 2025-2026م");
+    expect(messages.at(-1)?.text).toContain("يرجى اختيار الفرع أو المادة الدراسية من القائمة أدناه، أو استخدام الأمر المباشر.");
     expect(sectionsMenu).toContain("exam:level:secondary-literary");
     expect(sectionsMenu).toContain("exam:level:secondary-scientific");
     expect(sectionsMenu).not.toContain("exam:subject:secondary:");
@@ -1210,9 +1230,9 @@ describe("Telegram library conversation", () => {
     );
 
     await callback("exam-menu", "exams");
-    expect(messages[0]?.text).toContain("📝 اختبارات الشريعة والقانون");
-    expect(messages[0]?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية");
-    expect(messages[0]?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(messages[0]?.text).toContain("📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون");
+    expect(messages[0]?.text).toContain("بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون");
+    expect(messages[0]?.text).toContain("يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.");
     expect(messages[0]?.text).not.toContain("/newquiz");
     expect(messages[0]?.text).not.toContain("/quizzes");
     expect(messages[0]?.text).not.toContain("/stop");
