@@ -8425,7 +8425,7 @@ function registerTelegramWebhook(app2) {
     try {
       if (process.env.BOT_STORAGE_MODE === "supabase") {
         const [statistics, usage] = await Promise.all([getSupabaseBotAdminStatistics(30), createSupabaseBotStore().getOwnerStatistics()]);
-        res.status(200).json({ ok: true, ...statistics, firstSubscribedAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
+        res.status(200).json({ ok: true, storageMode: "supabase", ...statistics, firstSubscribedAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
         return;
       }
       const stats = await getTelegramOwnerStatistics();
@@ -8821,6 +8821,10 @@ function registerTelegramWebhook(app2) {
     const scheduledFor = normalizeScheduledBroadcastTime(req.body?.scheduledFor);
     if (!adminUserId || req.body?.confirmation !== "SCHEDULE" || !Number.isInteger(id) || id < 1 || !scheduledFor) {
       res.status(400).json({ ok: false, error: "invalid_schedule" });
+      return;
+    }
+    if (process.env.BOT_STORAGE_MODE === "supabase") {
+      res.status(409).json({ ok: false, error: "schedule_unavailable_supabase" });
       return;
     }
     const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : void 0;
