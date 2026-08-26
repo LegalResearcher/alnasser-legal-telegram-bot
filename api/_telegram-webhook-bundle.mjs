@@ -3304,18 +3304,21 @@ function managedItemsRows(managedItems) {
   return [...managedItems].sort((left, right) => left.rowIndex - right.rowIndex || left.sortOrder - right.sortOrder || left.id - right.id).map((item) => [{ text: item.label, ...item.actionType === "url" && item.accessMode === "free" ? { url: item.actionValue } : { callback_data: `managed:${item.id}` } }]);
 }
 function mainMenu(managedItems = [], managedSections = []) {
-  return {
-    inline_keyboard: [
-      [{ text: "\u{1F50E} \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A", callback_data: "menu:search" }, { text: "\u{1F4DA} \u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", callback_data: "menu:library" }],
-      [{ text: "\u{1F4DD} \u0628\u0646\u0643 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A", callback_data: "menu:exams" }, { text: "\u{1F4C4} \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0648\u0627\u0644\u0635\u064A\u063A \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", callback_data: "menu:documents" }],
-      [{ text: "\u{1F4CC} \u0627\u0644\u0645\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0645\u064A\u0632\u0629", callback_data: "menu:featured" }, { text: "\u{1F6E0} \u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0648\u0627\u0644\u0623\u062F\u0648\u0627\u062A", callback_data: "menu:services" }],
-      [{ text: "\u{1F4CA} \u0625\u062D\u0635\u0627\u0621\u0627\u062A \u0627\u0644\u0628\u0648\u062A", callback_data: "stats" }],
-      [{ text: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0628\u0648\u062A \u0648\u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629", callback_data: "menu:help" }],
-      ...managedItemsRows(managedItems),
-      [{ text: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://alnaseer.org/" }],
-      [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }]
-    ]
-  };
+  const overrides = sectionOverridesMap(managedSections);
+  const section = (key, fallbackText, callbackData) => configuredSectionButton(key, fallbackText, callbackData, overrides);
+  const rows = [];
+  const firstRow = [section("menu:search", "\u{1F50E} \u0627\u0644\u0628\u062D\u062B \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A", "menu:search"), section("menu:library", "\u{1F4DA} \u0627\u0644\u0645\u0643\u062A\u0628\u0629 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", "menu:library")].filter(Boolean);
+  const secondRow = [section("menu:exams", "\u{1F4DD} \u0628\u0646\u0643 \u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0648\u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631\u0627\u062A", "menu:exams"), section("menu:documents", "\u{1F4C4} \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0648\u0627\u0644\u0635\u064A\u063A \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", "menu:documents")].filter(Boolean);
+  const thirdRow = [section("menu:featured", "\u{1F4CC} \u0627\u0644\u0645\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0645\u064A\u0632\u0629", "menu:featured"), section("menu:services", "\u{1F6E0} \u0627\u0644\u062E\u062F\u0645\u0627\u062A \u0648\u0627\u0644\u0623\u062F\u0648\u0627\u062A", "menu:services")].filter(Boolean);
+  if (firstRow.length) rows.push(firstRow);
+  if (secondRow.length) rows.push(secondRow);
+  if (thirdRow.length) rows.push(thirdRow);
+  rows.push([{ text: "\u{1F4CA} \u0625\u062D\u0635\u0627\u0621\u0627\u062A \u0627\u0644\u0628\u0648\u062A", callback_data: "stats" }]);
+  const helpButton = section("menu:help", "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0628\u0648\u062A \u0648\u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629", "menu:help");
+  if (helpButton) rows.push([helpButton]);
+  rows.push(...managedItemsRows(managedItems));
+  rows.push([{ text: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://alnaseer.org/" }], [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }]);
+  return { inline_keyboard: rows };
 }
 function mainCategoryMenu(category, managedSections = []) {
   const overrides = sectionOverridesMap(managedSections);
@@ -3343,7 +3346,8 @@ function mainCategoryMenu(category, managedSections = []) {
   } else if (category === "services") {
     const supportButton = section("support", "\u{1F4AC} \u062A\u0648\u0627\u0635\u0644 \u0648\u062F\u0639\u0645");
     if (supportButton) rows.push([supportButton]);
-    rows.push([{ text: "\u{1F381} \u0646\u0638\u0627\u0645 \u0627\u0644\u0625\u062D\u0627\u0644\u0629", callback_data: "premium:referral" }]);
+    const referralButton = section("referral", "\u{1F381} \u0646\u0638\u0627\u0645 \u0627\u0644\u0625\u062D\u0627\u0644\u0629", "premium:referral");
+    if (referralButton) rows.push([referralButton]);
   } else {
     rows.push([{ text: "\u2753 \u0627\u0644\u0645\u0633\u0627\u0639\u062F\u0629", callback_data: "help" }], [{ text: "\u2139\uFE0F \u0639\u0646 \u0627\u0644\u0645\u0643\u062A\u0628\u0629", callback_data: "about" }]);
     rows.push([{ text: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://alnaseer.org/" }], [{ text: "\u0642\u0646\u0627\u0629 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", url: "https://t.me/muen2025" }]);
@@ -3974,18 +3978,39 @@ function isReferralProtectedCallback(data) {
   return data === "exams" || data === "secondary-exams" || data.startsWith("exam:");
 }
 function managedSectionAccessMode(managedSections, sectionKey) {
-  if (sectionKey === "exams" || sectionKey === "secondary-exams") return "hasad";
   const configured = managedSections.find((section) => section.sectionKey === sectionKey)?.accessMode;
-  if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
-  return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
+  if (configured === "free" || configured === "premium" || configured === "referral" || configured === "hasad") return configured;
+  return sectionKey === "judicial" || sectionKey === "contract-templates" || sectionKey === "exams" || sectionKey === "secondary-exams" ? "hasad" : "premium";
 }
 function hasFreeManagedSectionAccess(managedSections, sectionKey) {
   return managedSectionAccessMode(managedSections, sectionKey) === "free";
 }
 function managedSectionForCallback(data) {
+  const fixedSections = /* @__PURE__ */ new Set([
+    "browse",
+    "judicial",
+    "legislation",
+    "legal-forms",
+    "illustrated-legal-forms",
+    "contract-templates",
+    "latest",
+    "popular",
+    "featured",
+    "favorites",
+    "support",
+    "important-laws",
+    "menu:search",
+    "menu:library",
+    "menu:exams",
+    "menu:documents",
+    "menu:featured",
+    "menu:services",
+    "menu:help"
+  ]);
+  if (fixedSections.has(data)) return data;
   if (isHasadProtectedCallback(data)) return hasadProtectedSectionKey(data);
   if (isReferralProtectedCallback(data)) return data === "secondary-exams" ? "secondary-exams" : "exams";
-  if (data === "important-laws" || data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
+  if (data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
   return void 0;
 }
 function isHasadProtectedCallback(data) {
@@ -5160,7 +5185,7 @@ ${referralHistoryText(history)}`, referralMenu());
       await sender.sendMessage(chatId2, gateText, hasadAccessMenu());
       return;
     }
-    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && callbackSectionMode === "premium" && !await store.hasReferralPremiumAccess(telegramUserId2, "sharia_exams")) {
+    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !await store.hasReferralPremiumAccess(telegramUserId2, "sharia_exams")) {
       await sender.sendMessage(chatId2, `\u{1F510} \u0627\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 ${callbackSectionKey === "judicial" ? "\u0627\u0644\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0642\u0636\u0627\u0626\u064A\u0629" : "\u0627\u0644\u0635\u064A\u063A \u0648\u0627\u0644\u0639\u0642\u0648\u062F \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629"} \u064A\u062A\u0627\u062D \u0628\u0639\u062F \u0627\u0643\u062A\u0645\u0627\u0644 5 \u0625\u062D\u0627\u0644\u0627\u062A \u0645\u0624\u0647\u0644\u0629.`, referralMenu());
       return;
     }
@@ -5170,11 +5195,12 @@ ${referralHistoryText(history)}`, referralMenu());
       const mode = managedSectionAccessMode(managedSections, "important-laws");
       if (mode === "free") return true;
       if (mode === "hasad") return store.hasConfirmedHasadAccess(telegramUserId2);
+      if (mode === "referral") return store.hasReferralPremiumAccess(telegramUserId2, "sharia_exams");
       return store.hasImportantYemeniLawsAccess(telegramUserId2);
     };
-    if (isReferralProtectedCallback(data) && callbackSectionMode === "premium" && !isFreeExamSection && !await store.hasReferralPremiumAccess(telegramUserId2, examAccessScope(data))) {
+    if (isReferralProtectedCallback(data) && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !isFreeExamSection && !await store.hasReferralPremiumAccess(telegramUserId2, examAccessScope(data))) {
       const scope = examAccessScope(data);
-      await sender.sendMessage(chatId2, optionalExamSupportText(scope), optionalExamSupportMenu(scope));
+      await sender.sendMessage(chatId2, callbackSectionMode === "referral" ? `\u{1F381} \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0642\u0633\u0645\u060C \u0623\u0643\u0645\u0644 5 \u0625\u062D\u0627\u0644\u0627\u062A \u0645\u0624\u0647\u0644\u0629 \u0644\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A.` : optionalExamSupportText(scope), callbackSectionMode === "referral" ? referralMenu() : optionalExamSupportMenu(scope));
       return;
     }
     if (data === "gexam:open") {
@@ -5464,11 +5490,12 @@ ${referralHistoryText(history)}`, referralMenu());
         await sender.sendMessage(chatId2, `\u{1F510} \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 ${item.label}\u060C \u064A\u0644\u0632\u0645 \u062A\u0648\u062B\u064A\u0642 \u0632\u064A\u0627\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0644\u0645\u0648\u0642\u0639 \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0639\u0628\u0631 \u0627\u0644\u0632\u0631 \u0627\u0644\u062A\u0627\u0644\u064A. \u0628\u0639\u062F \u0627\u0644\u062A\u0648\u062B\u064A\u0642 \u0644\u0646 \u062A\u0638\u0647\u0631 \u0644\u0643 \u0647\u0630\u0647 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649.`, hasadAccessMenu());
         return;
       }
-      if (item.accessMode === "premium" && !await store.hasManagedMenuItemPremiumAccess(telegramUserId2, itemId)) {
-        await sender.sendMessage(chatId2, `\u{1F510} \u0627\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 ${item.label} \u064A\u062A\u0627\u062D \u0639\u0628\u0631 \u0627\u0644\u062F\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631\u064A \u0623\u0648 \u0627\u0644\u0625\u062D\u0627\u0644\u0629. \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A \u0644\u0645\u062F\u0629 \u0634\u0647\u0631 \u0639\u0646\u062F \u0627\u0643\u062A\u0645\u0627\u0644 5 \u0625\u062D\u0627\u0644\u0627\u062A \u0645\u0624\u0647\u0644\u0629.`, {
+      if ((item.accessMode === "premium" || item.accessMode === "referral") && !await store.hasManagedMenuItemPremiumAccess(telegramUserId2, itemId) && !(item.accessMode === "referral" && await store.hasReferralPremiumAccess(telegramUserId2, "sharia_exams"))) {
+        const referralOnly = item.accessMode === "referral";
+        await sender.sendMessage(chatId2, referralOnly ? `\u{1F381} \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 ${item.label}\u060C \u0623\u0643\u0645\u0644 5 \u0625\u062D\u0627\u0644\u0627\u062A \u0645\u0624\u0647\u0644\u0629 \u0644\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A.` : `\u{1F510} \u0627\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 ${item.label} \u064A\u062A\u0627\u062D \u0639\u0628\u0631 \u0627\u0644\u062F\u0639\u0645 \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631\u064A \u0623\u0648 \u0627\u0644\u0625\u062D\u0627\u0644\u0629. \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A \u0644\u0645\u062F\u0629 \u0634\u0647\u0631 \u0639\u0646\u062F \u0627\u0643\u062A\u0645\u0627\u0644 5 \u0625\u062D\u0627\u0644\u0627\u062A \u0645\u0624\u0647\u0644\u0629.`, {
           inline_keyboard: [
             [{ text: "\u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A \u0628\u0627\u0644\u0625\u062D\u0627\u0644\u0629", callback_data: "premium:referral" }],
-            [{ text: "\u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0627\u0644\u0645\u062F\u0641\u0648\u0639", callback_data: `managed-premium:request:${itemId}` }],
+            ...!referralOnly ? [[{ text: "\u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0627\u0644\u0645\u062F\u0641\u0648\u0639", callback_data: `managed-premium:request:${itemId}` }]] : [],
             [{ text: "\u0631\u062C\u0648\u0639", callback_data: "start" }]
           ]
         });
@@ -7437,7 +7464,19 @@ async function loadDriveIndex() {
     readAll("drive_folders", "id,drive_id,name,parent_id,depth,order_index,is_premium,free_download", (query) => query.order("depth", { ascending: true }).order("order_index", { ascending: true }).order("id", { ascending: true })),
     readAll("drive_files", "id,drive_id,name,folder_id,mime_type,view_url,embed_url,download_url,order_index,is_premium,view_count,download_count,extracted_title,download_locked,created_at,updated_at", (query) => query.order("folder_id", { ascending: true }).order("order_index", { ascending: true }).order("id", { ascending: true }))
   ]);
-  const foldersByDriveId = new Map(folders.map((folder) => [folder.drive_id, folder]));
+  const [sourceOverrideResult, folderOverrideResult] = await Promise.all([
+    getClient().from("bot_source_overrides").select("source_id,title,description,sort_order,is_featured,enabled").limit(1e4),
+    getClient().from("bot_folder_overrides").select("folder_id,name,sort_order,enabled").limit(1e4)
+  ]);
+  throwIfError(sourceOverrideResult.error, "read source overlays");
+  throwIfError(folderOverrideResult.error, "read folder overlays");
+  const sourceOverrides = new Map((sourceOverrideResult.data ?? []).map((row) => [Number(row.source_id), row]));
+  const folderOverrides = new Map((folderOverrideResult.data ?? []).map((row) => [Number(row.folder_id), row]));
+  const overlaidFolders = folders.map((folder) => {
+    const override = folderOverrides.get(Number(folder.id));
+    return { ...folder, name: typeof override?.name === "string" && override.name.trim() ? override.name.trim() : folder.name, order_index: override?.sort_order ?? folder.order_index };
+  }).filter((folder) => folderOverrides.get(Number(folder.id))?.enabled !== false);
+  const foldersByDriveId = new Map(overlaidFolders.map((folder) => [folder.drive_id, folder]));
   const collectionCache = /* @__PURE__ */ new Map();
   const rootCollection = new Map(Object.entries(ROOT_BY_COLLECTION).map(([collection, root]) => [root.id, collection]));
   const collectionForFolder = (driveId) => {
@@ -7472,9 +7511,13 @@ async function loadDriveIndex() {
   };
   const sourceRows = files.map((file) => {
     const collection = collectionForFolder(file.folder_id);
-    return collection ? { file, collection, source: mapFile(file, collection, file.folder_id ? folderPath(file.folder_id) : "") } : void 0;
+    if (!collection) return void 0;
+    const source = mapFile(file, collection, file.folder_id ? folderPath(file.folder_id) : "");
+    const override = sourceOverrides.get(source.id);
+    if (override?.enabled === false) return void 0;
+    return { file, collection, source: { ...source, title: typeof override?.title === "string" && override.title.trim() ? override.title.trim() : source.title, description: typeof override?.description === "string" && override.description.trim() ? override.description.trim() : source.description, sortOrder: Number.isInteger(override?.sort_order) ? Number(override.sort_order) : source.sortOrder, isFeatured: typeof override?.is_featured === "boolean" ? override.is_featured : source.isFeatured } };
   }).filter((value) => Boolean(value));
-  return { folders, files, foldersByDriveId, collectionForFolder, folderPath, sourceRows };
+  return { folders: overlaidFolders, files, foldersByDriveId, collectionForFolder, folderPath, sourceRows };
 }
 function virtualFolder(collection) {
   const root = ROOT_BY_COLLECTION[collection];
@@ -7598,10 +7641,6 @@ async function hasScopedAccess(telegramUserId, accessScope, managedMenuItemId) {
   throwIfError(error, "check scoped access");
   const now = Date.now();
   return (data ?? []).some((row) => (managedMenuItemId === void 0 || Number(row.managed_menu_item_id) === managedMenuItemId) && (!row.expires_at || new Date(row.expires_at).getTime() > now));
-}
-async function upsertScopedAccess(telegramUserId, accessScope, approvedBy, managedMenuItemId = null) {
-  const { error } = await getClient().from("bot_user_access").upsert({ telegram_user_id: telegramUserId, access_scope: accessScope, managed_menu_item_id: managedMenuItemId, approved_by: approvedBy, expires_at: null, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "telegram_user_id,access_scope,managed_menu_item_id" });
-  throwIfError(error, "grant scoped access");
 }
 function mapRound(row) {
   return { id: Number(row.id), chatId: String(row.chat_id), creatorTelegramUserId: row.creator_telegram_user_id, subjectKey: row.subject_key, sectionKey: row.section_key, status: row.status, questionIndex: Number(row.question_index), timeLimitSeconds: Number(row.time_limit_seconds), activePollId: row.active_poll_id, startedAt: row.started_at ? dateValue(row.started_at) : null };
@@ -7730,14 +7769,14 @@ function createSupabaseBotStore() {
     },
     createBroadcastDraft: async (input) => {
       const subscriberIds = await store.listSubscriberChatIds();
-      const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4e3) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1e3) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count").limit(1).maybeSingle();
+      const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4e3) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1e3) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").limit(1).maybeSingle();
       throwIfError(error, "create broadcast");
-      return data ? { id: Number(data.id), ownerTelegramUserId: data.owner_telegram_user_id, kind: data.kind, message: data.message, fileId: data.file_id, fileName: data.file_name, caption: data.caption, status: data.status, recipientCount: Number(data.recipient_count) } : void 0;
+      return data ? { id: Number(data.id), ownerTelegramUserId: data.owner_telegram_user_id, kind: data.kind, message: data.message, fileId: data.file_id, fileName: data.file_name, caption: data.caption, status: data.status, recipientCount: Number(data.recipient_count), scheduledFor: data.scheduled_for ? dateValue(data.scheduled_for) : null } : void 0;
     },
     getBroadcastDraft: async (id, ownerTelegramUserId) => {
-      const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle();
+      const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle();
       throwIfError(error, "get broadcast");
-      return data ? { id: Number(data.id), ownerTelegramUserId: data.owner_telegram_user_id, kind: data.kind, message: data.message, fileId: data.file_id, fileName: data.file_name, caption: data.caption, status: data.status, recipientCount: Number(data.recipient_count) } : void 0;
+      return data ? { id: Number(data.id), ownerTelegramUserId: data.owner_telegram_user_id, kind: data.kind, message: data.message, fileId: data.file_id, fileName: data.file_name, caption: data.caption, status: data.status, recipientCount: Number(data.recipient_count), scheduledFor: data.scheduled_for ? dateValue(data.scheduled_for) : null } : void 0;
     },
     cancelBroadcastDraft: async (id, ownerTelegramUserId) => {
       const { data, error } = await getClient().from("bot_broadcasts").update({ status: "cancelled", completed_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").select("id");
@@ -7830,29 +7869,8 @@ function createSupabaseBotStore() {
       throwIfError(error, "create subscription request");
       return data ? { id: Number(data.id), created: true } : void 0;
     },
-    approveImportantYemeniLawsSubscriptionRequest: async (requestId, ownerTelegramUserId) => {
-      const client = getClient();
-      const pending = await client.from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id").eq("id", requestId).eq("status", "pending").limit(1).maybeSingle();
-      throwIfError(pending.error, "find subscription request");
-      if (!pending.data) return void 0;
-      const request = pending.data;
-      const { data, error } = await client.from("bot_subscription_requests").update({ status: "approved", reviewed_by: ownerTelegramUserId, reviewed_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", requestId).eq("status", "pending").select("id");
-      throwIfError(error, "approve subscription request");
-      if (!Array.isArray(data) || data.length === 0) return void 0;
-      if (request.access_scope === "important_laws") await upsertScopedAccess(request.telegram_user_id, request.managed_menu_item_id ? "managed_menu" : "important_laws", ownerTelegramUserId, request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null);
-      else await upsertScopedAccess(request.telegram_user_id, request.access_scope, ownerTelegramUserId);
-      return { telegramUserId: request.telegram_user_id, chatId: request.chat_id, accessScope: request.access_scope, managedMenuItemId: request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null };
-    },
-    rejectImportantYemeniLawsSubscriptionRequest: async (requestId, ownerTelegramUserId) => {
-      const { data: pending, error: findError } = await getClient().from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id").eq("id", requestId).eq("status", "pending").limit(1).maybeSingle();
-      throwIfError(findError, "find subscription request");
-      if (!pending) return void 0;
-      const { data, error } = await getClient().from("bot_subscription_requests").update({ status: "rejected", reviewed_by: ownerTelegramUserId, reviewed_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", requestId).eq("status", "pending").select("id");
-      throwIfError(error, "reject subscription request");
-      if (!Array.isArray(data) || data.length === 0) return void 0;
-      const request = pending;
-      return { telegramUserId: request.telegram_user_id, chatId: request.chat_id, accessScope: request.access_scope, managedMenuItemId: request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null };
-    },
+    approveImportantYemeniLawsSubscriptionRequest: (requestId, ownerTelegramUserId) => decideSupabaseSubscriptionRequest(requestId, "approve", ownerTelegramUserId),
+    rejectImportantYemeniLawsSubscriptionRequest: (requestId, ownerTelegramUserId) => decideSupabaseSubscriptionRequest(requestId, "reject", ownerTelegramUserId),
     listPendingImportantYemeniLawsSubscriptionRequests: async () => {
       const { data, error } = await getClient().from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id,telegram_username,telegram_first_name,telegram_last_name,payment_method,created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(20);
       throwIfError(error, "list pending subscriptions");
@@ -7993,7 +8011,7 @@ async function createSupabaseBotManagedMenuItem(input, adminUserId) {
   const actionType = input?.actionType;
   const actionValue = typeof input?.actionValue === "string" ? input.actionValue.trim().slice(0, 4e3) : "";
   if (!label || !["url", "message", "file"].includes(actionType) || !actionValue) return void 0;
-  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
+  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "referral", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
   const { data, error } = await getClient().from("bot_managed_menu_items").insert(payload).select("id,label,action_type,action_value,row_index,sort_order,access_mode,enabled").limit(1).maybeSingle();
   throwIfError(error, "create managed menu item");
   if (!data) return void 0;
@@ -8008,7 +8026,7 @@ async function updateSupabaseBotManagedMenuItem(id, input, adminUserId) {
   if (typeof input?.actionValue === "string" && input.actionValue.trim()) patch.action_value = input.actionValue.trim().slice(0, 4e3);
   if (Number.isInteger(input?.rowIndex)) patch.row_index = input.rowIndex;
   if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
-  if (["free", "premium", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
+  if (["free", "premium", "referral", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
   if (typeof input?.enabled === "boolean") patch.enabled = input.enabled;
   if (Object.keys(patch).length === 0) return void 0;
   patch.updated_at = (/* @__PURE__ */ new Date()).toISOString();
@@ -8033,7 +8051,7 @@ async function listSupabaseBotManagedSections() {
 async function updateSupabaseBotManagedSection(sectionKey, input, adminUserId) {
   const key = sectionKey.trim().slice(0, 64);
   if (!key) return void 0;
-  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "referral", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
   const { data, error } = await getClient().from("bot_managed_sections").upsert(payload, { onConflict: "section_key" }).select("section_key,display_label,enabled,access_mode,sort_order").limit(1).maybeSingle();
   throwIfError(error, "update managed section");
   if (!data) return void 0;
@@ -8055,9 +8073,25 @@ async function updateSupabaseBotManagedMessage(messageKey, content, adminUserId)
   return mapManagedMessage(data);
 }
 async function listSupabaseBotBroadcasts(limit = 20) {
-  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
+  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,scheduled_for,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
   throwIfError(error, "list broadcasts");
-  return (data ?? []).map((row) => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
+  return (data ?? []).map((row) => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), scheduledFor: row.scheduled_for ? dateValue(row.scheduled_for) : null, createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
+}
+async function scheduleSupabaseBotBroadcast(id, ownerTelegramUserId, scheduledFor) {
+  if (!Number.isInteger(id) || id < 1 || !ownerTelegramUserId || scheduledFor.getTime() <= Date.now()) return false;
+  const { data, error } = await getClient().from("bot_broadcasts").update({ scheduled_for: scheduledFor.toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").is("scheduled_for", null).select("id").limit(1);
+  throwIfError(error, "schedule broadcast");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(ownerTelegramUserId, "schedule", "broadcast", id, { scheduledFor: scheduledFor.toISOString() });
+  return true;
+}
+async function cancelSupabaseBotBroadcastSchedule(id, ownerTelegramUserId) {
+  if (!Number.isInteger(id) || id < 1 || !ownerTelegramUserId) return false;
+  const { data, error } = await getClient().from("bot_broadcasts").update({ scheduled_for: null }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").not("scheduled_for", "is", null).select("id").limit(1);
+  throwIfError(error, "cancel broadcast schedule");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(ownerTelegramUserId, "cancel_schedule", "broadcast", id, {});
+  return true;
 }
 async function listSupabaseBotAdminAuditLogs(limit = 100) {
   const { data, error } = await getClient().from("bot_admin_audit_logs").select("id,admin_user_id,action,entity_type,entity_id,details,created_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(200, limit)));
@@ -8114,6 +8148,145 @@ async function confirmSupabaseBotPlatformAccess(telegramUserId, region) {
 async function confirmSupabaseBotHasadAccess(telegramUserId, region) {
   const { error } = await getClient().from("bot_hasad_access").upsert({ telegram_user_id: telegramUserId, visited_at: (/* @__PURE__ */ new Date()).toISOString(), region: region ?? null }, { onConflict: "telegram_user_id" });
   throwIfError(error, "confirm Hasad access");
+}
+async function listSupabaseBotManagedFolders(queryText = "") {
+  const index2 = await loadDriveIndex();
+  const needle = normalizeSearch(queryText);
+  return index2.folders.map((row) => {
+    const collection = index2.collectionForFolder(row.drive_id);
+    return collection ? mapFolder(row, collection, index2.folderPath(row.drive_id)) : void 0;
+  }).filter((folder) => Boolean(folder)).filter((folder) => !needle || normalizeSearch(`${folder.name} ${folder.path} ${folder.collection}`).includes(needle)).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)).slice(0, 200).map((folder) => ({ id: folder.id, name: folder.name, collection: folder.collection, sortOrder: folder.sortOrder, driveFolderId: folder.driveFolderId, parentDriveFolderId: folder.parentDriveFolderId }));
+}
+async function listSupabaseBotManagedSources(queryText = "", page = 1) {
+  const index2 = await loadDriveIndex();
+  const needle = normalizeSearch(queryText);
+  const all = index2.sourceRows.map((item) => item.source).filter((source) => !needle || normalizeSearch(`${source.title} ${source.description} ${source.collection}`).includes(needle)).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  return { sources: all.slice((safePage - 1) * LIBRARY_PAGE_SIZE, safePage * LIBRARY_PAGE_SIZE).map((source) => ({ id: source.id, title: source.title, description: source.description, collection: source.collection, sortOrder: source.sortOrder, isFeatured: source.isFeatured, updatedAt: source.updatedAt })), total: all.length };
+}
+async function getSupabaseBotUsageAnalytics(days = 30) {
+  const periodDays = Math.max(1, Math.min(365, Number.isInteger(days) ? days : 30));
+  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1e3).toISOString();
+  const events = await readAll("bot_usage_events", "telegram_user_id,event_type,section_key,source_id,created_at", (query) => query.gte("created_at", since).order("created_at", { ascending: false }).limit(1e4));
+  const eventTypes = /* @__PURE__ */ new Map();
+  const sections = /* @__PURE__ */ new Map();
+  const sources = /* @__PURE__ */ new Map();
+  const users2 = /* @__PURE__ */ new Set();
+  for (const event of events) {
+    users2.add(event.telegram_user_id);
+    eventTypes.set(event.event_type, (eventTypes.get(event.event_type) ?? 0) + 1);
+    if (event.section_key) sections.set(event.section_key, (sections.get(event.section_key) ?? 0) + 1);
+    if (event.source_id !== null && event.source_id !== void 0) sources.set(Number(event.source_id), (sources.get(Number(event.source_id)) ?? 0) + 1);
+  }
+  const index2 = await loadDriveIndex();
+  const titleById = new Map(index2.sourceRows.map((item) => [item.source.id, item.source.title]));
+  return {
+    periodDays,
+    totalEvents: events.length,
+    uniqueUsers: users2.size,
+    eventTypes: Array.from(eventTypes, ([eventType, count3]) => ({ eventType, count: count3 })).sort((a, b) => b.count - a.count),
+    topSections: Array.from(sections, ([sectionKey, count3]) => ({ sectionKey, count: count3 })).sort((a, b) => b.count - a.count).slice(0, 10),
+    topSources: Array.from(sources, ([sourceId, count3]) => ({ sourceId, title: titleById.get(sourceId) ?? `\u0645\u0644\u0641 ${sourceId}`, count: count3 })).sort((a, b) => b.count - a.count).slice(0, 10)
+  };
+}
+async function getSupabaseBotVisitAnalytics(period) {
+  const days = period === "day" ? 1 : period === "week" ? 7 : 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1e3).toISOString();
+  const [platform, hasad, subscribers] = await Promise.all([
+    readAll("bot_platform_access", "telegram_user_id,confirmed_at", (query) => query.gte("confirmed_at", since).order("confirmed_at", { ascending: false }).limit(1e4)),
+    readAll("bot_hasad_access", "telegram_user_id,visited_at", (query) => query.gte("visited_at", since).order("visited_at", { ascending: false }).limit(1e4)),
+    readAll("bot_subscribers", "telegram_user_id,telegram_username,telegram_first_name,telegram_last_name", (query) => query.limit(1e4))
+  ]);
+  const profiles = new Map(subscribers.map((row) => [row.telegram_user_id, row]));
+  const users2 = /* @__PURE__ */ new Map();
+  for (const row of platform) users2.set(row.telegram_user_id, { telegramUserId: row.telegram_user_id, platformVisitedAt: row.confirmed_at, hasadVisitedAt: null });
+  for (const row of hasad) users2.set(row.telegram_user_id, { ...users2.get(row.telegram_user_id) ?? { telegramUserId: row.telegram_user_id, platformVisitedAt: null }, hasadVisitedAt: row.visited_at });
+  const resultUsers = Array.from(users2.values()).map((row) => ({ ...row, ...profiles.get(row.telegramUserId) ? { telegramUsername: profiles.get(row.telegramUserId)?.telegram_username ?? null, telegramFirstName: profiles.get(row.telegramUserId)?.telegram_first_name ?? null, telegramLastName: profiles.get(row.telegramUserId)?.telegram_last_name ?? null } : { telegramUsername: null, telegramFirstName: null, telegramLastName: null } }));
+  return { period, since, platformVisits: { total: platform.length, uniqueUsers: new Set(platform.map((row) => row.telegram_user_id)).size }, hasadVisits: { total: hasad.length, uniqueUsers: new Set(hasad.map((row) => row.telegram_user_id)).size }, users: resultUsers.slice(0, 200) };
+}
+async function updateSupabaseBotManagedSource(id, input, adminUserId) {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return void 0;
+  const current = await getBotSource(id);
+  if (!current) return void 0;
+  const patch = { source_id: id, updated_by: adminUserId, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+  if (typeof input?.title === "string" && input.title.trim()) patch.title = input.title.trim().slice(0, 255);
+  if (typeof input?.description === "string" && input.description.trim()) patch.description = input.description.trim().slice(0, 2e3);
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  if (typeof input?.isFeatured === "boolean") patch.is_featured = input.isFeatured;
+  const { data, error } = await getClient().from("bot_source_overrides").upsert(patch, { onConflict: "source_id" }).select("source_id,title,description,sort_order,is_featured,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update source overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "source_metadata", id, patch);
+  return { id, title: data?.title ?? current.title, description: data?.description ?? current.description, collection: current.collection, sortOrder: data?.sort_order ?? current.sortOrder, isFeatured: data?.is_featured ?? current.isFeatured, updatedAt: /* @__PURE__ */ new Date() };
+}
+async function deleteSupabaseBotManagedSource(id, adminUserId) {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId || !await getBotSource(id)) return false;
+  const { error } = await getClient().from("bot_source_overrides").upsert({ source_id: id, enabled: false, updated_by: adminUserId, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "source_id" });
+  throwIfError(error, "disable source overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "disable", "source_metadata", id, {});
+  return true;
+}
+async function updateSupabaseBotManagedFolder(id, input, adminUserId) {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return void 0;
+  const index2 = await loadDriveIndex();
+  const current = index2.folders.find((row) => Number(row.id) === id);
+  const collection = current ? index2.collectionForFolder(current.drive_id) : void 0;
+  if (!current || !collection) return void 0;
+  const patch = { folder_id: id, updated_by: adminUserId, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+  if (typeof input?.name === "string" && input.name.trim()) patch.name = input.name.trim().slice(0, 255);
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  const { data, error } = await getClient().from("bot_folder_overrides").upsert(patch, { onConflict: "folder_id" }).select("folder_id,name,sort_order,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update folder overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "folder_metadata", id, patch);
+  return { id, name: data?.name ?? current.name, collection, sortOrder: data?.sort_order ?? current.order_index ?? 0, driveFolderId: current.drive_id, parentDriveFolderId: current.parent_id };
+}
+async function deleteSupabaseBotManagedFolder(id, adminUserId) {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return "missing";
+  const index2 = await loadDriveIndex();
+  const current = index2.folders.find((row) => Number(row.id) === id);
+  if (!current) return "missing";
+  const hasChildren = index2.folders.some((row) => row.parent_id === current.drive_id);
+  const hasFiles = index2.files.some((row) => row.folder_id === current.drive_id);
+  if (hasChildren || hasFiles) return "not_empty";
+  const { error } = await getClient().from("bot_folder_overrides").upsert({ folder_id: id, enabled: false, updated_by: adminUserId, updated_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "folder_id" });
+  throwIfError(error, "disable folder overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "disable", "folder_metadata", id, {});
+  return "deleted";
+}
+async function getSupabaseBotAdminStatistics(activeDays = 30) {
+  const periodDays = Math.max(1, Math.min(365, Math.trunc(activeDays) || 30));
+  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1e3).toISOString();
+  const client = getClient();
+  const [total, active, latest] = await Promise.all([
+    client.from("bot_subscribers").select("chat_id", { count: "exact", head: true }),
+    client.from("bot_subscribers").select("chat_id", { count: "exact", head: true }).gte("last_seen_at", since),
+    client.from("bot_subscribers").select("last_seen_at").not("last_seen_at", "is", null).order("last_seen_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+  throwIfError(total.error, "count bot subscribers");
+  throwIfError(active.error, "count active bot users");
+  throwIfError(latest.error, "read latest bot activity");
+  return {
+    totalSubscribers: Number(total.count ?? 0),
+    activeUsers: Number(active.count ?? 0),
+    activeUsersPeriodDays: periodDays,
+    lastActiveAt: latest.data && typeof latest.data.last_seen_at === "string" ? dateValue(latest.data.last_seen_at) : null
+  };
+}
+async function decideSupabaseSubscriptionRequest(requestId, decision, adminUserId) {
+  if (!Number.isInteger(requestId) || requestId < 1 || !adminUserId || !["approve", "reject"].includes(decision)) return void 0;
+  const { data, error } = await getClient().rpc("bot_admin_decide_subscription_request", {
+    p_request_id: requestId,
+    p_decision: decision,
+    p_admin_user_id: adminUserId
+  });
+  throwIfError(error, `${decision} subscription request atomically`);
+  if (!data) return void 0;
+  const row = data;
+  return {
+    telegramUserId: String(row.telegramUserId ?? ""),
+    chatId: String(row.chatId ?? ""),
+    accessScope: row.accessScope,
+    managedMenuItemId: row.managedMenuItemId == null ? null : Number(row.managedMenuItemId)
+  };
 }
 
 // server/telegramWebhook.ts
@@ -8177,21 +8350,36 @@ async function getPlatformAdministratorId(authorization) {
   const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!token || !serviceRoleKey) return void 0;
-  const userResponse = await fetch(`${PLATFORM_SUPABASE_URL}/auth/v1/user`, {
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${token}` }
-  });
-  if (!userResponse.ok) return void 0;
-  const user = await userResponse.json();
-  if (!user.id) return void 0;
-  const roleResponse = await fetch(`${PLATFORM_SUPABASE_URL}/rest/v1/user_roles?select=role&user_id=eq.${encodeURIComponent(user.id)}&role=eq.admin`, {
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` }
-  });
-  if (!roleResponse.ok) return void 0;
-  const roles = await roleResponse.json();
-  return roles.some((role) => role.role === "admin") ? user.id : void 0;
+  try {
+    const userResponse = await fetch(`${PLATFORM_SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: serviceRoleKey, Authorization: `Bearer ${token}` }
+    });
+    if (!userResponse.ok) return void 0;
+    const user = await userResponse.json();
+    if (!user.id) return void 0;
+    const roleResponse = await fetch(`${PLATFORM_SUPABASE_URL}/rest/v1/user_roles?select=role&user_id=eq.${encodeURIComponent(user.id)}&role=eq.admin`, {
+      headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` }
+    });
+    if (!roleResponse.ok) return void 0;
+    const roles = await roleResponse.json();
+    return roles.some((role) => role.role === "admin") ? user.id : void 0;
+  } catch (error) {
+    console.error("[Telegram] Platform administrator verification failed:", error instanceof Error ? error.message : "unknown error");
+    return void 0;
+  }
 }
 async function isPlatformAdministrator(authorization) {
   return Boolean(await getPlatformAdministratorId(authorization));
+}
+function safeAdminOperationError(error, fallback) {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("drive_library_read_only")) return "drive_library_read_only";
+  if (message.includes("grant scoped access")) return "access_grant_failed";
+  if (message.includes("subscription request")) return "subscription_processing_failed";
+  if (message.includes("broadcast")) return "broadcast_processing_failed";
+  if (message.includes("managed section")) return "section_update_failed";
+  if (message.includes("managed menu item")) return "menu_item_update_failed";
+  return fallback;
 }
 function isValidTelegramWebhookSecret(receivedSecret, expectedSecret) {
   if (!receivedSecret || !expectedSecret) return false;
@@ -8236,10 +8424,8 @@ function registerTelegramWebhook(app2) {
     }
     try {
       if (process.env.BOT_STORAGE_MODE === "supabase") {
-        const supabaseStore = createSupabaseBotStore();
-        const subscribers = await supabaseStore.listSubscriberChatIds();
-        const usage = await supabaseStore.getOwnerStatistics();
-        res.status(200).json({ ok: true, totalSubscribers: subscribers.length, firstSubscribedAt: null, lastActiveAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
+        const [statistics, usage] = await Promise.all([getSupabaseBotAdminStatistics(30), createSupabaseBotStore().getOwnerStatistics()]);
+        res.status(200).json({ ok: true, ...statistics, firstSubscribedAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
         return;
       }
       const stats = await getTelegramOwnerStatistics();
@@ -8294,6 +8480,10 @@ function registerTelegramWebhook(app2) {
     const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
+      return;
+    }
+    if (process.env.BOT_STORAGE_MODE === "supabase") {
+      res.status(409).json({ ok: false, error: "drive_library_read_only" });
       return;
     }
     const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.replace(/[\\/\u0000]/g, "_").slice(0, 180) : "";
@@ -8457,7 +8647,8 @@ function registerTelegramWebhook(app2) {
     }
     const query = typeof req.query.q === "string" ? req.query.q : "";
     const page = Number(req.query.page ?? 1);
-    res.status(200).json({ ok: true, ...await listManagedTelegramSources(query, page) });
+    const result = process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedSources(query, page) : await listManagedTelegramSources(query, page);
+    res.status(200).json({ ok: true, ...result });
   });
   app2.put("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
@@ -8466,7 +8657,7 @@ function registerTelegramWebhook(app2) {
       res.status(403).json({ ok: false });
       return;
     }
-    const source = await updateManagedTelegramSource(Number(req.params.id), req.body ?? {}, adminUserId);
+    const source = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedSource(Number(req.params.id), req.body ?? {}, adminUserId) : await updateManagedTelegramSource(Number(req.params.id), req.body ?? {}, adminUserId);
     if (!source) {
       res.status(400).json({ ok: false, error: "invalid_source" });
       return;
@@ -8476,7 +8667,8 @@ function registerTelegramWebhook(app2) {
   app2.delete("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
     const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
-    if (!adminUserId || !await deleteManagedTelegramSource(Number(req.params.id), adminUserId)) {
+    const removed = process.env.BOT_STORAGE_MODE === "supabase" ? await deleteSupabaseBotManagedSource(Number(req.params.id), adminUserId ?? "") : await deleteManagedTelegramSource(Number(req.params.id), adminUserId ?? "");
+    if (!adminUserId || !removed) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -8491,6 +8683,10 @@ function registerTelegramWebhook(app2) {
     const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : void 0;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
+      return;
+    }
+    if (process.env.BOT_STORAGE_MODE === "supabase") {
+      res.status(409).json({ ok: false, error: "drive_only_library" });
       return;
     }
     const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.replace(/[\\/\u0000]/g, "_").slice(0, 180) : "";
@@ -8541,7 +8737,7 @@ function registerTelegramWebhook(app2) {
       return;
     }
     const query = typeof req.query.q === "string" ? req.query.q : "";
-    res.status(200).json({ ok: true, folders: await listManagedTelegramFolders(query) });
+    res.status(200).json({ ok: true, folders: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedFolders(query) : await listManagedTelegramFolders(query) });
   });
   app2.put("/api/telegram/admin/folders/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
@@ -8550,7 +8746,7 @@ function registerTelegramWebhook(app2) {
       res.status(403).json({ ok: false });
       return;
     }
-    const folder = await updateManagedTelegramFolder(Number(req.params.id), req.body ?? {}, adminUserId);
+    const folder = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedFolder(Number(req.params.id), req.body ?? {}, adminUserId) : await updateManagedTelegramFolder(Number(req.params.id), req.body ?? {}, adminUserId);
     if (!folder) {
       res.status(400).json({ ok: false, error: "invalid_folder" });
       return;
@@ -8564,7 +8760,7 @@ function registerTelegramWebhook(app2) {
       res.status(403).json({ ok: false });
       return;
     }
-    const outcome = await deleteManagedTelegramFolder(Number(req.params.id), adminUserId);
+    const outcome = process.env.BOT_STORAGE_MODE === "supabase" ? await deleteSupabaseBotManagedFolder(Number(req.params.id), adminUserId) : await deleteManagedTelegramFolder(Number(req.params.id), adminUserId);
     if (outcome === "not_empty") {
       res.status(409).json({ ok: false, error: "folder_not_empty" });
       return;
@@ -8613,6 +8809,7 @@ function registerTelegramWebhook(app2) {
     }
     const scheduleCronTaskUid = draft.scheduleCronTaskUid;
     if (scheduleCronTaskUid) await deleteHeartbeatJob(scheduleCronTaskUid, "").catch(() => void 0);
+    if (supabaseStore && draft.scheduledFor) await cancelSupabaseBotBroadcastSchedule(id, adminUserId);
     if (supabaseStore) await recordSupabaseBotAdminAudit(adminUserId, "cancel", "broadcast", id, {});
     else await recordManagedTelegramBroadcastAudit(adminUserId, id, "cancel");
     res.status(200).json({ ok: true });
@@ -8626,12 +8823,21 @@ function registerTelegramWebhook(app2) {
       res.status(400).json({ ok: false, error: "invalid_schedule" });
       return;
     }
-    const draft = await getTelegramBroadcastDraft(id, adminUserId);
-    if (!draft || draft.status !== "draft" || draft.kind !== "message" || !draft.message || draft.scheduleCronTaskUid) {
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : void 0;
+    const draft = supabaseStore ? await supabaseStore.getBroadcastDraft(id, adminUserId) : await getTelegramBroadcastDraft(id, adminUserId);
+    if (!draft || draft.status !== "draft" || draft.kind !== "message" || !draft.message || draft.scheduleCronTaskUid || draft.scheduledFor) {
       res.status(400).json({ ok: false, error: "unavailable_broadcast" });
       return;
     }
     try {
+      if (supabaseStore) {
+        if (!await scheduleSupabaseBotBroadcast(id, adminUserId, scheduledFor)) {
+          res.status(409).json({ ok: false, error: "schedule_conflict" });
+          return;
+        }
+        res.status(200).json({ ok: true, id, scheduledFor, nextExecutionAt: scheduledFor });
+        return;
+      }
       const cron = scheduledBroadcastCron(scheduledFor);
       const job = await createHeartbeatJob({
         name: `telegram-broadcast-${id}-${scheduledFor.getTime()}`,
@@ -8795,7 +9001,7 @@ function registerTelegramWebhook(app2) {
     }
     const rawDays = Number(req.query.days);
     const days = Number.isInteger(rawDays) ? rawDays : 30;
-    res.status(200).json({ ok: true, analytics: await getTelegramUsageAnalytics(days) });
+    res.status(200).json({ ok: true, analytics: process.env.BOT_STORAGE_MODE === "supabase" ? await getSupabaseBotUsageAnalytics(days) : await getTelegramUsageAnalytics(days) });
   });
   app2.options("/api/telegram/admin/visit-analytics", (req, res) => {
     setPlatformAdminCors(req, res);
@@ -8812,7 +9018,7 @@ function registerTelegramWebhook(app2) {
       res.status(400).json({ ok: false, error: "invalid_visit_period" });
       return;
     }
-    res.status(200).json({ ok: true, analytics: await getTelegramVisitAnalytics(period) });
+    res.status(200).json({ ok: true, analytics: process.env.BOT_STORAGE_MODE === "supabase" ? await getSupabaseBotVisitAnalytics(period) : await getTelegramVisitAnalytics(period) });
   });
   app2.post("/api/telegram/admin/subscriptions/:id/:decision", async (req, res) => {
     setPlatformAdminCors(req, res);
@@ -8824,7 +9030,14 @@ function registerTelegramWebhook(app2) {
       return;
     }
     const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : void 0;
-    const result = decision === "approve" ? await (supabaseStore ? supabaseStore.approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId)) : await (supabaseStore ? supabaseStore.rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId));
+    let result;
+    try {
+      result = decision === "approve" ? await (supabaseStore ? supabaseStore.approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId)) : await (supabaseStore ? supabaseStore.rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId));
+    } catch (error) {
+      console.error("[Telegram] Admin subscription decision failed:", safeAdminOperationError(error, "subscription_processing_failed"));
+      res.status(500).json({ ok: false, error: safeAdminOperationError(error, "subscription_processing_failed") });
+      return;
+    }
     if (!result) {
       res.status(409).json({ ok: false, error: "request_unavailable" });
       return;
@@ -9021,6 +9234,16 @@ function registerTelegramWebhook(app2) {
       console.error("[Telegram] Update processing failed:", message);
       res.status(500).json({ ok: false });
     }
+  });
+  app2.use((error, req, res, next) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    setPlatformAdminCors(req, res);
+    const code = safeAdminOperationError(error, "admin_operation_failed");
+    console.error("[Telegram] Unhandled admin operation failed:", code);
+    res.status(500).json({ ok: false, error: code });
   });
 }
 
