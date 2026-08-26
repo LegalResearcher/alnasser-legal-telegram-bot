@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSupabaseBotStore } from "./supabaseBotStore";
+import { createSupabaseBotStore, listSupabaseBotManagedReferralRewards } from "./supabaseBotStore";
 import { FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID } from "./db";
 
 function jsonResponse(value: unknown) {
@@ -12,6 +12,9 @@ describe("Supabase bot store", () => {
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key");
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes("/rpc/bot_admin_decide_subscription_request")) {
+        return jsonResponse({ telegramUserId: "100", chatId: "200", accessScope: "important_laws", managedMenuItemId: null });
+      }
       if (url.includes("/drive_folders")) {
         return jsonResponse([
           { id: 2, drive_id: JUDICIAL_ROOT_FOLDER_ID, name: "قواعد قضائية", parent_id: null, depth: 0, order_index: 0, is_premium: false, free_download: false },
@@ -72,6 +75,18 @@ describe("Supabase bot store", () => {
     expect(result.totalSources).toBe(217);
     expect(result.sources[0]?.collection).toBe("legal_forms");
     expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
+  });
+
+  it("يقرأ ملخص مكافآت الإحالات من جداول Supabase المملوكة للبوت", async () => {
+    const result = await listSupabaseBotManagedReferralRewards();
+    expect(result.summary).toEqual({ qualifiedReferrals: 0, pendingReferrals: 0, activeRewards: 0 });
+    expect(result.rewards).toEqual([]);
+  });
+
+  it("يعتمد طلب الاشتراك عبر RPC ذري بدل تحديثين منفصلين", async () => {
+    const store = createSupabaseBotStore();
+    const result = await store.approveImportantYemeniLawsSubscriptionRequest(99, "admin-user");
+    expect(result).toEqual({ telegramUserId: "100", chatId: "200", accessScope: "important_laws", managedMenuItemId: null });
   });
 
   it("يقرأ القوالب القانونية من legal_documents مع تصنيفها", async () => {

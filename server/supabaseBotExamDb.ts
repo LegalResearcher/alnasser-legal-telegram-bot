@@ -125,6 +125,33 @@ async function insertResultIfCompleted(client: SupabaseClient, session: Telegram
   assertNoSupabaseError(error, "save result");
 }
 
+export type SupabaseBotExamStatistics = {
+  formCount: number;
+  questionCount: number;
+  subjectKeys: string[];
+  totalExams: number;
+};
+
+export async function getSupabaseBotExamStatistics(): Promise<SupabaseBotExamStatistics> {
+  const client = getSupabase();
+  const [formsResult, questionsResult, subjectsResult, platformStatsResult, examSummaryResult] = await Promise.all([
+    client.from("bot_exam_forms").select("id", { count: "exact", head: true }).eq("is_active", true),
+    client.from("bot_exam_questions").select("id", { count: "exact", head: true }).eq("is_active", true),
+    client.from("bot_exam_forms").select("subject_key").eq("is_active", true).limit(1000),
+    client.from("platform_stats").select("total_exams").eq("id", 1).limit(1).maybeSingle(),
+    client.rpc("get_exam_results_summary"),
+  ]);
+  assertNoSupabaseError(formsResult.error, "count forms");
+  assertNoSupabaseError(questionsResult.error, "count questions");
+  assertNoSupabaseError(subjectsResult.error, "list exam subjects");
+  assertNoSupabaseError(platformStatsResult.error, "read platform exam stats");
+  assertNoSupabaseError(examSummaryResult.error, "read exam results summary");
+  const subjectKeys = Array.from(new Set(((subjectsResult.data ?? []) as Array<{ subject_key?: string }>).map(row => row.subject_key).filter((key): key is string => Boolean(key))));
+  const archivedExams = Number((platformStatsResult.data as { total_exams?: number } | null)?.total_exams ?? 0);
+  const currentExams = Number((examSummaryResult.data as { total?: number } | null)?.total ?? 0);
+  return { formCount: Number(formsResult.count ?? 0), questionCount: Number(questionsResult.count ?? 0), subjectKeys, totalExams: archivedExams + currentExams };
+}
+
 export async function listSupabaseBotExamForms(subjectKey: string): Promise<Array<{ formKey: string; formName: string; sortOrder: number; questionCount: number }>> {
   const client = getSupabase();
   const { data, error } = await client

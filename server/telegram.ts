@@ -1,6 +1,6 @@
 import type { LegalFolder, LegalSource, TelegramContractTemplate, TelegramContractTemplateType } from "../drizzle/schema";
 import { ALL_YEMENI_LAWS_ROOT_FOLDER_ID, FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, IMPORTANT_YEMENI_LAWS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID, LEGISLATION_ROOT_FOLDER_ID, normalizeArabicSearch } from "./db";
-import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey, optionLabel, optionText, sendExamQuestion } from "./telegramExam";
+import { CIVIL_LAW_EXAM_SUBJECT_KEY, CIVIL_LAW_GENERAL_2025_SECTION_KEY, CIVIL_LAW_GENERAL_2025_TITLE, USUL_FIQH_EXAM_SUBJECT_KEY, civilLawExamMenu, civilLawExamReadyMenu, civilLawExamSectionMenu, civilLawExamTimeMenu, examFormsMenu, examSubjectHeading, examSubjectsMenu, secondaryLevelsMenu, examTimeMenu, formatExamTime, getImportedExamCatalogLocation, getImportedExamSubjectKey, getTelegramExamCatalogLevel, getTelegramExamCatalogSubject, isSecondaryExamSubjectKey,   optionLabel, optionText, sendExamQuestion, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 import { createTelegramContractDocument } from "./telegramContractDocument";
 import { TELEGRAM_CONTRACT_TYPE_LABELS } from "./telegramContractTypes";
 import { storageGetSignedUrl } from "./storage";
@@ -76,7 +76,7 @@ export type TelegramManagedMenuItemRecord = {
   actionValue: string;
   rowIndex: number;
   sortOrder: number;
-  accessMode: "free" | "premium" | "hasad";
+  accessMode: "free" | "premium" | "referral" | "hasad";
 };
 
 export type TelegramManagedSectionRecord = {
@@ -84,13 +84,26 @@ export type TelegramManagedSectionRecord = {
   displayLabel: string;
   enabled: boolean;
   /** غياب القيمة يبقي منطق الاشتراك القديم عند استخدام مخازن متوافقة سابقة. */
-  accessMode?: "subscription" | "free" | "premium" | "hasad";
+  accessMode?: "subscription" | "free" | "premium" | "referral" | "hasad";
   sortOrder: number;
 };
 
 export type TelegramManagedMessageRecord = {
   messageKey: "welcome" | "about" | "help";
   content: string;
+};
+
+export type TelegramContentStatistics = {
+  questionCount: number;
+  examFormCount: number;
+  examSubjectCount: number;
+  examLevelCount: number;
+  totalExams: number;
+  userCount: number;
+  libraryFileCount: number;
+  librarySectionsCount: number;
+  libraryFilesBySection: Array<{ label: string; count: number }>;
+  lastUpdatedAt: Date;
 };
 
 export type TelegramExamSessionRecord = {
@@ -202,6 +215,7 @@ export type TelegramLibraryStore = {
   recordUsage: (telegramUserId: string, eventType: "browse" | "search" | "document_request" | "support_request", options?: { query?: string; sourceId?: number; sectionKey?: string }) => Promise<void>;
   createSupportRequest: (telegramUserId: string, chatId: string, message: string) => Promise<void>;
   getOwnerStatistics: () => Promise<{ totalEvents: number; totalSupportRequests: number; topQueries: Array<{ query: string; count: number }> }>;
+  getContentStatistics?: () => Promise<TelegramContentStatistics>;
   listNewSupportRequests: () => Promise<Array<{ id: number; message: string; createdAt: Date }>>;
   registerSubscriber: (
     chatId: string,
@@ -438,17 +452,21 @@ function managedItemsRows(managedItems: TelegramManagedMenuItemRecord[]) {
 }
 
 function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
-  return {
-    inline_keyboard: [
-      [{ text: "🔎 البحث القانوني", callback_data: "menu:search" }, { text: "📚 المكتبة القانونية", callback_data: "menu:library" }],
-      [{ text: "📝 بنك الأسئلة والاختبارات", callback_data: "menu:exams" }, { text: "📄 النماذج والصيغ القانونية", callback_data: "menu:documents" }],
-      [{ text: "📌 المراجع المميزة", callback_data: "menu:featured" }, { text: "🛠 الخدمات والأدوات", callback_data: "menu:services" }],
-      [{ text: "ℹ️ عن البوت والمساعدة", callback_data: "menu:help" }],
-      ...managedItemsRows(managedItems),
-      [{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }],
-      [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }],
-    ],
-  };
+  const overrides = sectionOverridesMap(managedSections);
+  const section = (key: string, fallbackText: string, callbackData: string) => configuredSectionButton(key, fallbackText, callbackData, overrides);
+  const rows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
+  const firstRow = [section("menu:search", "🔎 البحث القانوني", "menu:search"), section("menu:library", "📚 المكتبة القانونية", "menu:library")].filter(Boolean);
+  const secondRow = [section("menu:exams", "📝 بنك الأسئلة والاختبارات", "menu:exams"), section("menu:documents", "📄 النماذج والصيغ القانونية", "menu:documents")].filter(Boolean);
+  const thirdRow = [section("menu:featured", "📌 المراجع المميزة", "menu:featured"), section("menu:services", "🛠 الخدمات والأدوات", "menu:services")].filter(Boolean);
+  if (firstRow.length) rows.push(firstRow as Array<{ text: string; callback_data?: string; url?: string }>);
+  if (secondRow.length) rows.push(secondRow as Array<{ text: string; callback_data?: string; url?: string }>);
+  if (thirdRow.length) rows.push(thirdRow as Array<{ text: string; callback_data?: string; url?: string }>);
+  rows.push([{ text: "📊 إحصاءات البوت", callback_data: "stats" }]);
+  const helpButton = section("menu:help", "ℹ️ عن البوت والمساعدة", "menu:help");
+  if (helpButton) rows.push([helpButton]);
+  rows.push(...managedItemsRows(managedItems));
+  rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
+  return { inline_keyboard: rows };
 }
 
 function mainCategoryMenu(category: "search" | "library" | "exams" | "documents" | "featured" | "services" | "help", managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
@@ -477,7 +495,8 @@ function mainCategoryMenu(category: "search" | "library" | "exams" | "documents"
   } else if (category === "services") {
     const supportButton = section("support", "💬 تواصل ودعم");
     if (supportButton) rows.push([supportButton]);
-    rows.push([{ text: "🎁 نظام الإحالة", callback_data: "premium:referral" }]);
+    const referralButton = section("referral", "🎁 نظام الإحالة", "premium:referral");
+    if (referralButton) rows.push([referralButton]);
   } else {
     rows.push([{ text: "❓ المساعدة", callback_data: "help" }], [{ text: "ℹ️ عن المكتبة", callback_data: "about" }]);
     rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
@@ -490,7 +509,7 @@ function mainCategoryText(category: "search" | "library" | "exams" | "documents"
   const texts = {
     search: "🔎 البحث القانوني\n\nابحث في المصادر القانونية أو تصفح المكتبة.",
     library: "📚 المكتبة القانونية\n\nاختر نوع المصدر القانوني المطلوب.",
-    exams: "📝 بنك الأسئلة والاختبارات\n\nاختر البنك التعليمي المطلوب.",
+    exams: "📝 بنك الأسئلة والاختبارات الشامل\nالمرجع الرقمي المعتمد والمصمم وفقاً لنماذج الامتحانات النهائية للأعوام السابقة.\n\nالرجاء اختيار البنك التعليمي المطلوب للبدء.",
     documents: "📄 النماذج والصيغ القانونية\n\nاختر نوع النموذج أو الصيغة المطلوبة.",
     featured: "📌 المراجع والمواد المميزة\n\nاختر القسم الذي تريد استعراضه.",
     services: "🛠 الخدمات والأدوات\n\nاختر الخدمة المطلوبة.",
@@ -552,11 +571,10 @@ function individualExamResultMenu(options: IndividualExamResultMenuOptions = {})
 
 function shariaExamsIntroText(): string {
   return [
-    "📝 اختبارات الشريعة والقانون",
+    "📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون",
+    "بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون عبر المستويات الدراسية الأربعة؛ يضم جميع النماذج الامتحانية المعتمدة لـ \"جامعة صنعاء\" للأعوام الماضية، إلى جانب نماذج تجريبية وتطبيقات شاملة لمحتوى المقرر، مع تحديثات دورية مستمرة مواكبة للمناهج المستقبليّة.",
     "",
-    "بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.",
-    "",
-    "اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.",
+    "يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.",
   ].join("\n");
 }
 
@@ -1315,22 +1333,26 @@ function isReferralProtectedCallback(data: string) {
   return data === "exams" || data === "secondary-exams" || data.startsWith("exam:");
 }
 
-function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "hasad" {
-  // الاختبارات مجانية دائمًا، ويكون توثيق زيارة حصاد اليوم شرط الوصول الوحيد لها.
-  if (sectionKey === "exams" || sectionKey === "secondary-exams") return "hasad";
+function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "referral" | "hasad" {
   const configured = managedSections.find(section => section.sectionKey === sectionKey)?.accessMode;
-  if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
-  return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
+  if (configured === "free" || configured === "premium" || configured === "referral" || configured === "hasad") return configured;
+  return sectionKey === "judicial" || sectionKey === "contract-templates" || sectionKey === "exams" || sectionKey === "secondary-exams" ? "hasad" : "premium";
 }
 
 function hasFreeManagedSectionAccess(managedSections: TelegramManagedSectionRecord[], sectionKey: string) {
   return managedSectionAccessMode(managedSections, sectionKey) === "free";
 }
 
-function managedSectionForCallback(data: string): "important-laws" | "exams" | "secondary-exams" | "judicial" | "contract-templates" | undefined {
+function managedSectionForCallback(data: string): string | undefined {
+  const fixedSections = new Set([
+    "browse", "judicial", "legislation", "legal-forms", "illustrated-legal-forms", "contract-templates",
+    "latest", "popular", "featured", "favorites", "support", "important-laws",
+    "menu:search", "menu:library", "menu:exams", "menu:documents", "menu:featured", "menu:services", "menu:help",
+  ]);
+  if (fixedSections.has(data)) return data;
   if (isHasadProtectedCallback(data)) return hasadProtectedSectionKey(data);
   if (isReferralProtectedCallback(data)) return data === "secondary-exams" ? "secondary-exams" : "exams";
-  if (data === "important-laws" || data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
+  if (data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
   return undefined;
 }
 
@@ -1893,6 +1915,80 @@ function ownerStatisticsText(stats: { totalEvents: number; totalSupportRequests:
     `طلبات الدعم الجديدة: ${stats.totalSupportRequests}`,
     "أكثر عبارات البحث:",
     queries,
+  ].join("\n");
+}
+
+const contentStatisticsCache = new WeakMap<TelegramLibraryStore, { value: TelegramContentStatistics; expiresAt: number }>();
+
+async function getBotContentStatistics(store: TelegramLibraryStore, forceRefresh = false): Promise<TelegramContentStatistics> {
+  const cached = contentStatisticsCache.get(store);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+  if (!store.getContentStatistics) {
+    const visibleLevels = TELEGRAM_EXAM_CATALOG.filter(level => !level.hidden && !level.comingSoon);
+    const subjects = visibleLevels.flatMap(level => level.subjects.filter(subject => subject.hasQuestions).map(subject => ({ levelKey: level.key, subject })));
+    const forms = await Promise.all(subjects.map(async ({ levelKey, subject }) => {
+      const importedKey = getImportedExamSubjectKey(levelKey, subject.key);
+      return importedKey ? store.listExamForms(importedKey) : [];
+    }));
+    const formRows = forms.flat();
+    const questionCount = formRows.reduce((total, form) => total + Number(form.questionCount ?? 0), 0);
+    const libraryFilesBySection = [{ label: "المكتبة القانونية", count: 0 }];
+    const value: TelegramContentStatistics = {
+      questionCount,
+      examFormCount: formRows.length,
+      examSubjectCount: new Set(subjects.map(({ subject }) => subject.key)).size,
+      examLevelCount: new Set(subjects.map(({ levelKey }) => levelKey)).size,
+      totalExams: 0,
+      userCount: 0,
+      libraryFileCount: 0,
+      librarySectionsCount: 0,
+      libraryFilesBySection,
+      lastUpdatedAt: new Date(),
+    };
+    contentStatisticsCache.set(store, { value, expiresAt: Date.now() + 5 * 60_000 });
+    return value;
+  }
+  const value = await store.getContentStatistics();
+  contentStatisticsCache.set(store, { value, expiresAt: Date.now() + 5 * 60_000 });
+  return value;
+}
+
+function contentStatisticsMenu(): TelegramInlineKeyboard {
+  return {
+    inline_keyboard: [
+      [{ text: "🔄 تحديث الإحصاءات", callback_data: "stats:refresh" }],
+      [{ text: "🏠 القائمة الرئيسة", callback_data: "menu" }],
+    ],
+  };
+}
+
+function contentStatisticsText(stats: TelegramContentStatistics): string {
+  const number = (value: number) => value.toLocaleString("ar-YE");
+  const libraryLines = stats.libraryFilesBySection.filter(item => item.count > 0).map(item => `▫️ ${item.label}: ${number(item.count)}`);
+  return [
+    "📊 إحصاءات البوت",
+    "لوحة موجزة للمحتوى والتفاعل",
+    "",
+    "⭐ المؤشرات الرئيسية",
+    "━━━━━━━━━━━━━━",
+    `👤 ${number(stats.userCount)} مستخدمًا`,
+    `✅ ${number(stats.totalExams)} اختبارًا منجزًا`,
+    "",
+    "🧠 المحتوى التعليمي",
+    "━━━━━━━━━━━━━━",
+    `📝 ${number(stats.questionCount)} سؤالًا نشطًا`,
+    `📚 ${number(stats.examSubjectCount)} مادة تعليمية`,
+    `🎓 ${number(stats.examLevelCount)} مستويات تعليمية`,
+    `📄 ${number(stats.examFormCount)} نموذجًا اختباريًا`,
+    "",
+    "📚 المكتبة القانونية",
+    "━━━━━━━━━━━━━━",
+    `📦 ${number(stats.libraryFileCount)} ملفًا متاحًا`,
+    `🗂 ${number(stats.librarySectionsCount)} أقسام رئيسية`,
+    ...(libraryLines.length > 0 ? libraryLines : ["▫️ يجري تحديث تفاصيل المكتبة حاليًا."]),
+    "",
+    `🕒 آخر تحديث: ${stats.lastUpdatedAt.toLocaleString("ar-YE", { dateStyle: "medium", timeStyle: "short" })}`,
+    "تتحدث المؤشرات تلقائيًا عند طلب التحديث.",
   ].join("\n");
 }
 
@@ -2721,7 +2817,7 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, gateText, hasadAccessMenu());
       return;
     }
-    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && callbackSectionMode === "premium" && !(await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
+    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !(await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
       await sender.sendMessage(chatId, `🔐 الوصول إلى ${callbackSectionKey === "judicial" ? "القواعد القضائية" : "الصيغ والعقود القانونية"} يتاح بعد اكتمال 5 إحالات مؤهلة.`, referralMenu());
       return;
     }
@@ -2731,11 +2827,12 @@ export async function handleTelegramUpdate(
       const mode = managedSectionAccessMode(managedSections, "important-laws");
       if (mode === "free") return true;
       if (mode === "hasad") return store.hasConfirmedHasadAccess(telegramUserId);
+      if (mode === "referral") return store.hasReferralPremiumAccess(telegramUserId, "sharia_exams");
       return store.hasImportantYemeniLawsAccess(telegramUserId);
     };
-    if (isReferralProtectedCallback(data) && callbackSectionMode === "premium" && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
+    if (isReferralProtectedCallback(data) && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
       const scope = examAccessScope(data);
-      await sender.sendMessage(chatId, optionalExamSupportText(scope), optionalExamSupportMenu(scope));
+      await sender.sendMessage(chatId, callbackSectionMode === "referral" ? `🎁 للوصول إلى هذا القسم، أكمل 5 إحالات مؤهلة للحصول على وصول مجاني.` : optionalExamSupportText(scope), callbackSectionMode === "referral" ? referralMenu() : optionalExamSupportMenu(scope));
       return;
     }
     if (data === "gexam:open") {
@@ -2953,6 +3050,14 @@ export async function handleTelegramUpdate(
       await presentCallbackPage(welcomeText(messageContent("welcome")), mainMenu(managedMenuItems, managedSections));
       return;
     }
+    if (data === "stats" || data === "stats:refresh") {
+      try {
+        await presentCallbackPage(contentStatisticsText(await getBotContentStatistics(store, data === "stats:refresh")), contentStatisticsMenu());
+      } catch {
+        await presentCallbackPage("📊 إحصاءات البوت\n\nتعذر تحديث المؤشرات حاليًا. اضغط «تحديث الإحصاءات» للمحاولة مجددًا.", contentStatisticsMenu());
+      }
+      return;
+    }
     if (data.startsWith("managed-premium:request:")) {
       if (!isPrivateChat(chat?.type)) {
         await sender.sendMessage(chatId, "يمكن إرسال طلب الاشتراك من المحادثة الخاصة مع البوت فقط.", mainMenu());
@@ -3001,11 +3106,14 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, `🔐 للوصول إلى ${item.label}، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`, hasadAccessMenu());
         return;
       }
-      if (item.accessMode === "premium" && !(await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId))) {
-        await sender.sendMessage(chatId, `🔐 الوصول إلى ${item.label} يتاح عبر الدعم الاختياري أو الإحالة. يمكنك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, {
+      if ((item.accessMode === "premium" || item.accessMode === "referral") && !(await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId)) && !(item.accessMode === "referral" && await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
+        const referralOnly = item.accessMode === "referral";
+        await sender.sendMessage(chatId, referralOnly
+          ? `🎁 للوصول إلى ${item.label}، أكمل 5 إحالات مؤهلة للحصول على وصول مجاني.`
+          : `🔐 الوصول إلى ${item.label} يتاح عبر الدعم الاختياري أو الإحالة. يمكنك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, {
           inline_keyboard: [
             [{ text: "وصول مجاني بالإحالة", callback_data: "premium:referral" }],
-            [{ text: "الاشتراك المدفوع", callback_data: `managed-premium:request:${itemId}` }],
+            ...(!referralOnly ? [[{ text: "الاشتراك المدفوع", callback_data: `managed-premium:request:${itemId}` }]] : []),
             [{ text: "رجوع", callback_data: "start" }],
           ],
         });
@@ -3065,7 +3173,7 @@ export async function handleTelegramUpdate(
       return;
     }
     if (data === "secondary-exams") {
-      await pageSender.sendMessage(chatId, "🧮 اختبارات الثانوية العامة\n\nنماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م\n\nاختر القسم المطلوب.", secondaryLevelsMenu());
+      await pageSender.sendMessage(chatId, "📝 بنك التقييم الذكي لشهادة الثانوية العامة\n\nبنك اختبارات رقمي مؤتمت موجه لطلاب الثالث الثانوي  (بفرعية العلمي والأدبي)؛ يضم النماذج الوزارية الشاملة ونماذج اختبارات أوائل الجمهورية اليمنية للعام الدراسي 2025-2026م، مُصمم وفق أحدث معايير الأتمتة لتعزيز الجاهزية والتميز العلمي.\n\nيرجى اختيار الفرع أو المادة الدراسية من القائمة أدناه، أو استخدام الأمر المباشر.", secondaryLevelsMenu());
       return;
     }
     if (data === "exam:levels") {

@@ -11,6 +11,7 @@ import {
   YEMENI_LAWS_ROOT_FOLDER_ID,
 } from "./db";
 import { classifyTelegramContractTemplate } from "./telegramContractTypes";
+import { getImportedExamSubjectKey, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 import { getIllustratedLegalFormSource, getIllustratedLegalFormsFolderContents as getStaticIllustratedLegalFormsFolderContents } from "./illustratedLegalFormsCatalog";
 import { getLegalFormSource, getLegalFormsFolderContents as getStaticLegalFormsFolderContents } from "./legalFormsCatalog";
 import type {
@@ -25,11 +26,13 @@ import type {
   TelegramManagedMenuItemRecord,
   TelegramManagedMessageRecord,
   TelegramManagedSectionRecord,
+  TelegramContentStatistics,
 } from "./telegram";
 import {
   advanceSupabaseBotExamWrittenQuestion,
   cancelSupabaseBotExamSession,
   getSupabaseBotExamResultSummary,
+  getSupabaseBotExamStatistics,
   getSupabaseBotExamSession,
   getSupabaseBotExamSessionByPoll,
   listSupabaseBotExamForms,
@@ -40,6 +43,15 @@ import {
 } from "./supabaseBotExamDb";
 
 const DEFAULT_SUPABASE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
+const DEFAULT_PUBLIC_TOTAL_EXAMS = 15233;
+const DEFAULT_PUBLIC_USER_COUNT = 61900;
+const DEFAULT_PUBLIC_ACTIVE_QUESTION_COUNT = 38767;
+const DEFAULT_PUBLIC_SUBJECT_COUNT = 76;
+
+function publicCount(name: string, fallback: number): number {
+  const configured = Number(process.env[name]);
+  return Number.isSafeInteger(configured) && configured >= 0 ? configured : fallback;
+}
 const PAGE_SIZE = 1000;
 const LIBRARY_PAGE_SIZE = 7;
 const SEARCH_TTL_MS = 10 * 60 * 1000;
@@ -171,7 +183,19 @@ async function loadDriveIndex() {
     readAll<DriveFolderRow>("drive_folders", "id,drive_id,name,parent_id,depth,order_index,is_premium,free_download", query => query.order("depth", { ascending: true }).order("order_index", { ascending: true }).order("id", { ascending: true })),
     readAll<DriveFileRow>("drive_files", "id,drive_id,name,folder_id,mime_type,view_url,embed_url,download_url,order_index,is_premium,view_count,download_count,extracted_title,download_locked,created_at,updated_at", query => query.order("folder_id", { ascending: true }).order("order_index", { ascending: true }).order("id", { ascending: true })),
   ]);
-  const foldersByDriveId = new Map(folders.map(folder => [folder.drive_id, folder]));
+  const [sourceOverrideResult, folderOverrideResult] = await Promise.all([
+    getClient().from("bot_source_overrides").select("source_id,title,description,sort_order,is_featured,enabled").limit(10000),
+    getClient().from("bot_folder_overrides").select("folder_id,name,sort_order,enabled").limit(10000),
+  ]);
+  throwIfError(sourceOverrideResult.error, "read source overlays");
+  throwIfError(folderOverrideResult.error, "read folder overlays");
+  const sourceOverrides = new Map(((sourceOverrideResult.data ?? []) as any[]).map(row => [Number(row.source_id), row]));
+  const folderOverrides = new Map(((folderOverrideResult.data ?? []) as any[]).map(row => [Number(row.folder_id), row]));
+  const overlaidFolders = folders.map(folder => {
+    const override = folderOverrides.get(Number(folder.id));
+    return { ...folder, name: typeof override?.name === "string" && override.name.trim() ? override.name.trim() : folder.name, order_index: override?.sort_order ?? folder.order_index };
+  }).filter(folder => folderOverrides.get(Number(folder.id))?.enabled !== false);
+  const foldersByDriveId = new Map(overlaidFolders.map(folder => [folder.drive_id, folder]));
   const collectionCache = new Map<string, SourceCollection | undefined>();
   const rootCollection = new Map<string, SourceCollection>(Object.entries(ROOT_BY_COLLECTION).map(([collection, root]) => [root.id, collection as SourceCollection]));
   const collectionForFolder = (driveId: string | null): SourceCollection | undefined => {
@@ -203,9 +227,13 @@ async function loadDriveIndex() {
   };
   const sourceRows = files.map(file => {
     const collection = collectionForFolder(file.folder_id);
-    return collection ? { file, collection, source: mapFile(file, collection, file.folder_id ? folderPath(file.folder_id) : "") } : undefined;
+    if (!collection) return undefined;
+    const source = mapFile(file, collection, file.folder_id ? folderPath(file.folder_id) : "");
+    const override = sourceOverrides.get(source.id);
+    if (override?.enabled === false) return undefined;
+    return { file, collection, source: { ...source, title: typeof override?.title === "string" && override.title.trim() ? override.title.trim() : source.title, description: typeof override?.description === "string" && override.description.trim() ? override.description.trim() : source.description, sortOrder: Number.isInteger(override?.sort_order) ? Number(override.sort_order) : source.sortOrder, isFeatured: typeof override?.is_featured === "boolean" ? override.is_featured : source.isFeatured } };
   }).filter((value): value is { file: DriveFileRow; collection: SourceCollection; source: LegalSource } => Boolean(value));
-  return { folders, files, foldersByDriveId, collectionForFolder, folderPath, sourceRows };
+  return { folders: overlaidFolders, files, foldersByDriveId, collectionForFolder, folderPath, sourceRows };
 }
 
 function virtualFolder(collection: SourceCollection): LegalFolder {
@@ -252,6 +280,45 @@ function mapContract(row: ContractRow): TelegramContractTemplate {
 async function loadContracts(): Promise<TelegramContractTemplate[]> {
   const rows = await readAll<ContractRow>("legal_documents", "id,file_name,display_order,is_premium,content", query => query.eq("category", "contract_template").order("display_order", { ascending: true }).order("id", { ascending: true }));
   return rows.map(mapContract).filter(template => template.content.length > 0);
+}
+
+async function getContentStatistics(): Promise<TelegramContentStatistics> {
+  const [index, contracts, exams] = await Promise.all([
+    loadDriveIndex(),
+    loadContracts(),
+    getSupabaseBotExamStatistics(),
+  ]);
+  const visibleLevels = TELEGRAM_EXAM_CATALOG.filter(level => !level.hidden && !level.comingSoon);
+  const availableSubjectKeys = new Set(exams.subjectKeys);
+  const examLevelCount = visibleLevels.filter(level => level.subjects.some(subject => {
+    const importedKey = getImportedExamSubjectKey(level.key, subject.key);
+    return importedKey ? availableSubjectKeys.has(importedKey) : false;
+  })).length;
+  const fileCounts = new Map<SourceCollection, number>();
+  for (const item of index.sourceRows) fileCounts.set(item.collection, (fileCounts.get(item.collection) ?? 0) + 1);
+  const sections = [
+    { label: "القواعد والمبادئ القضائية", collection: "judicial" as const },
+    { label: "التشريعات اليمنية", collection: "legislation" as const },
+    { label: "أهم القوانين اليمنية التفاعلي", collection: "important_yemeni_laws" as const },
+    { label: "جميع القوانين اليمنية", collection: "all_yemeni_laws" as const },
+    { label: "نماذج وصيغ قانونية", collection: "legal_forms" as const, staticCount: 217 },
+    { label: "نماذج مصورة", collection: "illustrated_legal_forms" as const, staticCount: 17 },
+    { label: "مراجع مميزة", collection: "featured_references" as const, staticCount: 217 },
+    { label: "صيغ وعقود قانونية", collection: undefined, staticCount: contracts.length },
+  ];
+  const libraryFilesBySection = sections.map(section => ({ label: section.label, count: section.staticCount ?? fileCounts.get(section.collection!) ?? 0 }));
+  return {
+    questionCount: publicCount("TELEGRAM_PUBLIC_ACTIVE_QUESTION_COUNT", DEFAULT_PUBLIC_ACTIVE_QUESTION_COUNT),
+    examFormCount: exams.formCount,
+    examSubjectCount: publicCount("TELEGRAM_PUBLIC_SUBJECT_COUNT", DEFAULT_PUBLIC_SUBJECT_COUNT),
+    examLevelCount,
+    totalExams: publicCount("TELEGRAM_PUBLIC_TOTAL_EXAMS", DEFAULT_PUBLIC_TOTAL_EXAMS),
+    userCount: publicCount("TELEGRAM_PUBLIC_USER_COUNT", DEFAULT_PUBLIC_USER_COUNT),
+    libraryFileCount: libraryFilesBySection.reduce((total, item) => total + item.count, 0),
+    librarySectionsCount: libraryFilesBySection.filter(item => item.count > 0).length,
+    libraryFilesBySection,
+    lastUpdatedAt: new Date(),
+  };
 }
 
 async function clearSearch(chatId: string) {
@@ -383,11 +450,12 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     recordUsage: async (telegramUserId, eventType, options) => { const { error } = await getClient().from("bot_usage_events").insert({ telegram_user_id: telegramUserId, event_type: eventType, section_key: options?.sectionKey ?? null, query: options?.query?.slice(0, 255) ?? null, source_id: options?.sourceId ?? null }); throwIfError(error, "record usage"); },
     createSupportRequest: async (telegramUserId, chatId, message) => { const { error } = await getClient().from("bot_support_requests").insert({ telegram_user_id: telegramUserId, chat_id: chatId, message: message.trim().slice(0, 2000) }); throwIfError(error, "create support request"); },
     getOwnerStatistics: async () => { const events = await readAll<{ telegram_user_id: string; event_type: string; query: string | null }>("bot_usage_events", "telegram_user_id,event_type,query", query => query.order("created_at", { ascending: false }).limit(10000)); const supports = await readAll<{ id: number }>("bot_support_requests", "id", query => query.limit(10000)); const queryCounts = new Map<string, number>(); for (const event of events) if (event.query) queryCounts.set(event.query, (queryCounts.get(event.query) ?? 0) + 1); return { totalEvents: events.length, totalSupportRequests: supports.length, topQueries: Array.from(queryCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([query, count]) => ({ query, count })) }; },
+    getContentStatistics,
     listNewSupportRequests: async () => { const { data, error } = await getClient().from("bot_support_requests").select("id,message,created_at").eq("status", "new").order("created_at", { ascending: true }).limit(20); throwIfError(error, "list support requests"); return ((data ?? []) as Array<{ id: number; message: string; created_at: string }>).map(row => ({ id: Number(row.id), message: row.message, createdAt: dateValue(row.created_at) })); },
     registerSubscriber: async (chatId, telegramUserId, profile) => { const { error } = await getClient().from("bot_subscribers").upsert({ chat_id: chatId, telegram_user_id: telegramUserId, telegram_username: profile?.telegramUsername ?? null, telegram_first_name: profile?.telegramFirstName ?? null, telegram_last_name: profile?.telegramLastName ?? null, last_seen_at: new Date().toISOString() }, { onConflict: "chat_id" }); throwIfError(error, "register subscriber"); return true; },
     listSubscriberChatIds: async () => { const rows = await readAll<{ chat_id: string }>("bot_subscribers", "chat_id", query => query.order("chat_id", { ascending: true }).limit(10000)); return rows.map(row => row.chat_id); },
-    createBroadcastDraft: async input => { const subscriberIds = await store.listSubscriberChatIds(); const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4000) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1000) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count").limit(1).maybeSingle(); throwIfError(error, "create broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count) } : undefined; },
-    getBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle(); throwIfError(error, "get broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count) } : undefined; },
+    createBroadcastDraft: async input => { const subscriberIds = await store.listSubscriberChatIds(); const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4000) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1000) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").limit(1).maybeSingle(); throwIfError(error, "create broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count), scheduledFor: (data as any).scheduled_for ? dateValue((data as any).scheduled_for) : null } : undefined; },
+    getBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle(); throwIfError(error, "get broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count), scheduledFor: (data as any).scheduled_for ? dateValue((data as any).scheduled_for) : null } : undefined; },
     cancelBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").update({ status: "cancelled", completed_at: new Date().toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").select("id"); throwIfError(error, "cancel broadcast"); return Array.isArray(data) && data.length > 0; },
     beginBroadcast: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").update({ status: "sending" }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").select("id"); throwIfError(error, "begin broadcast"); return Array.isArray(data) && data.length > 0; },
     completeBroadcast: async (id, ownerTelegramUserId, successCount, failureCount) => { const { data, error } = await getClient().from("bot_broadcasts").update({ status: "sent", success_count: successCount, failure_count: failureCount, completed_at: new Date().toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "sending").select("id"); throwIfError(error, "complete broadcast"); return Array.isArray(data) && data.length > 0; },
@@ -410,8 +478,8 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     getReferralProgress: async telegramUserId => { const client = getClient(); const [qualified, pending, rewards] = await Promise.all([client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("referrer_telegram_user_id", telegramUserId).eq("status", "qualified"), client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("referrer_telegram_user_id", telegramUserId).eq("status", "pending"), client.from("bot_user_access").select("expires_at").eq("telegram_user_id", telegramUserId).in("access_scope", ["sharia_exams", "secondary_exams"]).not("expires_at", "is", null).gt("expires_at", new Date().toISOString()).order("expires_at", { ascending: false }).limit(2)]); throwIfError(qualified.error, "count qualified referrals"); throwIfError(pending.error, "count pending referrals"); throwIfError(rewards.error, "read referral rewards"); const rewardDates = ((rewards.data ?? []) as Array<{ expires_at: string }>).map(row => dateValue(row.expires_at)); return { qualifiedCount: Number(qualified.count ?? 0), pendingCount: Number(pending.count ?? 0), remainingCount: Math.max(0, 5 - (Number(qualified.count ?? 0) % 5 || 5)), activeAccessExpiresAt: rewardDates[0] ?? null }; },
     listReferralHistory: async telegramUserId => { const { data, error } = await getClient().from("bot_referrals").select("id,status,created_at,qualified_at,rejected_at,rejection_reason").eq("referrer_telegram_user_id", telegramUserId).order("created_at", { ascending: false }).limit(50); throwIfError(error, "list referral history"); return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), status: row.status, createdAt: dateValue(row.created_at), qualifiedAt: row.qualified_at ? dateValue(row.qualified_at) : null, rejectedAt: row.rejected_at ? dateValue(row.rejected_at) : null, rejectionReason: row.rejection_reason })); },
     createImportantYemeniLawsSubscriptionRequest: async (telegramUserId, chatId, profile) => { const accessScope = (profile?.accessScope ?? "important_laws") as string; const managedMenuItemId = Number.isInteger(profile?.managedMenuItemId) ? Number(profile?.managedMenuItemId) : null; const existing = await getClient().from("bot_subscription_requests").select("id").eq("telegram_user_id", telegramUserId).eq("access_scope", accessScope).eq("status", "pending").limit(1).maybeSingle(); throwIfError(existing.error, "check subscription request"); if (existing.data) return { id: Number((existing.data as any).id), created: false }; const { data, error } = await getClient().from("bot_subscription_requests").insert({ telegram_user_id: telegramUserId, chat_id: chatId, access_scope: accessScope, managed_menu_item_id: managedMenuItemId, telegram_username: profile?.username?.replace(/^@/, "").slice(0, 64) ?? null, telegram_first_name: profile?.firstName?.slice(0, 128) ?? null, telegram_last_name: profile?.lastName?.slice(0, 128) ?? null, payment_method: profile?.paymentMethod?.slice(0, 32) ?? null }).select("id").limit(1).maybeSingle(); throwIfError(error, "create subscription request"); return data ? { id: Number((data as any).id), created: true } : undefined; },
-    approveImportantYemeniLawsSubscriptionRequest: async (requestId, ownerTelegramUserId) => { const client = getClient(); const pending = await client.from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id").eq("id", requestId).eq("status", "pending").limit(1).maybeSingle(); throwIfError(pending.error, "find subscription request"); if (!pending.data) return undefined; const request = pending.data as any; const { data, error } = await client.from("bot_subscription_requests").update({ status: "approved", reviewed_by: ownerTelegramUserId, reviewed_at: new Date().toISOString() }).eq("id", requestId).eq("status", "pending").select("id"); throwIfError(error, "approve subscription request"); if (!Array.isArray(data) || data.length === 0) return undefined; if (request.access_scope === "important_laws") await upsertScopedAccess(request.telegram_user_id, request.managed_menu_item_id ? "managed_menu" : "important_laws", ownerTelegramUserId, request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null); else await upsertScopedAccess(request.telegram_user_id, request.access_scope as AccessScope, ownerTelegramUserId); return { telegramUserId: request.telegram_user_id, chatId: request.chat_id, accessScope: request.access_scope, managedMenuItemId: request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null }; },
-    rejectImportantYemeniLawsSubscriptionRequest: async (requestId, ownerTelegramUserId) => { const { data: pending, error: findError } = await getClient().from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id").eq("id", requestId).eq("status", "pending").limit(1).maybeSingle(); throwIfError(findError, "find subscription request"); if (!pending) return undefined; const { data, error } = await getClient().from("bot_subscription_requests").update({ status: "rejected", reviewed_by: ownerTelegramUserId, reviewed_at: new Date().toISOString() }).eq("id", requestId).eq("status", "pending").select("id"); throwIfError(error, "reject subscription request"); if (!Array.isArray(data) || data.length === 0) return undefined; const request = pending as any; return { telegramUserId: request.telegram_user_id, chatId: request.chat_id, accessScope: request.access_scope, managedMenuItemId: request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null }; },
+    approveImportantYemeniLawsSubscriptionRequest: (requestId, ownerTelegramUserId) => decideSupabaseSubscriptionRequest(requestId, "approve", ownerTelegramUserId),
+    rejectImportantYemeniLawsSubscriptionRequest: (requestId, ownerTelegramUserId) => decideSupabaseSubscriptionRequest(requestId, "reject", ownerTelegramUserId),
     listPendingImportantYemeniLawsSubscriptionRequests: async () => { const { data, error } = await getClient().from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id,telegram_username,telegram_first_name,telegram_last_name,payment_method,created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(20); throwIfError(error, "list pending subscriptions"); return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), telegramUserId: row.telegram_user_id, chatId: row.chat_id, accessScope: row.access_scope, managedMenuItemId: row.managed_menu_item_id ? Number(row.managed_menu_item_id) : null, telegramUsername: row.telegram_username, telegramFirstName: row.telegram_first_name, telegramLastName: row.telegram_last_name, paymentMethod: row.payment_method, createdAt: dateValue(row.created_at) })); },
     beginLegislationSearch: chatId => beginSearch(chatId, "legislation"),
     consumeLegislationSearchQuery: (chatId, query) => consumeSearch(chatId, "legislation", query),
@@ -470,7 +538,7 @@ export async function createSupabaseBotManagedMenuItem(input: any, adminUserId: 
   const actionType = input?.actionType;
   const actionValue = typeof input?.actionValue === "string" ? input.actionValue.trim().slice(0, 4000) : "";
   if (!label || !["url", "message", "file"].includes(actionType) || !actionValue) return undefined;
-  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
+  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "referral", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
   const { data, error } = await getClient().from("bot_managed_menu_items").insert(payload).select("id,label,action_type,action_value,row_index,sort_order,access_mode,enabled").limit(1).maybeSingle();
   throwIfError(error, "create managed menu item");
   if (!data) return undefined;
@@ -486,7 +554,7 @@ export async function updateSupabaseBotManagedMenuItem(id: number, input: any, a
   if (typeof input?.actionValue === "string" && input.actionValue.trim()) patch.action_value = input.actionValue.trim().slice(0, 4000);
   if (Number.isInteger(input?.rowIndex)) patch.row_index = input.rowIndex;
   if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
-  if (["free", "premium", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
+  if (["free", "premium", "referral", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
   if (typeof input?.enabled === "boolean") patch.enabled = input.enabled;
   if (Object.keys(patch).length === 0) return undefined;
   patch.updated_at = new Date().toISOString();
@@ -513,7 +581,7 @@ export async function listSupabaseBotManagedSections(): Promise<TelegramManagedS
 export async function updateSupabaseBotManagedSection(sectionKey: string, input: any, adminUserId: string): Promise<TelegramManagedSectionRecord | undefined> {
   const key = sectionKey.trim().slice(0, 64);
   if (!key) return undefined;
-  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: new Date().toISOString() };
+  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "referral", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: new Date().toISOString() };
   const { data, error } = await getClient().from("bot_managed_sections").upsert(payload, { onConflict: "section_key" }).select("section_key,display_label,enabled,access_mode,sort_order").limit(1).maybeSingle();
   throwIfError(error, "update managed section");
   if (!data) return undefined;
@@ -535,15 +603,79 @@ export async function updateSupabaseBotManagedMessage(messageKey: string, conten
   return mapManagedMessage(data);
 }
 export async function listSupabaseBotBroadcasts(limit = 20): Promise<any[]> {
-  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
+  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,scheduled_for,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
   throwIfError(error, "list broadcasts");
-  return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
+  return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), scheduledFor: row.scheduled_for ? dateValue(row.scheduled_for) : null, createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
 }
+export async function scheduleSupabaseBotBroadcast(id: number, ownerTelegramUserId: string, scheduledFor: Date): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || !ownerTelegramUserId || scheduledFor.getTime() <= Date.now()) return false;
+  const { data, error } = await getClient().from("bot_broadcasts").update({ scheduled_for: scheduledFor.toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").is("scheduled_for", null).select("id").limit(1);
+  throwIfError(error, "schedule broadcast");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(ownerTelegramUserId, "schedule", "broadcast", id, { scheduledFor: scheduledFor.toISOString() });
+  return true;
+}
+
+export async function cancelSupabaseBotBroadcastSchedule(id: number, ownerTelegramUserId: string): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || !ownerTelegramUserId) return false;
+  const { data, error } = await getClient().from("bot_broadcasts").update({ scheduled_for: null }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").not("scheduled_for", "is", null).select("id").limit(1);
+  throwIfError(error, "cancel broadcast schedule");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(ownerTelegramUserId, "cancel_schedule", "broadcast", id, {});
+  return true;
+}
+
 export async function listSupabaseBotAdminAuditLogs(limit = 100): Promise<any[]> {
   const { data, error } = await getClient().from("bot_admin_audit_logs").select("id,admin_user_id,action,entity_type,entity_id,details,created_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(200, limit)));
   throwIfError(error, "list admin audit logs");
   return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), adminUserId: row.admin_user_id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, details: row.details, createdAt: dateValue(row.created_at) }));
 }
+export async function listSupabaseBotManagedReferralRewards(limit = 100): Promise<{ summary: { qualifiedReferrals: number; pendingReferrals: number; activeRewards: number }; rewards: Array<{ id: number; referrerTelegramUserId: string; qualifiedReferralCount: number; status: "active" | "revoked"; accessStartsAt: Date; accessExpiresAt: Date; revokedAt: Date | null; revokeReason: string | null }> }> {
+  const client = getClient();
+  const [qualified, pending, active, rewards] = await Promise.all([
+    client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("status", "qualified"),
+    client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    client.from("bot_referral_rewards").select("id", { count: "exact", head: true }).eq("status", "active").gt("access_expires_at", new Date().toISOString()),
+    client.from("bot_referral_rewards").select("id,referrer_telegram_user_id,qualified_count,status,access_starts_at,access_expires_at,revoked_at,revoke_reason").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit))),
+  ]);
+  throwIfError(qualified.error, "count qualified referrals");
+  throwIfError(pending.error, "count pending referrals");
+  throwIfError(active.error, "count active referral rewards");
+  throwIfError(rewards.error, "list referral rewards");
+  return {
+    summary: {
+      qualifiedReferrals: Number(qualified.count ?? 0),
+      pendingReferrals: Number(pending.count ?? 0),
+      activeRewards: Number(active.count ?? 0),
+    },
+    rewards: ((rewards.data ?? []) as any[]).map(row => ({
+      id: Number(row.id),
+      referrerTelegramUserId: String(row.referrer_telegram_user_id),
+      qualifiedReferralCount: Number(row.qualified_count ?? 0),
+      status: row.status as "active" | "revoked",
+      accessStartsAt: dateValue(row.access_starts_at),
+      accessExpiresAt: dateValue(row.access_expires_at),
+      revokedAt: row.revoked_at ? dateValue(row.revoked_at) : null,
+      revokeReason: row.revoke_reason ?? null,
+    })),
+  };
+}
+
+export async function revokeSupabaseBotManagedReferralReward(rewardId: number, adminUserId: string, reason?: unknown): Promise<boolean> {
+  if (!adminUserId || !Number.isInteger(rewardId) || rewardId < 1) return false;
+  const revokeReason = typeof reason === "string" ? reason.trim().slice(0, 255) || null : null;
+  const { data, error } = await getClient().from("bot_referral_rewards")
+    .update({ status: "revoked", revoked_at: new Date().toISOString(), revoke_reason: revokeReason })
+    .eq("id", rewardId)
+    .eq("status", "active")
+    .select("id")
+    .limit(1);
+  throwIfError(error, "revoke referral reward");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(adminUserId, "revoke", "referral_reward", rewardId, { reason: revokeReason });
+  return true;
+}
+
 export async function recordSupabaseBotAdminAudit(adminUserId: string, action: string, entityType: string, entityId: number | string | null, details: Record<string, unknown> = {}): Promise<void> {
   const { error } = await getClient().from("bot_admin_audit_logs").insert({ admin_user_id: adminUserId, action, entity_type: entityType, entity_id: entityId === null ? null : String(entityId), details });
   throwIfError(error, "record admin audit");
@@ -557,4 +689,166 @@ export async function confirmSupabaseBotPlatformAccess(telegramUserId: string, r
 export async function confirmSupabaseBotHasadAccess(telegramUserId: string, region?: string | null): Promise<void> {
   const { error } = await getClient().from("bot_hasad_access").upsert({ telegram_user_id: telegramUserId, visited_at: new Date().toISOString(), region: region ?? null }, { onConflict: "telegram_user_id" });
   throwIfError(error, "confirm Hasad access");
+}
+
+
+export async function listSupabaseBotManagedFolders(queryText = ""): Promise<any[]> {
+  const index = await loadDriveIndex();
+  const needle = normalizeSearch(queryText);
+  return index.folders
+    .map(row => {
+      const collection = index.collectionForFolder(row.drive_id);
+      return collection ? mapFolder(row, collection, index.folderPath(row.drive_id)) : undefined;
+    })
+    .filter((folder): folder is LegalFolder => Boolean(folder))
+    .filter(folder => !needle || normalizeSearch(`${folder.name} ${folder.path} ${folder.collection}`).includes(needle))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .slice(0, 200)
+    .map(folder => ({ id: folder.id, name: folder.name, collection: folder.collection, sortOrder: folder.sortOrder, driveFolderId: folder.driveFolderId, parentDriveFolderId: folder.parentDriveFolderId }));
+}
+
+export async function listSupabaseBotManagedSources(queryText = "", page = 1): Promise<{ sources: any[]; total: number }> {
+  const index = await loadDriveIndex();
+  const needle = normalizeSearch(queryText);
+  const all = index.sourceRows
+    .map(item => item.source)
+    .filter(source => !needle || normalizeSearch(`${source.title} ${source.description} ${source.collection}`).includes(needle))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  return { sources: all.slice((safePage - 1) * LIBRARY_PAGE_SIZE, safePage * LIBRARY_PAGE_SIZE).map(source => ({ id: source.id, title: source.title, description: source.description, collection: source.collection, sortOrder: source.sortOrder, isFeatured: source.isFeatured, updatedAt: source.updatedAt })), total: all.length };
+}
+
+export async function getSupabaseBotUsageAnalytics(days = 30): Promise<any> {
+  const periodDays = Math.max(1, Math.min(365, Number.isInteger(days) ? days : 30));
+  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+  const events = await readAll<{ telegram_user_id: string; event_type: string; section_key: string | null; source_id: number | null }>("bot_usage_events", "telegram_user_id,event_type,section_key,source_id,created_at", query => query.gte("created_at", since).order("created_at", { ascending: false }).limit(10000));
+  const eventTypes = new Map<string, number>();
+  const sections = new Map<string, number>();
+  const sources = new Map<number, number>();
+  const users = new Set<string>();
+  for (const event of events) {
+    users.add(event.telegram_user_id);
+    eventTypes.set(event.event_type, (eventTypes.get(event.event_type) ?? 0) + 1);
+    if (event.section_key) sections.set(event.section_key, (sections.get(event.section_key) ?? 0) + 1);
+    if (event.source_id !== null && event.source_id !== undefined) sources.set(Number(event.source_id), (sources.get(Number(event.source_id)) ?? 0) + 1);
+  }
+  const index = await loadDriveIndex();
+  const titleById = new Map(index.sourceRows.map(item => [item.source.id, item.source.title]));
+  return {
+    periodDays,
+    totalEvents: events.length,
+    uniqueUsers: users.size,
+    eventTypes: Array.from(eventTypes, ([eventType, count]) => ({ eventType, count })).sort((a, b) => b.count - a.count),
+    topSections: Array.from(sections, ([sectionKey, count]) => ({ sectionKey, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+    topSources: Array.from(sources, ([sourceId, count]) => ({ sourceId, title: titleById.get(sourceId) ?? `ملف ${sourceId}`, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+  };
+}
+
+export async function getSupabaseBotVisitAnalytics(period: "day" | "week" | "month"): Promise<any> {
+  const days = period === "day" ? 1 : period === "week" ? 7 : 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const [platform, hasad, subscribers] = await Promise.all([
+    readAll<{ telegram_user_id: string; confirmed_at: string }>("bot_platform_access", "telegram_user_id,confirmed_at", query => query.gte("confirmed_at", since).order("confirmed_at", { ascending: false }).limit(10000)),
+    readAll<{ telegram_user_id: string; visited_at: string }>("bot_hasad_access", "telegram_user_id,visited_at", query => query.gte("visited_at", since).order("visited_at", { ascending: false }).limit(10000)),
+    readAll<{ telegram_user_id: string; telegram_username: string | null; telegram_first_name: string | null; telegram_last_name: string | null }>("bot_subscribers", "telegram_user_id,telegram_username,telegram_first_name,telegram_last_name", query => query.limit(10000)),
+  ]);
+  const profiles = new Map(subscribers.map(row => [row.telegram_user_id, row]));
+  const users = new Map<string, any>();
+  for (const row of platform) users.set(row.telegram_user_id, { telegramUserId: row.telegram_user_id, platformVisitedAt: row.confirmed_at, hasadVisitedAt: null });
+  for (const row of hasad) users.set(row.telegram_user_id, { ...(users.get(row.telegram_user_id) ?? { telegramUserId: row.telegram_user_id, platformVisitedAt: null }), hasadVisitedAt: row.visited_at });
+  const resultUsers = Array.from(users.values()).map(row => ({ ...row, ...(profiles.get(row.telegramUserId) ? { telegramUsername: profiles.get(row.telegramUserId)?.telegram_username ?? null, telegramFirstName: profiles.get(row.telegramUserId)?.telegram_first_name ?? null, telegramLastName: profiles.get(row.telegramUserId)?.telegram_last_name ?? null } : { telegramUsername: null, telegramFirstName: null, telegramLastName: null }) }));
+  return { period, since, platformVisits: { total: platform.length, uniqueUsers: new Set(platform.map(row => row.telegram_user_id)).size }, hasadVisits: { total: hasad.length, uniqueUsers: new Set(hasad.map(row => row.telegram_user_id)).size }, users: resultUsers.slice(0, 200) };
+}
+
+
+export async function updateSupabaseBotManagedSource(id: number, input: any, adminUserId: string): Promise<any | undefined> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return undefined;
+  const current = await getBotSource(id);
+  if (!current) return undefined;
+  const patch: any = { source_id: id, updated_by: adminUserId, updated_at: new Date().toISOString() };
+  if (typeof input?.title === "string" && input.title.trim()) patch.title = input.title.trim().slice(0, 255);
+  if (typeof input?.description === "string" && input.description.trim()) patch.description = input.description.trim().slice(0, 2000);
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  if (typeof input?.isFeatured === "boolean") patch.is_featured = input.isFeatured;
+  const { data, error } = await getClient().from("bot_source_overrides").upsert(patch, { onConflict: "source_id" }).select("source_id,title,description,sort_order,is_featured,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update source overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "source_metadata", id, patch);
+  return { id, title: data?.title ?? current.title, description: data?.description ?? current.description, collection: current.collection, sortOrder: data?.sort_order ?? current.sortOrder, isFeatured: data?.is_featured ?? current.isFeatured, updatedAt: new Date() };
+}
+
+export async function deleteSupabaseBotManagedSource(id: number, adminUserId: string): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId || !await getBotSource(id)) return false;
+  const { error } = await getClient().from("bot_source_overrides").upsert({ source_id: id, enabled: false, updated_by: adminUserId, updated_at: new Date().toISOString() }, { onConflict: "source_id" });
+  throwIfError(error, "disable source overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "disable", "source_metadata", id, {});
+  return true;
+}
+
+export async function updateSupabaseBotManagedFolder(id: number, input: any, adminUserId: string): Promise<any | undefined> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return undefined;
+  const index = await loadDriveIndex();
+  const current = index.folders.find(row => Number(row.id) === id);
+  const collection = current ? index.collectionForFolder(current.drive_id) : undefined;
+  if (!current || !collection) return undefined;
+  const patch: any = { folder_id: id, updated_by: adminUserId, updated_at: new Date().toISOString() };
+  if (typeof input?.name === "string" && input.name.trim()) patch.name = input.name.trim().slice(0, 255);
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  const { data, error } = await getClient().from("bot_folder_overrides").upsert(patch, { onConflict: "folder_id" }).select("folder_id,name,sort_order,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update folder overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "folder_metadata", id, patch);
+  return { id, name: data?.name ?? current.name, collection, sortOrder: data?.sort_order ?? current.order_index ?? 0, driveFolderId: current.drive_id, parentDriveFolderId: current.parent_id };
+}
+
+export async function deleteSupabaseBotManagedFolder(id: number, adminUserId: string): Promise<"deleted" | "not_empty" | "missing"> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return "missing";
+  const index = await loadDriveIndex();
+  const current = index.folders.find(row => Number(row.id) === id);
+  if (!current) return "missing";
+  const hasChildren = index.folders.some(row => row.parent_id === current.drive_id);
+  const hasFiles = index.files.some(row => row.folder_id === current.drive_id);
+  if (hasChildren || hasFiles) return "not_empty";
+  const { error } = await getClient().from("bot_folder_overrides").upsert({ folder_id: id, enabled: false, updated_by: adminUserId, updated_at: new Date().toISOString() }, { onConflict: "folder_id" });
+  throwIfError(error, "disable folder overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "disable", "folder_metadata", id, {});
+  return "deleted";
+}
+
+
+export async function getSupabaseBotAdminStatistics(activeDays = 30): Promise<{ totalSubscribers: number; activeUsers: number; activeUsersPeriodDays: number; lastActiveAt: Date | null }> {
+  const periodDays = Math.max(1, Math.min(365, Math.trunc(activeDays) || 30));
+  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+  const client = getClient();
+  const [total, active, latest] = await Promise.all([
+    client.from("bot_subscribers").select("chat_id", { count: "exact", head: true }),
+    client.from("bot_subscribers").select("chat_id", { count: "exact", head: true }).gte("last_seen_at", since),
+    client.from("bot_subscribers").select("last_seen_at").not("last_seen_at", "is", null).order("last_seen_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  throwIfError(total.error, "count bot subscribers");
+  throwIfError(active.error, "count active bot users");
+  throwIfError(latest.error, "read latest bot activity");
+  return {
+    totalSubscribers: Number(total.count ?? 0),
+    activeUsers: Number(active.count ?? 0),
+    activeUsersPeriodDays: periodDays,
+    lastActiveAt: latest.data && typeof (latest.data as any).last_seen_at === "string" ? dateValue((latest.data as any).last_seen_at) : null,
+  };
+}
+
+
+async function decideSupabaseSubscriptionRequest(requestId: number, decision: "approve" | "reject", adminUserId: string): Promise<{ telegramUserId: string; chatId: string; accessScope: any; managedMenuItemId: number | null } | undefined> {
+  if (!Number.isInteger(requestId) || requestId < 1 || !adminUserId || !["approve", "reject"].includes(decision)) return undefined;
+  const { data, error } = await getClient().rpc("bot_admin_decide_subscription_request", {
+    p_request_id: requestId,
+    p_decision: decision,
+    p_admin_user_id: adminUserId,
+  });
+  throwIfError(error, `${decision} subscription request atomically`);
+  if (!data) return undefined;
+  const row = data as { telegramUserId?: unknown; chatId?: unknown; accessScope?: unknown; managedMenuItemId?: unknown };
+  return {
+    telegramUserId: String(row.telegramUserId ?? ""),
+    chatId: String(row.chatId ?? ""),
+    accessScope: row.accessScope,
+    managedMenuItemId: row.managedMenuItemId == null ? null : Number(row.managedMenuItemId),
+  };
 }

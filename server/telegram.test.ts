@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LegalFolder, LegalSource, TelegramContractTemplate } from "../drizzle/schema";
+import type { TelegramContentStatistics } from "./telegram";
 import { approximateArabicMatchScore, fallbackJudicialSearchResults, normalizeArabicSearch } from "./db";
 import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, createTelegramSender, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
 import { examPollOptionText, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
@@ -231,7 +232,7 @@ const laborContractTemplate: TelegramContractTemplate = {
 function createStore(
   platformConfirmed = true,
   initialImportantLawsAccess = false,
-  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message" | "file"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" | "hasad" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free" | "premium" | "hasad"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectionReason: string | null }>; secondaryQuranWrittenQuestion?: boolean } = {}
+  options: { recentSources?: LegalSource[]; managedMenuItems?: Array<{ id: number; label: string; actionType: "url" | "message" | "file"; actionValue: string; rowIndex: number; sortOrder: number; accessMode?: "free" | "premium" | "hasad" }>; managedSections?: Array<{ sectionKey: string; displayLabel: string; enabled: boolean; accessMode?: "subscription" | "free" | "premium" | "hasad"; sortOrder: number }>; managedMessages?: Array<{ messageKey: "welcome" | "about" | "help"; content: string }>; contentStatistics?: TelegramContentStatistics; onUsage?: (eventType: string, options?: { query?: string; sourceId?: number; sectionKey?: string }) => void; referralPremiumAccess?: boolean; managedMenuPremiumAccess?: boolean; hasadConfirmed?: boolean; onReferralCreated?: (referrerTelegramUserId: string, refereeTelegramUserId: string, refereeChatId: string) => void; referralProgress?: { qualifiedCount: number; pendingCount: number; remainingCount: number; activeAccessExpiresAt: Date | null }; referralHistory?: Array<{ id: number; status: "pending" | "qualified" | "rejected"; createdAt: Date; qualifiedAt: Date | null; rejectionReason: string | null }>; secondaryQuranWrittenQuestion?: boolean } = {}
 ): TelegramLibraryStore {
   let confirmed = platformConfirmed;
   const hasadConfirmed = options.hasadConfirmed ?? true;
@@ -315,6 +316,18 @@ function createStore(
     recordUsage: async (_telegramUserId, eventType, usageOptions) => { options.onUsage?.(eventType, usageOptions); },
     createSupportRequest: async () => undefined,
     getOwnerStatistics: async () => ({ totalEvents: 3, totalSupportRequests: 1, topQueries: [{ query: "مدني", count: 2 }] }),
+    getContentStatistics: async () => options.contentStatistics ?? {
+      questionCount: 38767,
+      examFormCount: 42,
+      examSubjectCount: 76,
+      examLevelCount: 3,
+      totalExams: 15233,
+      userCount: 61900,
+      libraryFileCount: 240,
+      librarySectionsCount: 8,
+      libraryFilesBySection: [{ label: "نماذج وصيغ قانونية", count: 217 }, { label: "نماذج مصورة", count: 17 }],
+      lastUpdatedAt: new Date("2026-08-26T20:00:00.000Z"),
+    },
     listNewSupportRequests: async () => [],
     registerSubscriber: async chatId => {
       const firstUse = !registeredSubscriberChatIds.has(chatId);
@@ -725,6 +738,7 @@ describe("Telegram library conversation", () => {
     expect(keyboard).toContain("📄 النماذج والصيغ القانونية");
     expect(keyboard).toContain("📌 المراجع المميزة");
     expect(keyboard).toContain("🛠 الخدمات والأدوات");
+    expect(keyboard).toContain("📊 إحصاءات البوت");
     expect(keyboard).toContain("menu:library");
     expect(keyboard).toContain("menu:exams");
     expect(keyboard).not.toContain("📚 تصفح المكتبة");
@@ -736,6 +750,59 @@ describe("Telegram library conversation", () => {
     await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
     expect(messages[1]?.text).toContain("مرحباً بك في بوت الناصر القانوني");
     expect(messages[1]?.text).not.toContain("منصة معرفية وتعليمية بإشراف أ. معين الناصر");
+  });
+
+  it("يعرض إحصاءات البوت وعدد المستخدمين بصيغة بارزة ويحدث الرسالة نفسها", async () => {
+    const { sender, messages, editedMessages } = createSender();
+    const store = createStore(true, false, {
+      contentStatistics: {
+        questionCount: 38767,
+        examFormCount: 42,
+        examSubjectCount: 76,
+        examLevelCount: 3,
+        totalExams: 15233,
+        userCount: 61900,
+        libraryFileCount: 240,
+        librarySectionsCount: 8,
+        libraryFilesBySection: [{ label: "نماذج وصيغ قانونية", count: 217 }],
+        lastUpdatedAt: new Date("2026-08-26T20:00:00.000Z"),
+      },
+    });
+
+    await handleTelegramUpdate({ callback_query: { id: "open-help", data: "menu:help", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
+    expect(editedMessages.at(-1)?.messageId).toBe(88);
+    await handleTelegramUpdate({ callback_query: { id: "open-stats", data: "stats", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
+    expect(messages).toHaveLength(0);
+    expect(editedMessages.at(-1)?.text).toContain("📊 إحصاءات البوت");
+    expect(editedMessages.at(-1)?.text).toContain("٦١٬٩٠٠ مستخدمًا");
+    expect(editedMessages.at(-1)?.text).toContain("✅ ١٥٬٢٣٣ اختبارًا منجزًا");
+    expect(editedMessages.at(-1)?.text).toContain("📝 ٣٨٬٧٦٧ سؤالًا نشطًا");
+    expect(editedMessages.at(-1)?.text).toContain("📚 ٧٦ مادة تعليمية");
+    expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("stats:refresh");
+
+    await handleTelegramUpdate({ callback_query: { id: "refresh-stats", data: "stats:refresh", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
+    expect(editedMessages).toHaveLength(3);
+    expect(editedMessages.at(-1)?.messageId).toBe(88);
+  });
+
+  it("يعرض أوصاف بنوك الاختبارات المعتمدة في القوائم الثلاث", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore();
+
+    await handleTelegramUpdate({ callback_query: { id: "general-exams-description", data: "menu:exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("📝 بنك الأسئلة والاختبارات الشامل");
+    expect(messages.at(-1)?.text).toContain("المرجع الرقمي المعتمد والمصمم وفقاً لنماذج الامتحانات النهائية للأعوام السابقة.");
+    expect(messages.at(-1)?.text).toContain("الرجاء اختيار البنك التعليمي المطلوب للبدء.");
+
+    await handleTelegramUpdate({ callback_query: { id: "sharia-exams-description", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون");
+    expect(messages.at(-1)?.text).toContain("بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون عبر المستويات الدراسية الأربعة");
+    expect(messages.at(-1)?.text).toContain("يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.");
+
+    await handleTelegramUpdate({ callback_query: { id: "secondary-exams-description", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
+    expect(messages.at(-1)?.text).toContain("📝 بنك التقييم الذكي لشهادة الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("بنك اختبارات رقمي مؤتمت موجه لطلاب الثالث الثانوي  (بفرعية العلمي والأدبي)");
+    expect(messages.at(-1)?.text).toContain("يرجى اختيار الفرع أو المادة الدراسية من القائمة أدناه، أو استخدام الأمر المباشر.");
   });
 
   it("يسجل رابط الإحالة في أول بدء ويشرح متابعة الإحالات للمستخدم", async () => {
@@ -812,9 +879,9 @@ describe("Telegram library conversation", () => {
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
     await handleTelegramUpdate({ callback_query: { id: "exam-free-hasad", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("📝 اختبارات الشريعة والقانون");
-    expect(response?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية مع الشرح المفصل مبنية وفقاً لنماذج الأختبارات للأعوام السابقة لكلية الشريعة والقانون \"جامعة صنعاء\" من عام 2020 وحتى عام 2026، مع التحديث والترقية المستمرة للأعوام المقبلة.");
-    expect(response?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(response?.text).toContain("📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون");
+    expect(response?.text).toContain("بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون عبر المستويات الدراسية الأربعة");
+    expect(response?.text).toContain("يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
@@ -824,7 +891,7 @@ describe("Telegram library conversation", () => {
     const store = createStore(true, false, { referralPremiumAccess: false, hasadConfirmed: true });
     await handleTelegramUpdate({ callback_query: { id: "secondary-free-hasad", data: "secondary-exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("اختبارات الثانوية العامة");
+    expect(response?.text).toContain("بنك التقييم الذكي لشهادة الثانوية العامة");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(response?.text).not.toContain("الاشتراك المدفوع");
   });
@@ -838,7 +905,7 @@ describe("Telegram library conversation", () => {
     });
     await handleTelegramUpdate({ callback_query: { id: "exam-free", data: "exams", from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } }, store, sender);
     const response = messages.at(-1);
-    expect(response?.text).toContain("اختر المادة من القائمة");
+    expect(response?.text).toContain("يرجى اختيار المادة الدراسية");
     expect(response?.text).not.toContain("دعم اختياري");
     expect(JSON.stringify(response?.replyMarkup)).not.toContain("premium:request:sharia_exams");
   });
@@ -1047,9 +1114,9 @@ describe("Telegram library conversation", () => {
 
     await callback("secondary-menu", "secondary-exams");
     const sectionsMenu = JSON.stringify(messages.at(-1)?.replyMarkup);
-    expect(messages.at(-1)?.text).toContain("🧮 اختبارات الثانوية العامة");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية للصف الثالث ثانوي للعام الدراسي 2025م—2026م");
-    expect(messages.at(-1)?.text).toContain("اختر القسم المطلوب.");
+    expect(messages.at(-1)?.text).toContain("📝 بنك التقييم الذكي لشهادة الثانوية العامة");
+    expect(messages.at(-1)?.text).toContain("نماذج اختبارات أوائل الجمهورية اليمنية للعام الدراسي 2025-2026م");
+    expect(messages.at(-1)?.text).toContain("يرجى اختيار الفرع أو المادة الدراسية من القائمة أدناه، أو استخدام الأمر المباشر.");
     expect(sectionsMenu).toContain("exam:level:secondary-literary");
     expect(sectionsMenu).toContain("exam:level:secondary-scientific");
     expect(sectionsMenu).not.toContain("exam:subject:secondary:");
@@ -1165,9 +1232,9 @@ describe("Telegram library conversation", () => {
     );
 
     await callback("exam-menu", "exams");
-    expect(messages[0]?.text).toContain("📝 اختبارات الشريعة والقانون");
-    expect(messages[0]?.text).toContain("بنك أسئلة مؤتمت ونماذج أسئلة تجريبية");
-    expect(messages[0]?.text).toContain("اختر المادة من القائمة أدناه أو استخدم الأمر المناسب.");
+    expect(messages[0]?.text).toContain("📝 الأرشيف التفاعلي لطلاّب الشريعة والقانون");
+    expect(messages[0]?.text).toContain("بنك أسئلة رقمي مؤتمت لطلاب كليّة الشريعة والقانون");
+    expect(messages[0]?.text).toContain("يرجى اختيار المادة الدراسية من القائمة أدناه، أو إدخال الأمر المباشر.");
     expect(messages[0]?.text).not.toContain("/newquiz");
     expect(messages[0]?.text).not.toContain("/quizzes");
     expect(messages[0]?.text).not.toContain("/stop");
