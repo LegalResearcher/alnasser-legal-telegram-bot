@@ -1968,7 +1968,7 @@ function contentStatisticsText(stats: TelegramContentStatistics): string {
     "",
     "🧠 المحتوى التعليمي",
     "━━━━━━━━━━━━━━",
-    `📝 ${number(stats.questionCount)} سؤالًا مؤتمتًا`,
+    `📝 ${number(stats.questionCount)} سؤالًا نشطًا`,
     `📚 ${number(stats.examSubjectCount)} مادة تعليمية`,
     `🎓 ${number(stats.examLevelCount)} مستويات تعليمية`,
     `📄 ${number(stats.examFormCount)} نموذجًا اختباريًا`,

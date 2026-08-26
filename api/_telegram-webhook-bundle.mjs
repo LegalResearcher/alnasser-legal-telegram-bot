@@ -4466,7 +4466,7 @@ function contentStatisticsText(stats) {
     "",
     "\u{1F9E0} \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u062A\u0639\u0644\u064A\u0645\u064A",
     "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
-    `\u{1F4DD} ${number(stats.questionCount)} \u0633\u0624\u0627\u0644\u064B\u0627 \u0645\u0624\u062A\u0645\u062A\u064B\u0627`,
+    `\u{1F4DD} ${number(stats.questionCount)} \u0633\u0624\u0627\u0644\u064B\u0627 \u0646\u0634\u0637\u064B\u0627`,
     `\u{1F4DA} ${number(stats.examSubjectCount)} \u0645\u0627\u062F\u0629 \u062A\u0639\u0644\u064A\u0645\u064A\u0629`,
     `\u{1F393} ${number(stats.examLevelCount)} \u0645\u0633\u062A\u0648\u064A\u0627\u062A \u062A\u0639\u0644\u064A\u0645\u064A\u0629`,
     `\u{1F4C4} ${number(stats.examFormCount)} \u0646\u0645\u0648\u0630\u062C\u064B\u0627 \u0627\u062E\u062A\u0628\u0627\u0631\u064A\u064B\u0627`,
@@ -7320,6 +7320,8 @@ async function getSupabaseBotExamResultSummary(sessionId, telegramUserId) {
 var DEFAULT_SUPABASE_URL2 = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
 var DEFAULT_PUBLIC_TOTAL_EXAMS = 15233;
 var DEFAULT_PUBLIC_USER_COUNT = 61900;
+var DEFAULT_PUBLIC_ACTIVE_QUESTION_COUNT = 38767;
+var DEFAULT_PUBLIC_SUBJECT_COUNT = 76;
 function publicCount(name, fallback) {
   const configured = Number(process.env[name]);
   return Number.isSafeInteger(configured) && configured >= 0 ? configured : fallback;
@@ -7539,9 +7541,9 @@ async function getContentStatistics() {
   ];
   const libraryFilesBySection = sections.map((section) => ({ label: section.label, count: section.staticCount ?? fileCounts.get(section.collection) ?? 0 }));
   return {
-    questionCount: exams.questionCount,
+    questionCount: publicCount("TELEGRAM_PUBLIC_ACTIVE_QUESTION_COUNT", DEFAULT_PUBLIC_ACTIVE_QUESTION_COUNT),
     examFormCount: exams.formCount,
-    examSubjectCount: availableSubjectKeys.size,
+    examSubjectCount: publicCount("TELEGRAM_PUBLIC_SUBJECT_COUNT", DEFAULT_PUBLIC_SUBJECT_COUNT),
     examLevelCount,
     totalExams: publicCount("TELEGRAM_PUBLIC_TOTAL_EXAMS", DEFAULT_PUBLIC_TOTAL_EXAMS),
     userCount: publicCount("TELEGRAM_PUBLIC_USER_COUNT", DEFAULT_PUBLIC_USER_COUNT),

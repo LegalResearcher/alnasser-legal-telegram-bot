@@ -45,6 +45,8 @@ import {
 const DEFAULT_SUPABASE_URL = "https://nhrlwemvkvgmtzoiwcym.supabase.co";
 const DEFAULT_PUBLIC_TOTAL_EXAMS = 15233;
 const DEFAULT_PUBLIC_USER_COUNT = 61900;
+const DEFAULT_PUBLIC_ACTIVE_QUESTION_COUNT = 38767;
+const DEFAULT_PUBLIC_SUBJECT_COUNT = 76;
 
 function publicCount(name: string, fallback: number): number {
   const configured = Number(process.env[name]);
@@ -290,9 +292,9 @@ async function getContentStatistics(): Promise<TelegramContentStatistics> {
   ];
   const libraryFilesBySection = sections.map(section => ({ label: section.label, count: section.staticCount ?? fileCounts.get(section.collection!) ?? 0 }));
   return {
-    questionCount: exams.questionCount,
+    questionCount: publicCount("TELEGRAM_PUBLIC_ACTIVE_QUESTION_COUNT", DEFAULT_PUBLIC_ACTIVE_QUESTION_COUNT),
     examFormCount: exams.formCount,
-    examSubjectCount: availableSubjectKeys.size,
+    examSubjectCount: publicCount("TELEGRAM_PUBLIC_SUBJECT_COUNT", DEFAULT_PUBLIC_SUBJECT_COUNT),
     examLevelCount,
     totalExams: publicCount("TELEGRAM_PUBLIC_TOTAL_EXAMS", DEFAULT_PUBLIC_TOTAL_EXAMS),
     userCount: publicCount("TELEGRAM_PUBLIC_USER_COUNT", DEFAULT_PUBLIC_USER_COUNT),

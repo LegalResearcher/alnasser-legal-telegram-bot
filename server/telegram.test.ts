@@ -317,9 +317,9 @@ function createStore(
     createSupportRequest: async () => undefined,
     getOwnerStatistics: async () => ({ totalEvents: 3, totalSupportRequests: 1, topQueries: [{ query: "مدني", count: 2 }] }),
     getContentStatistics: async () => options.contentStatistics ?? {
-      questionCount: 1250,
+      questionCount: 38767,
       examFormCount: 42,
-      examSubjectCount: 9,
+      examSubjectCount: 76,
       examLevelCount: 3,
       totalExams: 15233,
       userCount: 61900,
@@ -756,9 +756,9 @@ describe("Telegram library conversation", () => {
     const { sender, messages, editedMessages } = createSender();
     const store = createStore(true, false, {
       contentStatistics: {
-        questionCount: 1250,
+        questionCount: 38767,
         examFormCount: 42,
-        examSubjectCount: 9,
+        examSubjectCount: 76,
         examLevelCount: 3,
         totalExams: 15233,
         userCount: 61900,
@@ -776,6 +776,8 @@ describe("Telegram library conversation", () => {
     expect(editedMessages.at(-1)?.text).toContain("📊 إحصاءات البوت");
     expect(editedMessages.at(-1)?.text).toContain("٦١٬٩٠٠ مستخدمًا");
     expect(editedMessages.at(-1)?.text).toContain("✅ ١٥٬٢٣٣ اختبارًا منجزًا");
+    expect(editedMessages.at(-1)?.text).toContain("📝 ٣٨٬٧٦٧ سؤالًا نشطًا");
+    expect(editedMessages.at(-1)?.text).toContain("📚 ٧٦ مادة تعليمية");
     expect(JSON.stringify(editedMessages.at(-1)?.replyMarkup)).toContain("stats:refresh");
 
     await handleTelegramUpdate({ callback_query: { id: "refresh-stats", data: "stats:refresh", from: { id: 12 }, message: { chat: { id: 12, type: "private" }, message_id: 88 } } }, store, sender);
