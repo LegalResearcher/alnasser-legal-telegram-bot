@@ -183,7 +183,19 @@ async function loadDriveIndex() {
     readAll<DriveFolderRow>("drive_folders", "id,drive_id,name,parent_id,depth,order_index,is_premium,free_download", query => query.order("depth", { ascending: true }).order("order_index", { ascending: true }).order("id", { ascending: true })),
     readAll<DriveFileRow>("drive_files", "id,drive_id,name,folder_id,mime_type,view_url,embed_url,download_url,order_index,is_premium,view_count,download_count,extracted_title,download_locked,created_at,updated_at", query => query.order("folder_id", { ascending: true }).order("order_index", { ascending: true }).order("id", { ascending: true })),
   ]);
-  const foldersByDriveId = new Map(folders.map(folder => [folder.drive_id, folder]));
+  const [sourceOverrideResult, folderOverrideResult] = await Promise.all([
+    getClient().from("bot_source_overrides").select("source_id,title,description,sort_order,is_featured,enabled").limit(10000),
+    getClient().from("bot_folder_overrides").select("folder_id,name,sort_order,enabled").limit(10000),
+  ]);
+  throwIfError(sourceOverrideResult.error, "read source overlays");
+  throwIfError(folderOverrideResult.error, "read folder overlays");
+  const sourceOverrides = new Map(((sourceOverrideResult.data ?? []) as any[]).map(row => [Number(row.source_id), row]));
+  const folderOverrides = new Map(((folderOverrideResult.data ?? []) as any[]).map(row => [Number(row.folder_id), row]));
+  const overlaidFolders = folders.map(folder => {
+    const override = folderOverrides.get(Number(folder.id));
+    return { ...folder, name: typeof override?.name === "string" && override.name.trim() ? override.name.trim() : folder.name, order_index: override?.sort_order ?? folder.order_index };
+  }).filter(folder => folderOverrides.get(Number(folder.id))?.enabled !== false);
+  const foldersByDriveId = new Map(overlaidFolders.map(folder => [folder.drive_id, folder]));
   const collectionCache = new Map<string, SourceCollection | undefined>();
   const rootCollection = new Map<string, SourceCollection>(Object.entries(ROOT_BY_COLLECTION).map(([collection, root]) => [root.id, collection as SourceCollection]));
   const collectionForFolder = (driveId: string | null): SourceCollection | undefined => {
@@ -215,9 +227,13 @@ async function loadDriveIndex() {
   };
   const sourceRows = files.map(file => {
     const collection = collectionForFolder(file.folder_id);
-    return collection ? { file, collection, source: mapFile(file, collection, file.folder_id ? folderPath(file.folder_id) : "") } : undefined;
+    if (!collection) return undefined;
+    const source = mapFile(file, collection, file.folder_id ? folderPath(file.folder_id) : "");
+    const override = sourceOverrides.get(source.id);
+    if (override?.enabled === false) return undefined;
+    return { file, collection, source: { ...source, title: typeof override?.title === "string" && override.title.trim() ? override.title.trim() : source.title, description: typeof override?.description === "string" && override.description.trim() ? override.description.trim() : source.description, sortOrder: Number.isInteger(override?.sort_order) ? Number(override.sort_order) : source.sortOrder, isFeatured: typeof override?.is_featured === "boolean" ? override.is_featured : source.isFeatured } };
   }).filter((value): value is { file: DriveFileRow; collection: SourceCollection; source: LegalSource } => Boolean(value));
-  return { folders, files, foldersByDriveId, collectionForFolder, folderPath, sourceRows };
+  return { folders: overlaidFolders, files, foldersByDriveId, collectionForFolder, folderPath, sourceRows };
 }
 
 function virtualFolder(collection: SourceCollection): LegalFolder {
@@ -438,8 +454,8 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     listNewSupportRequests: async () => { const { data, error } = await getClient().from("bot_support_requests").select("id,message,created_at").eq("status", "new").order("created_at", { ascending: true }).limit(20); throwIfError(error, "list support requests"); return ((data ?? []) as Array<{ id: number; message: string; created_at: string }>).map(row => ({ id: Number(row.id), message: row.message, createdAt: dateValue(row.created_at) })); },
     registerSubscriber: async (chatId, telegramUserId, profile) => { const { error } = await getClient().from("bot_subscribers").upsert({ chat_id: chatId, telegram_user_id: telegramUserId, telegram_username: profile?.telegramUsername ?? null, telegram_first_name: profile?.telegramFirstName ?? null, telegram_last_name: profile?.telegramLastName ?? null, last_seen_at: new Date().toISOString() }, { onConflict: "chat_id" }); throwIfError(error, "register subscriber"); return true; },
     listSubscriberChatIds: async () => { const rows = await readAll<{ chat_id: string }>("bot_subscribers", "chat_id", query => query.order("chat_id", { ascending: true }).limit(10000)); return rows.map(row => row.chat_id); },
-    createBroadcastDraft: async input => { const subscriberIds = await store.listSubscriberChatIds(); const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4000) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1000) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count").limit(1).maybeSingle(); throwIfError(error, "create broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count) } : undefined; },
-    getBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle(); throwIfError(error, "get broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count) } : undefined; },
+    createBroadcastDraft: async input => { const subscriberIds = await store.listSubscriberChatIds(); const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4000) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1000) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").limit(1).maybeSingle(); throwIfError(error, "create broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count), scheduledFor: (data as any).scheduled_for ? dateValue((data as any).scheduled_for) : null } : undefined; },
+    getBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle(); throwIfError(error, "get broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count), scheduledFor: (data as any).scheduled_for ? dateValue((data as any).scheduled_for) : null } : undefined; },
     cancelBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").update({ status: "cancelled", completed_at: new Date().toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").select("id"); throwIfError(error, "cancel broadcast"); return Array.isArray(data) && data.length > 0; },
     beginBroadcast: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").update({ status: "sending" }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").select("id"); throwIfError(error, "begin broadcast"); return Array.isArray(data) && data.length > 0; },
     completeBroadcast: async (id, ownerTelegramUserId, successCount, failureCount) => { const { data, error } = await getClient().from("bot_broadcasts").update({ status: "sent", success_count: successCount, failure_count: failureCount, completed_at: new Date().toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "sending").select("id"); throwIfError(error, "complete broadcast"); return Array.isArray(data) && data.length > 0; },
@@ -587,10 +603,28 @@ export async function updateSupabaseBotManagedMessage(messageKey: string, conten
   return mapManagedMessage(data);
 }
 export async function listSupabaseBotBroadcasts(limit = 20): Promise<any[]> {
-  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
+  const { data, error } = await getClient().from("bot_broadcasts").select("id,kind,message,status,recipient_count,success_count,failure_count,scheduled_for,created_at,completed_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));
   throwIfError(error, "list broadcasts");
-  return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
+  return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), kind: row.kind, message: row.message, status: row.status, recipientCount: Number(row.recipient_count ?? 0), successCount: Number(row.success_count ?? 0), failureCount: Number(row.failure_count ?? 0), scheduledFor: row.scheduled_for ? dateValue(row.scheduled_for) : null, createdAt: dateValue(row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : null }));
 }
+export async function scheduleSupabaseBotBroadcast(id: number, ownerTelegramUserId: string, scheduledFor: Date): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || !ownerTelegramUserId || scheduledFor.getTime() <= Date.now()) return false;
+  const { data, error } = await getClient().from("bot_broadcasts").update({ scheduled_for: scheduledFor.toISOString() }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").is("scheduled_for", null).select("id").limit(1);
+  throwIfError(error, "schedule broadcast");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(ownerTelegramUserId, "schedule", "broadcast", id, { scheduledFor: scheduledFor.toISOString() });
+  return true;
+}
+
+export async function cancelSupabaseBotBroadcastSchedule(id: number, ownerTelegramUserId: string): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || !ownerTelegramUserId) return false;
+  const { data, error } = await getClient().from("bot_broadcasts").update({ scheduled_for: null }).eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).eq("status", "draft").not("scheduled_for", "is", null).select("id").limit(1);
+  throwIfError(error, "cancel broadcast schedule");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(ownerTelegramUserId, "cancel_schedule", "broadcast", id, {});
+  return true;
+}
+
 export async function listSupabaseBotAdminAuditLogs(limit = 100): Promise<any[]> {
   const { data, error } = await getClient().from("bot_admin_audit_logs").select("id,admin_user_id,action,entity_type,entity_id,details,created_at").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(200, limit)));
   throwIfError(error, "list admin audit logs");
@@ -655,4 +689,126 @@ export async function confirmSupabaseBotPlatformAccess(telegramUserId: string, r
 export async function confirmSupabaseBotHasadAccess(telegramUserId: string, region?: string | null): Promise<void> {
   const { error } = await getClient().from("bot_hasad_access").upsert({ telegram_user_id: telegramUserId, visited_at: new Date().toISOString(), region: region ?? null }, { onConflict: "telegram_user_id" });
   throwIfError(error, "confirm Hasad access");
+}
+
+
+export async function listSupabaseBotManagedFolders(queryText = ""): Promise<any[]> {
+  const index = await loadDriveIndex();
+  const needle = normalizeSearch(queryText);
+  return index.folders
+    .map(row => {
+      const collection = index.collectionForFolder(row.drive_id);
+      return collection ? mapFolder(row, collection, index.folderPath(row.drive_id)) : undefined;
+    })
+    .filter((folder): folder is LegalFolder => Boolean(folder))
+    .filter(folder => !needle || normalizeSearch(`${folder.name} ${folder.path} ${folder.collection}`).includes(needle))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .slice(0, 200)
+    .map(folder => ({ id: folder.id, name: folder.name, collection: folder.collection, sortOrder: folder.sortOrder, driveFolderId: folder.driveFolderId, parentDriveFolderId: folder.parentDriveFolderId }));
+}
+
+export async function listSupabaseBotManagedSources(queryText = "", page = 1): Promise<{ sources: any[]; total: number }> {
+  const index = await loadDriveIndex();
+  const needle = normalizeSearch(queryText);
+  const all = index.sourceRows
+    .map(item => item.source)
+    .filter(source => !needle || normalizeSearch(`${source.title} ${source.description} ${source.collection}`).includes(needle))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  return { sources: all.slice((safePage - 1) * LIBRARY_PAGE_SIZE, safePage * LIBRARY_PAGE_SIZE).map(source => ({ id: source.id, title: source.title, description: source.description, collection: source.collection, sortOrder: source.sortOrder, isFeatured: source.isFeatured, updatedAt: source.updatedAt })), total: all.length };
+}
+
+export async function getSupabaseBotUsageAnalytics(days = 30): Promise<any> {
+  const periodDays = Math.max(1, Math.min(365, Number.isInteger(days) ? days : 30));
+  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+  const events = await readAll<{ telegram_user_id: string; event_type: string; section_key: string | null; source_id: number | null }>("bot_usage_events", "telegram_user_id,event_type,section_key,source_id,created_at", query => query.gte("created_at", since).order("created_at", { ascending: false }).limit(10000));
+  const eventTypes = new Map<string, number>();
+  const sections = new Map<string, number>();
+  const sources = new Map<number, number>();
+  const users = new Set<string>();
+  for (const event of events) {
+    users.add(event.telegram_user_id);
+    eventTypes.set(event.event_type, (eventTypes.get(event.event_type) ?? 0) + 1);
+    if (event.section_key) sections.set(event.section_key, (sections.get(event.section_key) ?? 0) + 1);
+    if (event.source_id !== null && event.source_id !== undefined) sources.set(Number(event.source_id), (sources.get(Number(event.source_id)) ?? 0) + 1);
+  }
+  const index = await loadDriveIndex();
+  const titleById = new Map(index.sourceRows.map(item => [item.source.id, item.source.title]));
+  return {
+    periodDays,
+    totalEvents: events.length,
+    uniqueUsers: users.size,
+    eventTypes: Array.from(eventTypes, ([eventType, count]) => ({ eventType, count })).sort((a, b) => b.count - a.count),
+    topSections: Array.from(sections, ([sectionKey, count]) => ({ sectionKey, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+    topSources: Array.from(sources, ([sourceId, count]) => ({ sourceId, title: titleById.get(sourceId) ?? `ملف ${sourceId}`, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+  };
+}
+
+export async function getSupabaseBotVisitAnalytics(period: "day" | "week" | "month"): Promise<any> {
+  const days = period === "day" ? 1 : period === "week" ? 7 : 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const [platform, hasad, subscribers] = await Promise.all([
+    readAll<{ telegram_user_id: string; confirmed_at: string }>("bot_platform_access", "telegram_user_id,confirmed_at", query => query.gte("confirmed_at", since).order("confirmed_at", { ascending: false }).limit(10000)),
+    readAll<{ telegram_user_id: string; visited_at: string }>("bot_hasad_access", "telegram_user_id,visited_at", query => query.gte("visited_at", since).order("visited_at", { ascending: false }).limit(10000)),
+    readAll<{ telegram_user_id: string; telegram_username: string | null; telegram_first_name: string | null; telegram_last_name: string | null }>("bot_subscribers", "telegram_user_id,telegram_username,telegram_first_name,telegram_last_name", query => query.limit(10000)),
+  ]);
+  const profiles = new Map(subscribers.map(row => [row.telegram_user_id, row]));
+  const users = new Map<string, any>();
+  for (const row of platform) users.set(row.telegram_user_id, { telegramUserId: row.telegram_user_id, platformVisitedAt: row.confirmed_at, hasadVisitedAt: null });
+  for (const row of hasad) users.set(row.telegram_user_id, { ...(users.get(row.telegram_user_id) ?? { telegramUserId: row.telegram_user_id, platformVisitedAt: null }), hasadVisitedAt: row.visited_at });
+  const resultUsers = Array.from(users.values()).map(row => ({ ...row, ...(profiles.get(row.telegramUserId) ? { telegramUsername: profiles.get(row.telegramUserId)?.telegram_username ?? null, telegramFirstName: profiles.get(row.telegramUserId)?.telegram_first_name ?? null, telegramLastName: profiles.get(row.telegramUserId)?.telegram_last_name ?? null } : { telegramUsername: null, telegramFirstName: null, telegramLastName: null }) }));
+  return { period, since, platformVisits: { total: platform.length, uniqueUsers: new Set(platform.map(row => row.telegram_user_id)).size }, hasadVisits: { total: hasad.length, uniqueUsers: new Set(hasad.map(row => row.telegram_user_id)).size }, users: resultUsers.slice(0, 200) };
+}
+
+
+export async function updateSupabaseBotManagedSource(id: number, input: any, adminUserId: string): Promise<any | undefined> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return undefined;
+  const current = await getBotSource(id);
+  if (!current) return undefined;
+  const patch: any = { source_id: id, updated_by: adminUserId, updated_at: new Date().toISOString() };
+  if (typeof input?.title === "string" && input.title.trim()) patch.title = input.title.trim().slice(0, 255);
+  if (typeof input?.description === "string" && input.description.trim()) patch.description = input.description.trim().slice(0, 2000);
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  if (typeof input?.isFeatured === "boolean") patch.is_featured = input.isFeatured;
+  const { data, error } = await getClient().from("bot_source_overrides").upsert(patch, { onConflict: "source_id" }).select("source_id,title,description,sort_order,is_featured,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update source overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "source_metadata", id, patch);
+  return { id, title: data?.title ?? current.title, description: data?.description ?? current.description, collection: current.collection, sortOrder: data?.sort_order ?? current.sortOrder, isFeatured: data?.is_featured ?? current.isFeatured, updatedAt: new Date() };
+}
+
+export async function deleteSupabaseBotManagedSource(id: number, adminUserId: string): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId || !await getBotSource(id)) return false;
+  const { error } = await getClient().from("bot_source_overrides").upsert({ source_id: id, enabled: false, updated_by: adminUserId, updated_at: new Date().toISOString() }, { onConflict: "source_id" });
+  throwIfError(error, "disable source overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "disable", "source_metadata", id, {});
+  return true;
+}
+
+export async function updateSupabaseBotManagedFolder(id: number, input: any, adminUserId: string): Promise<any | undefined> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return undefined;
+  const index = await loadDriveIndex();
+  const current = index.folders.find(row => Number(row.id) === id);
+  const collection = current ? index.collectionForFolder(current.drive_id) : undefined;
+  if (!current || !collection) return undefined;
+  const patch: any = { folder_id: id, updated_by: adminUserId, updated_at: new Date().toISOString() };
+  if (typeof input?.name === "string" && input.name.trim()) patch.name = input.name.trim().slice(0, 255);
+  if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
+  const { data, error } = await getClient().from("bot_folder_overrides").upsert(patch, { onConflict: "folder_id" }).select("folder_id,name,sort_order,enabled").limit(1).maybeSingle();
+  throwIfError(error, "update folder overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "update", "folder_metadata", id, patch);
+  return { id, name: data?.name ?? current.name, collection, sortOrder: data?.sort_order ?? current.order_index ?? 0, driveFolderId: current.drive_id, parentDriveFolderId: current.parent_id };
+}
+
+export async function deleteSupabaseBotManagedFolder(id: number, adminUserId: string): Promise<"deleted" | "not_empty" | "missing"> {
+  if (!Number.isInteger(id) || id < 1 || !adminUserId) return "missing";
+  const index = await loadDriveIndex();
+  const current = index.folders.find(row => Number(row.id) === id);
+  if (!current) return "missing";
+  const hasChildren = index.folders.some(row => row.parent_id === current.drive_id);
+  const hasFiles = index.files.some(row => row.folder_id === current.drive_id);
+  if (hasChildren || hasFiles) return "not_empty";
+  const { error } = await getClient().from("bot_folder_overrides").upsert({ folder_id: id, enabled: false, updated_by: adminUserId, updated_at: new Date().toISOString() }, { onConflict: "folder_id" });
+  throwIfError(error, "disable folder overlay");
+  await recordSupabaseBotAdminAudit(adminUserId, "disable", "folder_metadata", id, {});
+  return "deleted";
 }

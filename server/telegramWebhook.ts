@@ -39,6 +39,16 @@ import {
   updateSupabaseBotManagedSection,
   recordSupabaseBotAdminAudit,
   revokeSupabaseBotManagedReferralReward,
+  listSupabaseBotManagedFolders,
+  listSupabaseBotManagedSources,
+  updateSupabaseBotManagedSource,
+  deleteSupabaseBotManagedSource,
+  updateSupabaseBotManagedFolder,
+  deleteSupabaseBotManagedFolder,
+  getSupabaseBotUsageAnalytics,
+  getSupabaseBotVisitAnalytics,
+  scheduleSupabaseBotBroadcast,
+  cancelSupabaseBotBroadcastSchedule,
 } from "./supabaseBotStore";
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
@@ -419,7 +429,8 @@ export function registerTelegramWebhook(app: Express) {
     }
     const query = typeof req.query.q === "string" ? req.query.q : "";
     const page = Number(req.query.page ?? 1);
-    res.status(200).json({ ok: true, ...(await listManagedTelegramSources(query, page)) });
+    const result = process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedSources(query, page) : await listManagedTelegramSources(query, page);
+    res.status(200).json({ ok: true, ...result });
   });
 
   app.put("/api/telegram/admin/sources/:id", async (req, res) => {
@@ -429,7 +440,7 @@ export function registerTelegramWebhook(app: Express) {
       res.status(403).json({ ok: false });
       return;
     }
-    const source = await updateManagedTelegramSource(Number(req.params.id), req.body ?? {}, adminUserId);
+    const source = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedSource(Number(req.params.id), req.body ?? {}, adminUserId) : await updateManagedTelegramSource(Number(req.params.id), req.body ?? {}, adminUserId);
     if (!source) {
       res.status(400).json({ ok: false, error: "invalid_source" });
       return;
@@ -440,7 +451,8 @@ export function registerTelegramWebhook(app: Express) {
   app.delete("/api/telegram/admin/sources/:id", async (req, res) => {
     setPlatformAdminCors(req, res);
     const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
-    if (!adminUserId || !(await deleteManagedTelegramSource(Number(req.params.id), adminUserId))) {
+    const removed = process.env.BOT_STORAGE_MODE === "supabase" ? await deleteSupabaseBotManagedSource(Number(req.params.id), adminUserId ?? "") : await deleteManagedTelegramSource(Number(req.params.id), adminUserId ?? "");
+    if (!adminUserId || !removed) {
       res.status(403).json({ ok: false });
       return;
     }
@@ -457,6 +469,10 @@ export function registerTelegramWebhook(app: Express) {
     const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
+      return;
+    }
+    if (process.env.BOT_STORAGE_MODE === "supabase") {
+      res.status(409).json({ ok: false, error: "drive_only_library" });
       return;
     }
     const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.replace(/[\\/\u0000]/g, "_").slice(0, 180) : "";
@@ -509,7 +525,7 @@ export function registerTelegramWebhook(app: Express) {
       return;
     }
     const query = typeof req.query.q === "string" ? req.query.q : "";
-    res.status(200).json({ ok: true, folders: await listManagedTelegramFolders(query) });
+    res.status(200).json({ ok: true, folders: process.env.BOT_STORAGE_MODE === "supabase" ? await listSupabaseBotManagedFolders(query) : await listManagedTelegramFolders(query) });
   });
 
   app.put("/api/telegram/admin/folders/:id", async (req, res) => {
@@ -519,7 +535,7 @@ export function registerTelegramWebhook(app: Express) {
       res.status(403).json({ ok: false });
       return;
     }
-    const folder = await updateManagedTelegramFolder(Number(req.params.id), req.body ?? {}, adminUserId);
+    const folder = process.env.BOT_STORAGE_MODE === "supabase" ? await updateSupabaseBotManagedFolder(Number(req.params.id), req.body ?? {}, adminUserId) : await updateManagedTelegramFolder(Number(req.params.id), req.body ?? {}, adminUserId);
     if (!folder) {
       res.status(400).json({ ok: false, error: "invalid_folder" });
       return;
@@ -534,7 +550,7 @@ export function registerTelegramWebhook(app: Express) {
       res.status(403).json({ ok: false });
       return;
     }
-    const outcome = await deleteManagedTelegramFolder(Number(req.params.id), adminUserId);
+    const outcome = process.env.BOT_STORAGE_MODE === "supabase" ? await deleteSupabaseBotManagedFolder(Number(req.params.id), adminUserId) : await deleteManagedTelegramFolder(Number(req.params.id), adminUserId);
     if (outcome === "not_empty") {
       res.status(409).json({ ok: false, error: "folder_not_empty" });
       return;
@@ -589,6 +605,7 @@ export function registerTelegramWebhook(app: Express) {
     }
     const scheduleCronTaskUid = (draft as typeof draft & { scheduleCronTaskUid?: string }).scheduleCronTaskUid;
     if (scheduleCronTaskUid) await deleteHeartbeatJob(scheduleCronTaskUid, "").catch(() => undefined);
+    if (supabaseStore && (draft as any).scheduledFor) await cancelSupabaseBotBroadcastSchedule(id, adminUserId);
     if (supabaseStore) await recordSupabaseBotAdminAudit(adminUserId, "cancel", "broadcast", id, {}); else await recordManagedTelegramBroadcastAudit(adminUserId, id, "cancel");
     res.status(200).json({ ok: true });
   });
@@ -602,12 +619,21 @@ export function registerTelegramWebhook(app: Express) {
       res.status(400).json({ ok: false, error: "invalid_schedule" });
       return;
     }
-    const draft = await getTelegramBroadcastDraft(id, adminUserId);
-    if (!draft || draft.status !== "draft" || draft.kind !== "message" || !draft.message || draft.scheduleCronTaskUid) {
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : undefined;
+    const draft = supabaseStore ? await supabaseStore.getBroadcastDraft(id, adminUserId) : await getTelegramBroadcastDraft(id, adminUserId);
+    if (!draft || draft.status !== "draft" || draft.kind !== "message" || !draft.message || (draft as any).scheduleCronTaskUid || (draft as any).scheduledFor) {
       res.status(400).json({ ok: false, error: "unavailable_broadcast" });
       return;
     }
     try {
+      if (supabaseStore) {
+        if (!(await scheduleSupabaseBotBroadcast(id, adminUserId, scheduledFor))) {
+          res.status(409).json({ ok: false, error: "schedule_conflict" });
+          return;
+        }
+        res.status(200).json({ ok: true, id, scheduledFor, nextExecutionAt: scheduledFor });
+        return;
+      }
       const cron = scheduledBroadcastCron(scheduledFor);
       const job = await createHeartbeatJob({
         name: `telegram-broadcast-${id}-${scheduledFor.getTime()}`,
@@ -780,7 +806,7 @@ export function registerTelegramWebhook(app: Express) {
     }
     const rawDays = Number(req.query.days);
     const days = Number.isInteger(rawDays) ? rawDays : 30;
-    res.status(200).json({ ok: true, analytics: await getTelegramUsageAnalytics(days) });
+    res.status(200).json({ ok: true, analytics: process.env.BOT_STORAGE_MODE === "supabase" ? await getSupabaseBotUsageAnalytics(days) : await getTelegramUsageAnalytics(days) });
   });
 
   app.options("/api/telegram/admin/visit-analytics", (req, res) => {
@@ -799,7 +825,7 @@ export function registerTelegramWebhook(app: Express) {
       res.status(400).json({ ok: false, error: "invalid_visit_period" });
       return;
     }
-    res.status(200).json({ ok: true, analytics: await getTelegramVisitAnalytics(period as TelegramVisitPeriod) });
+    res.status(200).json({ ok: true, analytics: process.env.BOT_STORAGE_MODE === "supabase" ? await getSupabaseBotVisitAnalytics(period as TelegramVisitPeriod) : await getTelegramVisitAnalytics(period as TelegramVisitPeriod) });
   });
 
   app.post("/api/telegram/admin/subscriptions/:id/:decision", async (req, res) => {
