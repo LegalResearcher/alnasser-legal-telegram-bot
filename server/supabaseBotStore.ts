@@ -596,6 +596,52 @@ export async function listSupabaseBotAdminAuditLogs(limit = 100): Promise<any[]>
   throwIfError(error, "list admin audit logs");
   return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), adminUserId: row.admin_user_id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, details: row.details, createdAt: dateValue(row.created_at) }));
 }
+export async function listSupabaseBotManagedReferralRewards(limit = 100): Promise<{ summary: { qualifiedReferrals: number; pendingReferrals: number; activeRewards: number }; rewards: Array<{ id: number; referrerTelegramUserId: string; qualifiedReferralCount: number; status: "active" | "revoked"; accessStartsAt: Date; accessExpiresAt: Date; revokedAt: Date | null; revokeReason: string | null }> }> {
+  const client = getClient();
+  const [qualified, pending, active, rewards] = await Promise.all([
+    client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("status", "qualified"),
+    client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    client.from("bot_referral_rewards").select("id", { count: "exact", head: true }).eq("status", "active").gt("access_expires_at", new Date().toISOString()),
+    client.from("bot_referral_rewards").select("id,referrer_telegram_user_id,qualified_count,status,access_starts_at,access_expires_at,revoked_at,revoke_reason").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit))),
+  ]);
+  throwIfError(qualified.error, "count qualified referrals");
+  throwIfError(pending.error, "count pending referrals");
+  throwIfError(active.error, "count active referral rewards");
+  throwIfError(rewards.error, "list referral rewards");
+  return {
+    summary: {
+      qualifiedReferrals: Number(qualified.count ?? 0),
+      pendingReferrals: Number(pending.count ?? 0),
+      activeRewards: Number(active.count ?? 0),
+    },
+    rewards: ((rewards.data ?? []) as any[]).map(row => ({
+      id: Number(row.id),
+      referrerTelegramUserId: String(row.referrer_telegram_user_id),
+      qualifiedReferralCount: Number(row.qualified_count ?? 0),
+      status: row.status as "active" | "revoked",
+      accessStartsAt: dateValue(row.access_starts_at),
+      accessExpiresAt: dateValue(row.access_expires_at),
+      revokedAt: row.revoked_at ? dateValue(row.revoked_at) : null,
+      revokeReason: row.revoke_reason ?? null,
+    })),
+  };
+}
+
+export async function revokeSupabaseBotManagedReferralReward(rewardId: number, adminUserId: string, reason?: unknown): Promise<boolean> {
+  if (!adminUserId || !Number.isInteger(rewardId) || rewardId < 1) return false;
+  const revokeReason = typeof reason === "string" ? reason.trim().slice(0, 255) || null : null;
+  const { data, error } = await getClient().from("bot_referral_rewards")
+    .update({ status: "revoked", revoked_at: new Date().toISOString(), revoke_reason: revokeReason })
+    .eq("id", rewardId)
+    .eq("status", "active")
+    .select("id")
+    .limit(1);
+  throwIfError(error, "revoke referral reward");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(adminUserId, "revoke", "referral_reward", rewardId, { reason: revokeReason });
+  return true;
+}
+
 export async function recordSupabaseBotAdminAudit(adminUserId: string, action: string, entityType: string, entityId: number | string | null, details: Record<string, unknown> = {}): Promise<void> {
   const { error } = await getClient().from("bot_admin_audit_logs").insert({ admin_user_id: adminUserId, action, entity_type: entityType, entity_id: entityId === null ? null : String(entityId), details });
   throwIfError(error, "record admin audit");

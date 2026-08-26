@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSupabaseBotStore } from "./supabaseBotStore";
+import { createSupabaseBotStore, listSupabaseBotManagedReferralRewards } from "./supabaseBotStore";
 import { FEATURED_REFERENCES_ROOT_FOLDER_ID, ILLUSTRATED_LEGAL_FORMS_ROOT_FOLDER_ID, JUDICIAL_ROOT_FOLDER_ID, LEGAL_FORMS_ROOT_FOLDER_ID } from "./db";
 
 function jsonResponse(value: unknown) {
@@ -72,6 +72,12 @@ describe("Supabase bot store", () => {
     expect(result.totalSources).toBe(217);
     expect(result.sources[0]?.collection).toBe("legal_forms");
     expect(result.sources[0]?.url).toContain("drive.google.com/uc?export=download");
+  });
+
+  it("يقرأ ملخص مكافآت الإحالات من جداول Supabase المملوكة للبوت", async () => {
+    const result = await listSupabaseBotManagedReferralRewards();
+    expect(result.summary).toEqual({ qualifiedReferrals: 0, pendingReferrals: 0, activeRewards: 0 });
+    expect(result.rewards).toEqual([]);
   });
 
   it("يقرأ القوالب القانونية من legal_documents مع تصنيفها", async () => {

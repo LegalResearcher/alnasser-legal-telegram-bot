@@ -32,11 +32,13 @@ import {
   listSupabaseBotBroadcasts,
   listSupabaseBotManagedMenuItems,
   listSupabaseBotManagedMessages,
+  listSupabaseBotManagedReferralRewards,
   listSupabaseBotManagedSections,
   updateSupabaseBotManagedMenuItem,
   updateSupabaseBotManagedMessage,
   updateSupabaseBotManagedSection,
   recordSupabaseBotAdminAudit,
+  revokeSupabaseBotManagedReferralReward,
 } from "./supabaseBotStore";
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
@@ -737,7 +739,9 @@ export function registerTelegramWebhook(app: Express) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, ...(await listManagedTelegramReferralRewards()) });
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase";
+    const referrals = supabaseStore ? await listSupabaseBotManagedReferralRewards() : await listManagedTelegramReferralRewards();
+    res.status(200).json({ ok: true, ...referrals });
   });
 
   app.options("/api/telegram/admin/referrals/:id/revoke", (req, res) => {
@@ -753,7 +757,10 @@ export function registerTelegramWebhook(app: Express) {
       res.status(400).json({ ok: false, error: "invalid_referral_reward" });
       return;
     }
-    if (!(await revokeManagedTelegramReferralReward(rewardId, adminUserId, req.body?.reason))) {
+    const revoked = process.env.BOT_STORAGE_MODE === "supabase"
+      ? await revokeSupabaseBotManagedReferralReward(rewardId, adminUserId, req.body?.reason)
+      : await revokeManagedTelegramReferralReward(rewardId, adminUserId, req.body?.reason);
+    if (!revoked) {
       res.status(409).json({ ok: false, error: "referral_reward_unavailable" });
       return;
     }

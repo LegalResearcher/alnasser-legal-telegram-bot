@@ -8064,6 +8064,45 @@ async function listSupabaseBotAdminAuditLogs(limit = 100) {
   throwIfError(error, "list admin audit logs");
   return (data ?? []).map((row) => ({ id: Number(row.id), adminUserId: row.admin_user_id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, details: row.details, createdAt: dateValue(row.created_at) }));
 }
+async function listSupabaseBotManagedReferralRewards(limit = 100) {
+  const client = getClient();
+  const [qualified, pending, active, rewards] = await Promise.all([
+    client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("status", "qualified"),
+    client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    client.from("bot_referral_rewards").select("id", { count: "exact", head: true }).eq("status", "active").gt("access_expires_at", (/* @__PURE__ */ new Date()).toISOString()),
+    client.from("bot_referral_rewards").select("id,referrer_telegram_user_id,qualified_count,status,access_starts_at,access_expires_at,revoked_at,revoke_reason").order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)))
+  ]);
+  throwIfError(qualified.error, "count qualified referrals");
+  throwIfError(pending.error, "count pending referrals");
+  throwIfError(active.error, "count active referral rewards");
+  throwIfError(rewards.error, "list referral rewards");
+  return {
+    summary: {
+      qualifiedReferrals: Number(qualified.count ?? 0),
+      pendingReferrals: Number(pending.count ?? 0),
+      activeRewards: Number(active.count ?? 0)
+    },
+    rewards: (rewards.data ?? []).map((row) => ({
+      id: Number(row.id),
+      referrerTelegramUserId: String(row.referrer_telegram_user_id),
+      qualifiedReferralCount: Number(row.qualified_count ?? 0),
+      status: row.status,
+      accessStartsAt: dateValue(row.access_starts_at),
+      accessExpiresAt: dateValue(row.access_expires_at),
+      revokedAt: row.revoked_at ? dateValue(row.revoked_at) : null,
+      revokeReason: row.revoke_reason ?? null
+    }))
+  };
+}
+async function revokeSupabaseBotManagedReferralReward(rewardId, adminUserId, reason) {
+  if (!adminUserId || !Number.isInteger(rewardId) || rewardId < 1) return false;
+  const revokeReason = typeof reason === "string" ? reason.trim().slice(0, 255) || null : null;
+  const { data, error } = await getClient().from("bot_referral_rewards").update({ status: "revoked", revoked_at: (/* @__PURE__ */ new Date()).toISOString(), revoke_reason: revokeReason }).eq("id", rewardId).eq("status", "active").select("id").limit(1);
+  throwIfError(error, "revoke referral reward");
+  if (!Array.isArray(data) || data.length === 0) return false;
+  await recordSupabaseBotAdminAudit(adminUserId, "revoke", "referral_reward", rewardId, { reason: revokeReason });
+  return true;
+}
 async function recordSupabaseBotAdminAudit(adminUserId, action, entityType, entityId, details = {}) {
   const { error } = await getClient().from("bot_admin_audit_logs").insert({ admin_user_id: adminUserId, action, entity_type: entityType, entity_id: entityId === null ? null : String(entityId), details });
   throwIfError(error, "record admin audit");
@@ -8721,7 +8760,9 @@ function registerTelegramWebhook(app2) {
       res.status(403).json({ ok: false });
       return;
     }
-    res.status(200).json({ ok: true, ...await listManagedTelegramReferralRewards() });
+    const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase";
+    const referrals = supabaseStore ? await listSupabaseBotManagedReferralRewards() : await listManagedTelegramReferralRewards();
+    res.status(200).json({ ok: true, ...referrals });
   });
   app2.options("/api/telegram/admin/referrals/:id/revoke", (req, res) => {
     setPlatformAdminCors(req, res);
@@ -8735,7 +8776,8 @@ function registerTelegramWebhook(app2) {
       res.status(400).json({ ok: false, error: "invalid_referral_reward" });
       return;
     }
-    if (!await revokeManagedTelegramReferralReward(rewardId, adminUserId, req.body?.reason)) {
+    const revoked = process.env.BOT_STORAGE_MODE === "supabase" ? await revokeSupabaseBotManagedReferralReward(rewardId, adminUserId, req.body?.reason) : await revokeManagedTelegramReferralReward(rewardId, adminUserId, req.body?.reason);
+    if (!revoked) {
       res.status(409).json({ ok: false, error: "referral_reward_unavailable" });
       return;
     }
