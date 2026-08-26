@@ -478,8 +478,8 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     getReferralProgress: async telegramUserId => { const client = getClient(); const [qualified, pending, rewards] = await Promise.all([client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("referrer_telegram_user_id", telegramUserId).eq("status", "qualified"), client.from("bot_referrals").select("id", { count: "exact", head: true }).eq("referrer_telegram_user_id", telegramUserId).eq("status", "pending"), client.from("bot_user_access").select("expires_at").eq("telegram_user_id", telegramUserId).in("access_scope", ["sharia_exams", "secondary_exams"]).not("expires_at", "is", null).gt("expires_at", new Date().toISOString()).order("expires_at", { ascending: false }).limit(2)]); throwIfError(qualified.error, "count qualified referrals"); throwIfError(pending.error, "count pending referrals"); throwIfError(rewards.error, "read referral rewards"); const rewardDates = ((rewards.data ?? []) as Array<{ expires_at: string }>).map(row => dateValue(row.expires_at)); return { qualifiedCount: Number(qualified.count ?? 0), pendingCount: Number(pending.count ?? 0), remainingCount: Math.max(0, 5 - (Number(qualified.count ?? 0) % 5 || 5)), activeAccessExpiresAt: rewardDates[0] ?? null }; },
     listReferralHistory: async telegramUserId => { const { data, error } = await getClient().from("bot_referrals").select("id,status,created_at,qualified_at,rejected_at,rejection_reason").eq("referrer_telegram_user_id", telegramUserId).order("created_at", { ascending: false }).limit(50); throwIfError(error, "list referral history"); return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), status: row.status, createdAt: dateValue(row.created_at), qualifiedAt: row.qualified_at ? dateValue(row.qualified_at) : null, rejectedAt: row.rejected_at ? dateValue(row.rejected_at) : null, rejectionReason: row.rejection_reason })); },
     createImportantYemeniLawsSubscriptionRequest: async (telegramUserId, chatId, profile) => { const accessScope = (profile?.accessScope ?? "important_laws") as string; const managedMenuItemId = Number.isInteger(profile?.managedMenuItemId) ? Number(profile?.managedMenuItemId) : null; const existing = await getClient().from("bot_subscription_requests").select("id").eq("telegram_user_id", telegramUserId).eq("access_scope", accessScope).eq("status", "pending").limit(1).maybeSingle(); throwIfError(existing.error, "check subscription request"); if (existing.data) return { id: Number((existing.data as any).id), created: false }; const { data, error } = await getClient().from("bot_subscription_requests").insert({ telegram_user_id: telegramUserId, chat_id: chatId, access_scope: accessScope, managed_menu_item_id: managedMenuItemId, telegram_username: profile?.username?.replace(/^@/, "").slice(0, 64) ?? null, telegram_first_name: profile?.firstName?.slice(0, 128) ?? null, telegram_last_name: profile?.lastName?.slice(0, 128) ?? null, payment_method: profile?.paymentMethod?.slice(0, 32) ?? null }).select("id").limit(1).maybeSingle(); throwIfError(error, "create subscription request"); return data ? { id: Number((data as any).id), created: true } : undefined; },
-    approveImportantYemeniLawsSubscriptionRequest: async (requestId, ownerTelegramUserId) => { const client = getClient(); const pending = await client.from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id").eq("id", requestId).eq("status", "pending").limit(1).maybeSingle(); throwIfError(pending.error, "find subscription request"); if (!pending.data) return undefined; const request = pending.data as any; const { data, error } = await client.from("bot_subscription_requests").update({ status: "approved", reviewed_by: ownerTelegramUserId, reviewed_at: new Date().toISOString() }).eq("id", requestId).eq("status", "pending").select("id"); throwIfError(error, "approve subscription request"); if (!Array.isArray(data) || data.length === 0) return undefined; if (request.access_scope === "important_laws") await upsertScopedAccess(request.telegram_user_id, request.managed_menu_item_id ? "managed_menu" : "important_laws", ownerTelegramUserId, request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null); else await upsertScopedAccess(request.telegram_user_id, request.access_scope as AccessScope, ownerTelegramUserId); return { telegramUserId: request.telegram_user_id, chatId: request.chat_id, accessScope: request.access_scope, managedMenuItemId: request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null }; },
-    rejectImportantYemeniLawsSubscriptionRequest: async (requestId, ownerTelegramUserId) => { const { data: pending, error: findError } = await getClient().from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id").eq("id", requestId).eq("status", "pending").limit(1).maybeSingle(); throwIfError(findError, "find subscription request"); if (!pending) return undefined; const { data, error } = await getClient().from("bot_subscription_requests").update({ status: "rejected", reviewed_by: ownerTelegramUserId, reviewed_at: new Date().toISOString() }).eq("id", requestId).eq("status", "pending").select("id"); throwIfError(error, "reject subscription request"); if (!Array.isArray(data) || data.length === 0) return undefined; const request = pending as any; return { telegramUserId: request.telegram_user_id, chatId: request.chat_id, accessScope: request.access_scope, managedMenuItemId: request.managed_menu_item_id ? Number(request.managed_menu_item_id) : null }; },
+    approveImportantYemeniLawsSubscriptionRequest: (requestId, ownerTelegramUserId) => decideSupabaseSubscriptionRequest(requestId, "approve", ownerTelegramUserId),
+    rejectImportantYemeniLawsSubscriptionRequest: (requestId, ownerTelegramUserId) => decideSupabaseSubscriptionRequest(requestId, "reject", ownerTelegramUserId),
     listPendingImportantYemeniLawsSubscriptionRequests: async () => { const { data, error } = await getClient().from("bot_subscription_requests").select("id,telegram_user_id,chat_id,access_scope,managed_menu_item_id,telegram_username,telegram_first_name,telegram_last_name,payment_method,created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(20); throwIfError(error, "list pending subscriptions"); return ((data ?? []) as any[]).map(row => ({ id: Number(row.id), telegramUserId: row.telegram_user_id, chatId: row.chat_id, accessScope: row.access_scope, managedMenuItemId: row.managed_menu_item_id ? Number(row.managed_menu_item_id) : null, telegramUsername: row.telegram_username, telegramFirstName: row.telegram_first_name, telegramLastName: row.telegram_last_name, paymentMethod: row.payment_method, createdAt: dateValue(row.created_at) })); },
     beginLegislationSearch: chatId => beginSearch(chatId, "legislation"),
     consumeLegislationSearchQuery: (chatId, query) => consumeSearch(chatId, "legislation", query),
@@ -538,7 +538,7 @@ export async function createSupabaseBotManagedMenuItem(input: any, adminUserId: 
   const actionType = input?.actionType;
   const actionValue = typeof input?.actionValue === "string" ? input.actionValue.trim().slice(0, 4000) : "";
   if (!label || !["url", "message", "file"].includes(actionType) || !actionValue) return undefined;
-  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
+  const payload = { label, action_type: actionType, action_value: actionValue, row_index: Number.isInteger(input?.rowIndex) ? input.rowIndex : 0, sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, access_mode: ["free", "premium", "referral", "hasad"].includes(input?.accessMode) ? input.accessMode : "free", enabled: input?.enabled !== false };
   const { data, error } = await getClient().from("bot_managed_menu_items").insert(payload).select("id,label,action_type,action_value,row_index,sort_order,access_mode,enabled").limit(1).maybeSingle();
   throwIfError(error, "create managed menu item");
   if (!data) return undefined;
@@ -554,7 +554,7 @@ export async function updateSupabaseBotManagedMenuItem(id: number, input: any, a
   if (typeof input?.actionValue === "string" && input.actionValue.trim()) patch.action_value = input.actionValue.trim().slice(0, 4000);
   if (Number.isInteger(input?.rowIndex)) patch.row_index = input.rowIndex;
   if (Number.isInteger(input?.sortOrder)) patch.sort_order = input.sortOrder;
-  if (["free", "premium", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
+  if (["free", "premium", "referral", "hasad"].includes(input?.accessMode)) patch.access_mode = input.accessMode;
   if (typeof input?.enabled === "boolean") patch.enabled = input.enabled;
   if (Object.keys(patch).length === 0) return undefined;
   patch.updated_at = new Date().toISOString();
@@ -581,7 +581,7 @@ export async function listSupabaseBotManagedSections(): Promise<TelegramManagedS
 export async function updateSupabaseBotManagedSection(sectionKey: string, input: any, adminUserId: string): Promise<TelegramManagedSectionRecord | undefined> {
   const key = sectionKey.trim().slice(0, 64);
   if (!key) return undefined;
-  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: new Date().toISOString() };
+  const payload = { section_key: key, display_label: typeof input?.displayLabel === "string" && input.displayLabel.trim() ? input.displayLabel.trim().slice(0, 255) : key, enabled: input?.enabled !== false, access_mode: ["subscription", "free", "premium", "referral", "hasad"].includes(input?.accessMode) ? input.accessMode : "premium", sort_order: Number.isInteger(input?.sortOrder) ? input.sortOrder : 0, updated_at: new Date().toISOString() };
   const { data, error } = await getClient().from("bot_managed_sections").upsert(payload, { onConflict: "section_key" }).select("section_key,display_label,enabled,access_mode,sort_order").limit(1).maybeSingle();
   throwIfError(error, "update managed section");
   if (!data) return undefined;
@@ -811,4 +811,44 @@ export async function deleteSupabaseBotManagedFolder(id: number, adminUserId: st
   throwIfError(error, "disable folder overlay");
   await recordSupabaseBotAdminAudit(adminUserId, "disable", "folder_metadata", id, {});
   return "deleted";
+}
+
+
+export async function getSupabaseBotAdminStatistics(activeDays = 30): Promise<{ totalSubscribers: number; activeUsers: number; activeUsersPeriodDays: number; lastActiveAt: Date | null }> {
+  const periodDays = Math.max(1, Math.min(365, Math.trunc(activeDays) || 30));
+  const since = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+  const client = getClient();
+  const [total, active, latest] = await Promise.all([
+    client.from("bot_subscribers").select("chat_id", { count: "exact", head: true }),
+    client.from("bot_subscribers").select("chat_id", { count: "exact", head: true }).gte("last_seen_at", since),
+    client.from("bot_subscribers").select("last_seen_at").not("last_seen_at", "is", null).order("last_seen_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  throwIfError(total.error, "count bot subscribers");
+  throwIfError(active.error, "count active bot users");
+  throwIfError(latest.error, "read latest bot activity");
+  return {
+    totalSubscribers: Number(total.count ?? 0),
+    activeUsers: Number(active.count ?? 0),
+    activeUsersPeriodDays: periodDays,
+    lastActiveAt: latest.data && typeof (latest.data as any).last_seen_at === "string" ? dateValue((latest.data as any).last_seen_at) : null,
+  };
+}
+
+
+async function decideSupabaseSubscriptionRequest(requestId: number, decision: "approve" | "reject", adminUserId: string): Promise<{ telegramUserId: string; chatId: string; accessScope: any; managedMenuItemId: number | null } | undefined> {
+  if (!Number.isInteger(requestId) || requestId < 1 || !adminUserId || !["approve", "reject"].includes(decision)) return undefined;
+  const { data, error } = await getClient().rpc("bot_admin_decide_subscription_request", {
+    p_request_id: requestId,
+    p_decision: decision,
+    p_admin_user_id: adminUserId,
+  });
+  throwIfError(error, `${decision} subscription request atomically`);
+  if (!data) return undefined;
+  const row = data as { telegramUserId?: unknown; chatId?: unknown; accessScope?: unknown; managedMenuItemId?: unknown };
+  return {
+    telegramUserId: String(row.telegramUserId ?? ""),
+    chatId: String(row.chatId ?? ""),
+    accessScope: row.accessScope,
+    managedMenuItemId: row.managedMenuItemId == null ? null : Number(row.managedMenuItemId),
+  };
 }

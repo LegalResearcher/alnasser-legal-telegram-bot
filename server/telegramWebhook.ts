@@ -47,6 +47,7 @@ import {
   deleteSupabaseBotManagedFolder,
   getSupabaseBotUsageAnalytics,
   getSupabaseBotVisitAnalytics,
+  getSupabaseBotAdminStatistics,
   scheduleSupabaseBotBroadcast,
   cancelSupabaseBotBroadcastSchedule,
 } from "./supabaseBotStore";
@@ -122,24 +123,39 @@ export async function getPlatformAdministratorId(authorization: string | undefin
   const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!token || !serviceRoleKey) return undefined;
+  try {
+    const userResponse = await fetch(`${PLATFORM_SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: serviceRoleKey, Authorization: `Bearer ${token}` },
+    });
+    if (!userResponse.ok) return undefined;
+    const user = await userResponse.json() as { id?: string };
+    if (!user.id) return undefined;
 
-  const userResponse = await fetch(`${PLATFORM_SUPABASE_URL}/auth/v1/user`, {
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${token}` },
-  });
-  if (!userResponse.ok) return undefined;
-  const user = await userResponse.json() as { id?: string };
-  if (!user.id) return undefined;
-
-  const roleResponse = await fetch(`${PLATFORM_SUPABASE_URL}/rest/v1/user_roles?select=role&user_id=eq.${encodeURIComponent(user.id)}&role=eq.admin`, {
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
-  });
-  if (!roleResponse.ok) return undefined;
-  const roles = await roleResponse.json() as Array<{ role?: string }>;
-  return roles.some((role) => role.role === "admin") ? user.id : undefined;
+    const roleResponse = await fetch(`${PLATFORM_SUPABASE_URL}/rest/v1/user_roles?select=role&user_id=eq.${encodeURIComponent(user.id)}&role=eq.admin`, {
+      headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+    });
+    if (!roleResponse.ok) return undefined;
+    const roles = await roleResponse.json() as Array<{ role?: string }>;
+    return roles.some((role) => role.role === "admin") ? user.id : undefined;
+  } catch (error) {
+    console.error("[Telegram] Platform administrator verification failed:", error instanceof Error ? error.message : "unknown error");
+    return undefined;
+  }
 }
 
 export async function isPlatformAdministrator(authorization: string | undefined): Promise<boolean> {
   return Boolean(await getPlatformAdministratorId(authorization));
+}
+
+function safeAdminOperationError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("drive_library_read_only")) return "drive_library_read_only";
+  if (message.includes("grant scoped access")) return "access_grant_failed";
+  if (message.includes("subscription request")) return "subscription_processing_failed";
+  if (message.includes("broadcast")) return "broadcast_processing_failed";
+  if (message.includes("managed section")) return "section_update_failed";
+  if (message.includes("managed menu item")) return "menu_item_update_failed";
+  return fallback;
 }
 
 export function isValidTelegramWebhookSecret(receivedSecret: string | undefined, expectedSecret: string | undefined) {
@@ -191,10 +207,8 @@ export function registerTelegramWebhook(app: Express) {
     }
     try {
       if (process.env.BOT_STORAGE_MODE === "supabase") {
-        const supabaseStore = createSupabaseBotStore();
-        const subscribers = await supabaseStore.listSubscriberChatIds();
-        const usage = await supabaseStore.getOwnerStatistics();
-        res.status(200).json({ ok: true, totalSubscribers: subscribers.length, firstSubscribedAt: null, lastActiveAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
+        const [statistics, usage] = await Promise.all([getSupabaseBotAdminStatistics(30), createSupabaseBotStore().getOwnerStatistics()]);
+        res.status(200).json({ ok: true, ...statistics, firstSubscribedAt: null, regions: [], platformVisits: { total: 0, latestAt: null }, hasadVisits: { total: 0, latestAt: null }, usage });
         return;
       }
       const stats = await getTelegramOwnerStatistics();
@@ -253,6 +267,10 @@ export function registerTelegramWebhook(app: Express) {
     const adminUserId = PLATFORM_ADMIN_ORIGINS.has(req.get("origin") ?? "") ? await getPlatformAdministratorId(req.get("authorization")) : undefined;
     if (!adminUserId) {
       res.status(403).json({ ok: false });
+      return;
+    }
+    if (process.env.BOT_STORAGE_MODE === "supabase") {
+      res.status(409).json({ ok: false, error: "drive_library_read_only" });
       return;
     }
     const fileName = typeof req.body?.fileName === "string" ? req.body.fileName.replace(/[\\/\u0000]/g, "_").slice(0, 180) : "";
@@ -838,9 +856,16 @@ export function registerTelegramWebhook(app: Express) {
       return;
     }
     const supabaseStore = process.env.BOT_STORAGE_MODE === "supabase" ? createSupabaseBotStore() : undefined;
-    const result = decision === "approve"
-      ? await (supabaseStore ? supabaseStore.approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId))
-      : await (supabaseStore ? supabaseStore.rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId));
+    let result;
+    try {
+      result = decision === "approve"
+        ? await (supabaseStore ? supabaseStore.approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : approveImportantYemeniLawsSubscriptionRequest(requestId, adminUserId))
+        : await (supabaseStore ? supabaseStore.rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId) : rejectImportantYemeniLawsSubscriptionRequest(requestId, adminUserId));
+    } catch (error) {
+      console.error("[Telegram] Admin subscription decision failed:", safeAdminOperationError(error, "subscription_processing_failed"));
+      res.status(500).json({ ok: false, error: safeAdminOperationError(error, "subscription_processing_failed") });
+      return;
+    }
     if (!result) {
       res.status(409).json({ ok: false, error: "request_unavailable" });
       return;
@@ -1049,5 +1074,16 @@ export function registerTelegramWebhook(app: Express) {
       console.error("[Telegram] Update processing failed:", message);
       res.status(500).json({ ok: false });
     }
+  });
+
+  app.use((error: unknown, req: any, res: any, next: (error?: unknown) => void) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    setPlatformAdminCors(req, res);
+    const code = safeAdminOperationError(error, "admin_operation_failed");
+    console.error("[Telegram] Unhandled admin operation failed:", code);
+    res.status(500).json({ ok: false, error: code });
   });
 }

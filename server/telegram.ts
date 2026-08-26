@@ -76,7 +76,7 @@ export type TelegramManagedMenuItemRecord = {
   actionValue: string;
   rowIndex: number;
   sortOrder: number;
-  accessMode: "free" | "premium" | "hasad";
+  accessMode: "free" | "premium" | "referral" | "hasad";
 };
 
 export type TelegramManagedSectionRecord = {
@@ -84,7 +84,7 @@ export type TelegramManagedSectionRecord = {
   displayLabel: string;
   enabled: boolean;
   /** غياب القيمة يبقي منطق الاشتراك القديم عند استخدام مخازن متوافقة سابقة. */
-  accessMode?: "subscription" | "free" | "premium" | "hasad";
+  accessMode?: "subscription" | "free" | "premium" | "referral" | "hasad";
   sortOrder: number;
 };
 
@@ -452,18 +452,21 @@ function managedItemsRows(managedItems: TelegramManagedMenuItemRecord[]) {
 }
 
 function mainMenu(managedItems: TelegramManagedMenuItemRecord[] = [], managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
-  return {
-    inline_keyboard: [
-      [{ text: "🔎 البحث القانوني", callback_data: "menu:search" }, { text: "📚 المكتبة القانونية", callback_data: "menu:library" }],
-      [{ text: "📝 بنك الأسئلة والاختبارات", callback_data: "menu:exams" }, { text: "📄 النماذج والصيغ القانونية", callback_data: "menu:documents" }],
-      [{ text: "📌 المراجع المميزة", callback_data: "menu:featured" }, { text: "🛠 الخدمات والأدوات", callback_data: "menu:services" }],
-      [{ text: "📊 إحصاءات البوت", callback_data: "stats" }],
-      [{ text: "ℹ️ عن البوت والمساعدة", callback_data: "menu:help" }],
-      ...managedItemsRows(managedItems),
-      [{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }],
-      [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }],
-    ],
-  };
+  const overrides = sectionOverridesMap(managedSections);
+  const section = (key: string, fallbackText: string, callbackData: string) => configuredSectionButton(key, fallbackText, callbackData, overrides);
+  const rows: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [];
+  const firstRow = [section("menu:search", "🔎 البحث القانوني", "menu:search"), section("menu:library", "📚 المكتبة القانونية", "menu:library")].filter(Boolean);
+  const secondRow = [section("menu:exams", "📝 بنك الأسئلة والاختبارات", "menu:exams"), section("menu:documents", "📄 النماذج والصيغ القانونية", "menu:documents")].filter(Boolean);
+  const thirdRow = [section("menu:featured", "📌 المراجع المميزة", "menu:featured"), section("menu:services", "🛠 الخدمات والأدوات", "menu:services")].filter(Boolean);
+  if (firstRow.length) rows.push(firstRow as Array<{ text: string; callback_data?: string; url?: string }>);
+  if (secondRow.length) rows.push(secondRow as Array<{ text: string; callback_data?: string; url?: string }>);
+  if (thirdRow.length) rows.push(thirdRow as Array<{ text: string; callback_data?: string; url?: string }>);
+  rows.push([{ text: "📊 إحصاءات البوت", callback_data: "stats" }]);
+  const helpButton = section("menu:help", "ℹ️ عن البوت والمساعدة", "menu:help");
+  if (helpButton) rows.push([helpButton]);
+  rows.push(...managedItemsRows(managedItems));
+  rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
+  return { inline_keyboard: rows };
 }
 
 function mainCategoryMenu(category: "search" | "library" | "exams" | "documents" | "featured" | "services" | "help", managedSections: TelegramManagedSectionRecord[] = []): TelegramInlineKeyboard {
@@ -492,7 +495,8 @@ function mainCategoryMenu(category: "search" | "library" | "exams" | "documents"
   } else if (category === "services") {
     const supportButton = section("support", "💬 تواصل ودعم");
     if (supportButton) rows.push([supportButton]);
-    rows.push([{ text: "🎁 نظام الإحالة", callback_data: "premium:referral" }]);
+    const referralButton = section("referral", "🎁 نظام الإحالة", "premium:referral");
+    if (referralButton) rows.push([referralButton]);
   } else {
     rows.push([{ text: "❓ المساعدة", callback_data: "help" }], [{ text: "ℹ️ عن المكتبة", callback_data: "about" }]);
     rows.push([{ text: "منصة الناصر القانونية", url: "https://alnaseer.org/" }], [{ text: "قناة منصة الناصر القانونية", url: "https://t.me/muen2025" }]);
@@ -1329,22 +1333,26 @@ function isReferralProtectedCallback(data: string) {
   return data === "exams" || data === "secondary-exams" || data.startsWith("exam:");
 }
 
-function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "hasad" {
-  // الاختبارات مجانية دائمًا، ويكون توثيق زيارة حصاد اليوم شرط الوصول الوحيد لها.
-  if (sectionKey === "exams" || sectionKey === "secondary-exams") return "hasad";
+function managedSectionAccessMode(managedSections: TelegramManagedSectionRecord[], sectionKey: string): "free" | "premium" | "referral" | "hasad" {
   const configured = managedSections.find(section => section.sectionKey === sectionKey)?.accessMode;
-  if (configured === "free" || configured === "premium" || configured === "hasad") return configured;
-  return sectionKey === "judicial" || sectionKey === "contract-templates" ? "hasad" : "premium";
+  if (configured === "free" || configured === "premium" || configured === "referral" || configured === "hasad") return configured;
+  return sectionKey === "judicial" || sectionKey === "contract-templates" || sectionKey === "exams" || sectionKey === "secondary-exams" ? "hasad" : "premium";
 }
 
 function hasFreeManagedSectionAccess(managedSections: TelegramManagedSectionRecord[], sectionKey: string) {
   return managedSectionAccessMode(managedSections, sectionKey) === "free";
 }
 
-function managedSectionForCallback(data: string): "important-laws" | "exams" | "secondary-exams" | "judicial" | "contract-templates" | undefined {
+function managedSectionForCallback(data: string): string | undefined {
+  const fixedSections = new Set([
+    "browse", "judicial", "legislation", "legal-forms", "illustrated-legal-forms", "contract-templates",
+    "latest", "popular", "featured", "favorites", "support", "important-laws",
+    "menu:search", "menu:library", "menu:exams", "menu:documents", "menu:featured", "menu:services", "menu:help",
+  ]);
+  if (fixedSections.has(data)) return data;
   if (isHasadProtectedCallback(data)) return hasadProtectedSectionKey(data);
   if (isReferralProtectedCallback(data)) return data === "secondary-exams" ? "secondary-exams" : "exams";
-  if (data === "important-laws" || data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
+  if (data.startsWith("ylindex:") || data.startsWith("iindex:") || data.startsWith("ylfile:") || data.startsWith("ifile:")) return "important-laws";
   return undefined;
 }
 
@@ -2809,7 +2817,7 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, gateText, hasadAccessMenu());
       return;
     }
-    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && callbackSectionMode === "premium" && !(await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
+    if ((callbackSectionKey === "judicial" || callbackSectionKey === "contract-templates") && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !(await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
       await sender.sendMessage(chatId, `🔐 الوصول إلى ${callbackSectionKey === "judicial" ? "القواعد القضائية" : "الصيغ والعقود القانونية"} يتاح بعد اكتمال 5 إحالات مؤهلة.`, referralMenu());
       return;
     }
@@ -2819,11 +2827,12 @@ export async function handleTelegramUpdate(
       const mode = managedSectionAccessMode(managedSections, "important-laws");
       if (mode === "free") return true;
       if (mode === "hasad") return store.hasConfirmedHasadAccess(telegramUserId);
+      if (mode === "referral") return store.hasReferralPremiumAccess(telegramUserId, "sharia_exams");
       return store.hasImportantYemeniLawsAccess(telegramUserId);
     };
-    if (isReferralProtectedCallback(data) && callbackSectionMode === "premium" && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
+    if (isReferralProtectedCallback(data) && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
       const scope = examAccessScope(data);
-      await sender.sendMessage(chatId, optionalExamSupportText(scope), optionalExamSupportMenu(scope));
+      await sender.sendMessage(chatId, callbackSectionMode === "referral" ? `🎁 للوصول إلى هذا القسم، أكمل 5 إحالات مؤهلة للحصول على وصول مجاني.` : optionalExamSupportText(scope), callbackSectionMode === "referral" ? referralMenu() : optionalExamSupportMenu(scope));
       return;
     }
     if (data === "gexam:open") {
@@ -3097,11 +3106,14 @@ export async function handleTelegramUpdate(
         await sender.sendMessage(chatId, `🔐 للوصول إلى ${item.label}، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`, hasadAccessMenu());
         return;
       }
-      if (item.accessMode === "premium" && !(await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId))) {
-        await sender.sendMessage(chatId, `🔐 الوصول إلى ${item.label} يتاح عبر الدعم الاختياري أو الإحالة. يمكنك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, {
+      if ((item.accessMode === "premium" || item.accessMode === "referral") && !(await store.hasManagedMenuItemPremiumAccess(telegramUserId, itemId)) && !(item.accessMode === "referral" && await store.hasReferralPremiumAccess(telegramUserId, "sharia_exams"))) {
+        const referralOnly = item.accessMode === "referral";
+        await sender.sendMessage(chatId, referralOnly
+          ? `🎁 للوصول إلى ${item.label}، أكمل 5 إحالات مؤهلة للحصول على وصول مجاني.`
+          : `🔐 الوصول إلى ${item.label} يتاح عبر الدعم الاختياري أو الإحالة. يمكنك الحصول على وصول مجاني لمدة شهر عند اكتمال 5 إحالات مؤهلة.`, {
           inline_keyboard: [
             [{ text: "وصول مجاني بالإحالة", callback_data: "premium:referral" }],
-            [{ text: "الاشتراك المدفوع", callback_data: `managed-premium:request:${itemId}` }],
+            ...(!referralOnly ? [[{ text: "الاشتراك المدفوع", callback_data: `managed-premium:request:${itemId}` }]] : []),
             [{ text: "رجوع", callback_data: "start" }],
           ],
         });
