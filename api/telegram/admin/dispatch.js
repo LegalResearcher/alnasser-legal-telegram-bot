@@ -1,4 +1,4 @@
-import app from "../../../_telegram-webhook-bundle.mjs";
+import app from "../../_telegram-webhook-bundle.mjs";
 
 const ADMIN_PREFIX = "/api/telegram/admin/";
 
