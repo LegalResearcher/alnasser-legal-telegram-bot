@@ -4818,7 +4818,6 @@ async function launchGroupExamQuestion(chatId, roundId, store, sender) {
   const timeout = setTimeout(() => {
     void resolveGroupExamTimeout(poll.pollId, store, sender);
   }, (openPeriodSeconds + 1) * 1e3);
-  timeout.unref?.();
   groupExamTimeouts.set(poll.pollId, timeout);
 }
 async function resolveGroupExamTimeout(pollId, store, sender) {
@@ -4871,7 +4870,6 @@ async function launchNativeExamQuestion(chatId, sessionId, telegramUserId, store
   const timeout = setTimeout(() => {
     void resolveNativeExamTimeout(session.activePollId, store, sender);
   }, (session.timeLimitSeconds + 1) * 1e3);
-  timeout.unref?.();
   nativeExamTimeouts.set(session.activePollId, timeout);
 }
 async function sendStoppedExamMessage(chatId, stopped, store, sender) {

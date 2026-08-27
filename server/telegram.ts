@@ -2403,7 +2403,7 @@ async function launchGroupExamQuestion(chatId: number, roundId: number, store: T
   const timeout = setTimeout(() => {
     void resolveGroupExamTimeout(poll.pollId, store, sender);
   }, (openPeriodSeconds + 1) * 1000);
-  timeout.unref?.();
+  // Keep the timeout referenced so the group round can advance after the poll closes.
   groupExamTimeouts.set(poll.pollId, timeout);
 }
 
@@ -2465,7 +2465,7 @@ async function launchNativeExamQuestion(
   const timeout = setTimeout(() => {
     void resolveNativeExamTimeout(session.activePollId!, store, sender);
   }, (session.timeLimitSeconds + 1) * 1000);
-  timeout.unref?.();
+  // Keep the timeout referenced so a serverless invocation can finish the unanswered poll transition.
   nativeExamTimeouts.set(session.activePollId, timeout);
 }
 
