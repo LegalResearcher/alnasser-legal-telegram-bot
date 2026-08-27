@@ -4867,13 +4867,6 @@ async function continueGroupExamRound(round, outcome, store, sender) {
 }
 async function launchNativeExamQuestion(chatId, sessionId, telegramUserId, store, sender) {
   await sendExamQuestion(chatId, sessionId, telegramUserId, store, sender);
-  const session = await store.getExamSession(sessionId, telegramUserId);
-  if (!session?.activePollId || session.status !== "active") return;
-  clearNativeExamTimeout(session.activePollId);
-  const timeout = setTimeout(() => {
-    void resolveNativeExamTimeout(session.activePollId, store, sender);
-  }, (session.timeLimitSeconds + 1) * 1e3);
-  nativeExamTimeouts.set(session.activePollId, timeout);
 }
 async function sendStoppedExamMessage(chatId, stopped, store, sender) {
   if (!stopped) {
@@ -4893,18 +4886,6 @@ async function sendStoppedExamMessage(chatId, stopped, store, sender) {
     `\u23F8 \u062A\u0645 \u0625\u064A\u0642\u0627\u0641 \u0627\u062E\u062A\u0628\u0627\u0631 ${subject.name} \u2014 ${formName} \u0645\u0624\u0642\u062A\u064B\u0627. \u064A\u0645\u0643\u0646\u0643 \u0627\u062E\u062A\u064A\u0627\u0631 \u0646\u0645\u0648\u0630\u062C \u0622\u062E\u0631 \u0623\u0648 \u0628\u062F\u0621 \u062C\u0648\u0644\u0629 \u062C\u062F\u064A\u062F\u0629 \u0645\u062A\u0649 \u0634\u0626\u062A.`,
     examFormsMenu(location.levelKey, location.catalogSubjectKey, forms)
   );
-}
-async function resolveNativeExamTimeout(pollId, store, sender) {
-  clearNativeExamTimeout(pollId);
-  const session = await store.getExamSessionByPoll(pollId);
-  if (!session) return;
-  const outcome = await store.resolveExamPoll({
-    sessionId: session.id,
-    telegramUserId: session.telegramUserId,
-    questionIndex: session.questionIndex,
-    pollId
-  });
-  if (outcome) await continueNativeExamRound(session, outcome, store, sender);
 }
 function examResultSnapshotText(snapshot) {
   const total = snapshot.score + snapshot.incorrectCount + snapshot.missedCount;

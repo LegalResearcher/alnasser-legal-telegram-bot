@@ -1343,6 +1343,8 @@ describe("Telegram library conversation", () => {
       const pollDate = Math.floor(Date.now() / 1000);
       expect(JSON.stringify(polls[0]?.replyMarkup)).toContain("exam:next:91:0");
 
+      // The manual button is the only transition trigger for the individual exam;
+      // a serverless-local timer must not race with it.
       vi.advanceTimersByTime(5_000);
       await callback("next-early", "exam:next:91:0", pollDate);
       expect(polls).toHaveLength(1);
@@ -1351,6 +1353,8 @@ describe("Telegram library conversation", () => {
       vi.advanceTimersByTime(11_000);
       await callback("next-after-time", "exam:next:91:0", pollDate);
       expect(polls[1]?.question).toContain("[2/2]");
+      vi.advanceTimersByTime(60_000);
+      expect(polls).toHaveLength(2);
       expect(messages.some(message => message.text.includes("⌛️ انتهى الوقت دون إجابة.") && message.text.includes("📖 الشرح المفصل:"))).toBe(true);
 
       await callback("next-duplicate", "exam:next:91:0", pollDate);

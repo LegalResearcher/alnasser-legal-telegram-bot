@@ -2461,14 +2461,11 @@ async function launchNativeExamQuestion(
   sender: TelegramSender
 ): Promise<void> {
   await sendExamQuestion(chatId, sessionId, telegramUserId, store, sender);
-  const session = await store.getExamSession(sessionId, telegramUserId);
-  if (!session?.activePollId || session.status !== "active") return;
-  clearNativeExamTimeout(session.activePollId);
-  const timeout = setTimeout(() => {
-    void resolveNativeExamTimeout(session.activePollId!, store, sender);
-  }, (session.timeLimitSeconds + 1) * 1000);
-  // Keep the timeout referenced so a serverless invocation can finish the unanswered poll transition.
-  nativeExamTimeouts.set(session.activePollId, timeout);
+  // Individual exams advance through Telegram's closed-poll update or the explicit
+  // "next question" button. Do not keep a serverless-local timer: it can outlive
+  // the callback transition and race with it after the invocation is suspended.
+  // The callback path still validates the deadline against the poll message date.
+
 }
 
 async function sendStoppedExamMessage(
