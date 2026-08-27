@@ -7246,6 +7246,9 @@ async function listSupabaseBotExamQuestions(subjectKey, sectionKey) {
 }
 async function startSupabaseBotExamSession(telegramUserId, chatId, subjectKey, sectionKey, timeLimitSeconds) {
   const client = getSupabase();
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const { error: cancelError } = await client.from("bot_exam_sessions").update({ status: "cancelled", completed_at: now, active_poll_id: null, updated_at: now }).eq("telegram_user_id", telegramUserId).eq("chat_id", chatId).eq("status", "active");
+  assertNoSupabaseError(cancelError, "cancel previous sessions");
   const { data, error } = await client.from("bot_exam_sessions").insert({
     telegram_user_id: telegramUserId,
     chat_id: chatId,

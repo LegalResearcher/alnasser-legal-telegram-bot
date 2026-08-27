@@ -182,6 +182,13 @@ export async function listSupabaseBotExamQuestions(subjectKey: string, sectionKe
 
 export async function startSupabaseBotExamSession(telegramUserId: string, chatId: string, subjectKey: string, sectionKey: string, timeLimitSeconds: 15 | 30 | 60 | 300): Promise<{ id: number } | undefined> {
   const client = getSupabase();
+  const now = new Date().toISOString();
+  const { error: cancelError } = await client.from("bot_exam_sessions")
+    .update({ status: "cancelled", completed_at: now, active_poll_id: null, updated_at: now })
+    .eq("telegram_user_id", telegramUserId)
+    .eq("chat_id", chatId)
+    .eq("status", "active");
+  assertNoSupabaseError(cancelError, "cancel previous sessions");
   const { data, error } = await client.from("bot_exam_sessions").insert({
     telegram_user_id: telegramUserId,
     chat_id: chatId,
