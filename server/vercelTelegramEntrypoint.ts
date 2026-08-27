@@ -2,6 +2,8 @@ import express from "express";
 import { registerTelegramWebhook } from "./telegramWebhook.ts";
 import { synchronizeTelegramConfiguration } from "./telegram.ts";
 
+const VERCEL_PRODUCTION_WEBHOOK_URL = "https://alnasser-legal-telegram-bot-supabase-hasadalyoum.vercel.app/api/telegram/webhook";
+
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -10,7 +12,8 @@ function ensureTelegramConfiguration() {
   if (!telegramConfigurationPromise) {
     telegramConfigurationPromise = synchronizeTelegramConfiguration({
       token: process.env.TELEGRAM_BOT_TOKEN,
-      webhookUrl: process.env.TELEGRAM_WEBHOOK_URL,
+      // يوجّه Telegram إلى نسخة Vercel Production بعد إذن المالك، بدل endpoint Manus القديم.
+      webhookUrl: VERCEL_PRODUCTION_WEBHOOK_URL,
       webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET,
     }).catch((error) => {
       const message = error instanceof Error ? error.message : "unknown error";
