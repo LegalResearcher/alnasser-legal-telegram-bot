@@ -645,7 +645,7 @@ function createSender() {
   const documents: Array<{ chatId: number; filename: string; caption: string }> = [];
   const fileIdDocuments: Array<{ chatId: number; fileId: string; caption?: string }> = [];
   const fileIdPhotos: Array<{ chatId: number; fileId: string; caption?: string }> = [];
-  const polls: Array<{ chatId: number; question: string; options: string[]; explanation: string; openPeriodSeconds: number }> = [];
+  const polls: Array<{ chatId: number; question: string; options: string[]; explanation: string; openPeriodSeconds: number; replyMarkup?: unknown }> = [];
   const callbacks: string[] = [];
   const sender: TelegramSender = {
     sendMessage: async (chatId, text, replyMarkup) => {
@@ -661,7 +661,7 @@ function createSender() {
       fileIdPhotos.push({ chatId, fileId, caption });
     },
     sendQuizPoll: async (chatId, poll) => {
-      polls.push({ chatId, question: poll.question, options: poll.options, explanation: poll.explanation, openPeriodSeconds: poll.openPeriodSeconds });
+      polls.push({ chatId, question: poll.question, options: poll.options, explanation: poll.explanation, openPeriodSeconds: poll.openPeriodSeconds, replyMarkup: poll.replyMarkup });
       return { pollId: `poll-${polls.length}` };
     },
     answerCallbackQuery: async callbackQueryId => {
@@ -1321,6 +1321,66 @@ describe("Telegram library conversation", () => {
       vi.setSystemTime(new Date(Date.now() + 16_000));
       await handleTelegramUpdate({ poll: { id: "poll-1" } }, store, sender);
       expect(polls[1]?.question).toContain("[2/2]");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("يرفض زر السؤال التالي قبل انتهاء المهلة ثم ينتقل بعد انتهائها ويمنع التكرار", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+      const { sender, messages, polls, callbacks } = createSender();
+      const store = createStore();
+      const callback = (id: string, data: string, date = Math.floor(Date.now() / 1000)) => handleTelegramUpdate(
+        { callback_query: { id, data, from: { id: 12 }, message: { chat: { id: 12, type: "private" }, date } } },
+        store,
+        sender
+      );
+
+      await callback("next-time", "exam:time:15");
+      await callback("next-ready", "exam:ready:91");
+      const pollDate = Math.floor(Date.now() / 1000);
+      expect(JSON.stringify(polls[0]?.replyMarkup)).toContain("exam:next:91:0");
+
+      vi.advanceTimersByTime(5_000);
+      await callback("next-early", "exam:next:91:0", pollDate);
+      expect(polls).toHaveLength(1);
+      expect(callbacks).toContain("next-early");
+
+      vi.advanceTimersByTime(11_000);
+      await callback("next-after-time", "exam:next:91:0", pollDate);
+      expect(polls[1]?.question).toContain("[2/2]");
+      expect(messages.some(message => message.text.includes("⌛️ انتهى الوقت دون إجابة.") && message.text.includes("📖 الشرح المفصل:"))).toBe(true);
+
+      await callback("next-duplicate", "exam:next:91:0", pollDate);
+      expect(polls).toHaveLength(2);
+      expect(callbacks).toContain("next-duplicate");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ينتقل زر السؤال التالي في الثانوية بعد المهلة دون إضافة شرح الشريعة والقانون", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+      const { sender, messages, polls } = createSender();
+      const store = createStore();
+      const callback = (id: string, data: string, date = Math.floor(Date.now() / 1000)) => handleTelegramUpdate(
+        { callback_query: { id, data, from: { id: 12 }, message: { chat: { id: 12, type: "private" }, date } } },
+        store,
+        sender
+      );
+
+      await callback("secondary-time", "exam:time:exam_secondary_literary_history:1:15");
+      await callback("secondary-ready", "exam:ready:91");
+      const pollDate = Math.floor(Date.now() / 1000);
+      vi.advanceTimersByTime(16_000);
+      await callback("secondary-next", "exam:next:91:0", pollDate);
+
+      expect(polls[1]?.question).toContain("[2/2]");
+      expect(messages.some(message => message.text.includes("📖 الشرح المفصل:"))).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -2710,6 +2770,39 @@ describe("Telegram reply topics", () => {
       chat_id: 99,
       text: "عادي",
       reply_markup: { inline_keyboard: [[{ text: "فتح", web_app: { url: "https://alnaseer.org/" } }]] },
+    });
+  });
+});
+
+describe("Telegram quiz poll reply markup", () => {
+  it("يمرر زر السؤال التالي داخل استطلاع Telegram المؤقت", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ ok: true, result: { poll: { id: "telegram-poll-1" } } }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const result = await createTelegramSender("اختبار").sendQuizPoll(99, {
+        question: "سؤال تجريبي",
+        options: ["أ", "ب"],
+        correctOptionIndex: 0,
+        explanation: "شرح",
+        openPeriodSeconds: 30,
+        replyMarkup: { inline_keyboard: [[{ text: "➡️ السؤال التالي", callback_data: "exam:next:91:0" }]] },
+      });
+      expect(result).toEqual({ pollId: "telegram-poll-1" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requests[0]).toMatchObject({
+      chat_id: 99,
+      type: "quiz",
+      is_anonymous: false,
+      open_period: 30,
+      reply_markup: { inline_keyboard: [[{ text: "➡️ السؤال التالي", callback_data: "exam:next:91:0" }]] },
     });
   });
 });

@@ -3156,7 +3156,10 @@ async function sendExamQuestion(chatId, sessionId, telegramUserId, store, sender
     options: pollOptions.map((option) => option.text),
     correctOptionIndex,
     explanation: isSecondaryExamSubjectKey(session.subjectKey) ? "" : "\u{1F4D6} \u0633\u064A\u0638\u0647\u0631 \u0627\u0644\u0634\u0631\u062D \u0627\u0644\u0645\u0641\u0635\u0644 \u0628\u0639\u062F \u0627\u0644\u0625\u062C\u0627\u0628\u0629\u060C \u0648\u064A\u0638\u0647\u0631 \u0627\u0644\u062A\u0644\u0645\u064A\u062D \u0639\u0646\u062F \u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u062E\u0627\u0637\u0626\u0629.",
-    openPeriodSeconds
+    openPeriodSeconds,
+    replyMarkup: {
+      inline_keyboard: [[{ text: "\u27A1\uFE0F \u0627\u0644\u0633\u0624\u0627\u0644 \u0627\u0644\u062A\u0627\u0644\u064A", callback_data: `exam:next:${sessionId}:${session.questionIndex}` }]]
+    }
   });
   const linked = await store.setExamActivePoll({ sessionId, telegramUserId, questionIndex: session.questionIndex, pollId: poll.pollId });
   if (!linked) {
@@ -5731,6 +5734,38 @@ ${referralHistoryText(history)}`, referralMenu());
       );
       return;
     }
+    if (data.startsWith("exam:next:")) {
+      const [, , rawSessionId, rawQuestionIndex] = data.split(":");
+      const sessionId = Number(rawSessionId);
+      const questionIndex = Number(rawQuestionIndex);
+      if (!Number.isInteger(sessionId) || sessionId < 1 || !Number.isInteger(questionIndex) || questionIndex < 0) return;
+      const session = await store.getExamSession(sessionId, telegramUserId2);
+      if (!session || session.status !== "active" || session.questionIndex !== questionIndex || !session.activePollId) {
+        await acknowledgeCallback("\u0647\u0630\u0627 \u0627\u0644\u0633\u0624\u0627\u0644 \u0644\u0645 \u064A\u0639\u062F \u0645\u062A\u0627\u062D\u064B\u0627.");
+        return;
+      }
+      const messageDateMs = (callback.message?.date ?? 0) * 1e3;
+      const elapsedMs = messageDateMs > 0 ? Date.now() - messageDateMs : -1;
+      if (elapsedMs < session.timeLimitSeconds * 1e3) {
+        await acknowledgeCallback(`\u064A\u0646\u062A\u0647\u064A \u0627\u0644\u0648\u0642\u062A \u0628\u0639\u062F ${formatExamTime(Math.ceil((session.timeLimitSeconds * 1e3 - Math.max(0, elapsedMs)) / 1e3))}.`);
+        return;
+      }
+      const pollId = session.activePollId;
+      clearNativeExamTimeout(pollId);
+      const outcome = await store.resolveExamPoll({
+        sessionId: session.id,
+        telegramUserId: session.telegramUserId,
+        questionIndex: session.questionIndex,
+        pollId
+      });
+      if (!outcome) {
+        await acknowledgeCallback("\u062A\u0645\u062A \u0645\u0639\u0627\u0644\u062C\u0629 \u0647\u0630\u0627 \u0627\u0644\u0633\u0624\u0627\u0644 \u0628\u0627\u0644\u0641\u0639\u0644.");
+        return;
+      }
+      await acknowledgeCallback();
+      await continueNativeExamRound(session, outcome, store, sender);
+      return;
+    }
     if (data.startsWith("exam:ready:")) {
       const sessionId = Number(data.slice("exam:ready:".length));
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
@@ -6651,7 +6686,8 @@ function createTelegramSender(token, replyContext = {}) {
         is_anonymous: false,
         correct_option_id: poll.correctOptionIndex,
         explanation: poll.explanation,
-        open_period: poll.openPeriodSeconds
+        open_period: poll.openPeriodSeconds,
+        ...poll.replyMarkup ? { reply_markup: poll.replyMarkup } : {}
       });
       const pollId = result?.poll?.id;
       if (!pollId) throw new Error("Telegram did not return a quiz poll identifier");

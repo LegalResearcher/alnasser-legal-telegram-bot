@@ -44,6 +44,7 @@ export type TelegramQuizPoll = {
   correctOptionIndex: number;
   explanation: string;
   openPeriodSeconds: 15 | 30 | 60 | 300;
+  replyMarkup?: TelegramInlineKeyboard;
 };
 
 export type TelegramSender = {
@@ -359,6 +360,7 @@ export type TelegramUpdate = {
     message?: {
       chat?: { id?: number; type?: string };
       message_id?: number;
+      date?: number;
       message_thread_id?: number;
       direct_messages_topic?: { topic_id?: number };
     };
@@ -3347,6 +3349,38 @@ export async function handleTelegramUpdate(
       );
       return;
     }
+    if (data.startsWith("exam:next:")) {
+      const [, , rawSessionId, rawQuestionIndex] = data.split(":");
+      const sessionId = Number(rawSessionId);
+      const questionIndex = Number(rawQuestionIndex);
+      if (!Number.isInteger(sessionId) || sessionId < 1 || !Number.isInteger(questionIndex) || questionIndex < 0) return;
+      const session = await store.getExamSession(sessionId, telegramUserId);
+      if (!session || session.status !== "active" || session.questionIndex !== questionIndex || !session.activePollId) {
+        await acknowledgeCallback("هذا السؤال لم يعد متاحًا.");
+        return;
+      }
+      const messageDateMs = (callback.message?.date ?? 0) * 1000;
+      const elapsedMs = messageDateMs > 0 ? Date.now() - messageDateMs : -1;
+      if (elapsedMs < session.timeLimitSeconds * 1000) {
+        await acknowledgeCallback(`ينتهي الوقت بعد ${formatExamTime(Math.ceil((session.timeLimitSeconds * 1000 - Math.max(0, elapsedMs)) / 1000))}.`);
+        return;
+      }
+      const pollId = session.activePollId;
+      clearNativeExamTimeout(pollId);
+      const outcome = await store.resolveExamPoll({
+        sessionId: session.id,
+        telegramUserId: session.telegramUserId,
+        questionIndex: session.questionIndex,
+        pollId,
+      });
+      if (!outcome) {
+        await acknowledgeCallback("تمت معالجة هذا السؤال بالفعل.");
+        return;
+      }
+      await acknowledgeCallback();
+      await continueNativeExamRound(session, outcome, store, sender);
+      return;
+    }
     if (data.startsWith("exam:ready:")) {
       const sessionId = Number(data.slice("exam:ready:".length));
       if (!Number.isInteger(sessionId) || sessionId < 1) return;
@@ -4266,6 +4300,7 @@ export function createTelegramSender(token: string, replyContext: TelegramReplyC
         correct_option_id: poll.correctOptionIndex,
         explanation: poll.explanation,
         open_period: poll.openPeriodSeconds,
+        ...(poll.replyMarkup ? { reply_markup: poll.replyMarkup } : {}),
       }) as { poll?: { id?: string } } | undefined;
       const pollId = result?.poll?.id;
       if (!pollId) throw new Error("Telegram did not return a quiz poll identifier");

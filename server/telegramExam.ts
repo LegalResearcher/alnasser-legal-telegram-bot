@@ -524,6 +524,9 @@ export async function sendExamQuestion(chatId: number, sessionId: number, telegr
     correctOptionIndex,
     explanation: isSecondaryExamSubjectKey(session.subjectKey) ? "" : "📖 سيظهر الشرح المفصل بعد الإجابة، ويظهر التلميح عند الإجابة الخاطئة.",
     openPeriodSeconds,
+    replyMarkup: {
+      inline_keyboard: [[{ text: "➡️ السؤال التالي", callback_data: `exam:next:${sessionId}:${session.questionIndex}` }]],
+    },
   });
   const linked = await store.setExamActivePoll({ sessionId, telegramUserId, questionIndex: session.questionIndex, pollId: poll.pollId });
   if (!linked) {
