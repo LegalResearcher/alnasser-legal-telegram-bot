@@ -3,7 +3,7 @@ import type { LegalFolder, LegalSource, TelegramContractTemplate } from "../driz
 import type { TelegramContentStatistics } from "./telegram";
 import { approximateArabicMatchScore, fallbackJudicialSearchResults, normalizeArabicSearch } from "./db";
 import { BOT_COMMANDS, buttonLabel, canDeliverDocumentSource, createTelegramSender, documentFilename, driveDownloadUrl, FileDeliveryError, handleTelegramUpdate, highlightSearchTerm, isFinalTelegramWebhookUrl, isTelegramOwner, OWNER_COMMANDS, synchronizeTelegramConfiguration, type TelegramDocumentProvider, type TelegramLibraryStore, type TelegramSender } from "./telegram";
-import { examPollOptionText, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
+import { examFormsMenu, examPollOptionText, TELEGRAM_EXAM_CATALOG } from "./telegramExam";
 
 const sampleSource: LegalSource = {
   id: 7,
@@ -1165,6 +1165,14 @@ describe("Telegram library conversation", () => {
     await callback("scientific-form", "exam:form:secondary-scientific:physics:2026001:1");
     expect(messages.at(-1)?.text).toContain("2026 النموذج 1");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:exam_secondary_scientific_physics:2026001:15");
+  });
+
+  it("يعرض نماذج الأدبي المسماة بصيغة 2026 نموذج دون استبعادها", () => {
+    const markup = JSON.stringify(examFormsMenu("secondary-literary", "history", [
+      { formKey: "P.8", formName: "2026 نموذج 1", sortOrder: 2026001, questionCount: 50 },
+    ]));
+    expect(markup).toContain("2026 نموذج 1");
+    expect(markup).toContain("exam:form:secondary-literary:history:2026001:1");
   });
 
   it("يبقي سؤال الحفظ رقم 47 في نموذج القرآن الكريم نصًا كتابيًا ثم ينهي الاختبار بلا خيارات", async () => {
