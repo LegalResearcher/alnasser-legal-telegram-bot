@@ -280,7 +280,7 @@ type AnnualFormKind = "general" | "parallel" | "mixed" | "secondary";
 type AnnualFormIdentity = { year: number; kind: AnnualFormKind };
 
 function isSecondaryExamForm(form: ExamFormMenuItem): boolean {
-  return /^(?:exam_)?secondary_/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName);
+  return /^(?:exam_)?secondary_/i.test(form.formKey) || /^20\d{2}\s+(?:ال)?نموذج\s+\d+/i.test(form.formName);
 }
 
 function examFormIdentity(form: ExamFormMenuItem): AnnualFormIdentity | undefined {

@@ -2961,7 +2961,7 @@ function examSubjectsMenu(levelKey, requestedPage = 1) {
   return { inline_keyboard: rows };
 }
 function isSecondaryExamForm(form) {
-  return /^(?:exam_)?secondary_/i.test(form.formKey) || /^20\d{2}\s+النموذج\s+\d+/i.test(form.formName);
+  return /^(?:exam_)?secondary_/i.test(form.formKey) || /^20\d{2}\s+(?:ال)?نموذج\s+\d+/i.test(form.formName);
 }
 function examFormIdentity(form) {
   if (isSecondaryExamForm(form)) {
