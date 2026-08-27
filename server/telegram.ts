@@ -2663,17 +2663,21 @@ export async function handleTelegramUpdate(
   }
 
   const closedPoll = update.poll;
-  if (closedPoll?.id && closedPoll.is_closed) {
+  if (closedPoll?.id) {
     clearNativeExamTimeout(closedPoll.id);
     clearGroupExamTimeout(closedPoll.id);
     const groupRound = await store.getGroupExamRoundByPoll(closedPoll.id);
     if (groupRound) {
+      const groupStartedAt = groupRound.startedAt?.getTime();
+      if (closedPoll.is_closed !== true && (groupStartedAt === undefined || Date.now() - groupStartedAt < groupRound.timeLimitSeconds * 1000)) return;
       const outcome = await store.resolveGroupExamPoll(closedPoll.id);
       if (outcome) await continueGroupExamRound(groupRound, outcome, store, sender);
       return;
     }
     const session = await store.getExamSessionByPoll(closedPoll.id);
     if (!session) return;
+    const elapsedMs = Date.now() - session.startedAt.getTime();
+    if (closedPoll.is_closed !== true && elapsedMs < session.timeLimitSeconds * 1000) return;
     const outcome = await store.resolveExamPoll({
       sessionId: session.id,
       telegramUserId: session.telegramUserId,

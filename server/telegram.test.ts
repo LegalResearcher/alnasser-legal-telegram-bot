@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { LegalFolder, LegalSource, TelegramContractTemplate } from "../drizzle/schema";
 import type { TelegramContentStatistics } from "./telegram";
 import { approximateArabicMatchScore, fallbackJudicialSearchResults, normalizeArabicSearch } from "./db";
@@ -1299,6 +1299,28 @@ describe("Telegram library conversation", () => {
     await callback("exam-retry", "exam:retry");
     expect(messages.at(-1)?.text).toContain("اختر المدة");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("exam:time:30");
+  });
+
+  it("ينتقل للسؤال التالي عند انتهاء الزمن مع تحديث poll يفتقد is_closed", async () => {
+    vi.useFakeTimers();
+    try {
+      const { sender, polls } = createSender();
+      const store = createStore();
+      const callback = (id: string, data: string) => handleTelegramUpdate(
+        { callback_query: { id, data, from: { id: 12 }, message: { chat: { id: 12, type: "private" } } } },
+        store,
+        sender
+      );
+
+      await callback("timeout-time", "exam:time:15");
+      await callback("timeout-ready", "exam:ready:91");
+      expect(polls[0]?.question).toContain("[1/2]");
+      vi.setSystemTime(new Date(Date.now() + 16_000));
+      await handleTelegramUpdate({ poll: { id: "poll-1" } }, store, sender);
+      expect(polls[1]?.question).toContain("[2/2]");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("يحدّث بطاقة تجهيز الاختبار وبطاقة الاستعداد داخل الرسالة نفسها", async () => {
