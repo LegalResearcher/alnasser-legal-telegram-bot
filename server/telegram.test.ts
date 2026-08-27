@@ -1143,6 +1143,8 @@ describe("Telegram library conversation", () => {
     await callback("literary-time", "exam:time:exam_secondary_literary_math:2:15");
     await callback("literary-ready", "exam:ready:91");
     expect(polls.at(-1)?.question).toContain("[1/2]");
+    await handleTelegramUpdate({ poll: { id: "poll-1", is_closed: true } }, store, sender);
+    expect(polls.at(-1)?.question).toContain("[2/2]");
 
     await callback("scientific-level", "exam:level:secondary-scientific");
     const scientificSubjects = JSON.stringify(messages.at(-1)?.replyMarkup);
