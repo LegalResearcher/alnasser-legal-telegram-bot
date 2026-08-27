@@ -2910,7 +2910,7 @@ function getTelegramExamCatalogSubject(levelKey, subjectKey) {
 }
 function examSubjectHeading(levelKey, subject) {
   if (!levelKey.startsWith("secondary-")) return subject.name;
-  const academicYear = subject.key === "math" || subject.key === "history" ? "2023\u0645" : "2025\u20142026\u0645";
+  const academicYear = "2026\u0645";
   return `\u0646\u0645\u0627\u0630\u062C \u0623\u0648\u0627\u0626\u0644 \u0627\u0644\u062C\u0645\u0647\u0648\u0631\u064A\u0629 \u0627\u0644\u064A\u0645\u0646\u064A\u0629 \u0645\u0627\u062F\u0629 ${subject.name} \u0644\u0644\u0639\u0627\u0645 \u0627\u0644\u062F\u0631\u0627\u0633\u064A ${academicYear}`;
 }
 function civilLawExamMenu() {
@@ -3049,7 +3049,7 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
   return { inline_keyboard: rows };
 }
 function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
-  const availableForms = officialAnnualForms(forms);
+  const availableForms = levelKey.startsWith("secondary-") ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) : officialAnnualForms(forms);
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 function civilLawExamSectionMenu() {

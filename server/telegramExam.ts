@@ -215,7 +215,7 @@ export function getTelegramExamCatalogSubject(levelKey: string, subjectKey: stri
 
 export function examSubjectHeading(levelKey: string, subject: TelegramExamCatalogSubject): string {
   if (!levelKey.startsWith("secondary-")) return subject.name;
-  const academicYear = subject.key === "math" || subject.key === "history" ? "2023م" : "2025—2026م";
+  const academicYear = "2026م";
   return `نماذج أوائل الجمهورية اليمنية مادة ${subject.name} للعام الدراسي ${academicYear}`;
 }
 
@@ -389,7 +389,10 @@ function pagedFormsMenu(
 }
 
 export function examFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {
-  const availableForms = officialAnnualForms(forms);
+  // نماذج الثانوية الأساسية هي كل النماذج النشطة المستوردة؛ لا نربط ظهورها بصيغة الاسم.
+  const availableForms = levelKey.startsWith("secondary-")
+    ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+    : officialAnnualForms(forms);
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 

@@ -1130,7 +1130,7 @@ describe("Telegram library conversation", () => {
     expect(literarySubjectsPageTwo).toContain("exam:subject:secondary-literary:math:2");
 
     await callback("literary-math", "exam:subject:secondary-literary:math:2");
-    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الرياضيات للعام الدراسي 2023م");
+    expect(messages.at(-1)?.text).toContain("نماذج أوائل الجمهورية اليمنية مادة الرياضيات للعام الدراسي 2026م");
     const literaryForms = JSON.stringify(messages.at(-1)?.replyMarkup);
     expect(literaryForms).toContain("exam:form:secondary-literary:math:2:1");
 
