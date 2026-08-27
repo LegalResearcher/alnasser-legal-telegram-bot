@@ -1283,6 +1283,7 @@ describe("Telegram library conversation", () => {
 
     await handleTelegramUpdate({ poll: { id: "poll-2", is_closed: true } }, store, sender);
     const result = messages.at(-1)?.text ?? "";
+    expect(messages.some(message => message.text.includes("⌛️ انتهى الوقت دون إجابة.") && message.text.includes("📖 الشرح المفصل:"))).toBe(true);
     expect(result).toContain("🏁 انتهى الاختبار");
     expect(result).toContain("📊 ملخص المحاولة");
     expect(result).toContain("✅ الصحيحة: 1");
