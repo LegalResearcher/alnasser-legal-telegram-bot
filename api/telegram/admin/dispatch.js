@@ -1,6 +1,7 @@
 import app from "../../_telegram-webhook-bundle.mjs";
 
 const ADMIN_PREFIX = "/api/telegram/admin/";
+const ADMIN_STATS_PATH = "/api/telegram/admin-stats";
 
 function jsonResponse(res, body, status) {
   res.statusCode = status;
@@ -14,7 +15,7 @@ export default function dispatch(req, res) {
     const incoming = new URL(req.url || "/", "https://alnaseer.org");
     const rawTarget = incoming.searchParams.get("target") || "";
     const target = decodeURIComponent(rawTarget);
-    if (!target.startsWith(ADMIN_PREFIX) || target.includes("?") || target.includes("#")) {
+    if ((!target.startsWith(ADMIN_PREFIX) && target !== ADMIN_STATS_PATH) || target.includes("?") || target.includes("#")) {
       jsonResponse(res, { ok: false, error: "invalid_admin_target" }, 400);
       return;
     }
