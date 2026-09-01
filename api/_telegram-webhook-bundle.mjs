@@ -3444,6 +3444,12 @@ function hasadProtectedSectionKey(data) {
 function hasadAccessGateText(data) {
   return `\u{1F510} \u0644\u0644\u0648\u0635\u0648\u0644 \u0627\u0644\u0645\u062C\u0627\u0646\u064A \u0625\u0644\u0649 ${hasadProtectedSectionName(data)}\u060C \u064A\u0644\u0632\u0645 \u062A\u0648\u062B\u064A\u0642 \u0632\u064A\u0627\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0644\u0645\u0648\u0642\u0639 \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0639\u0628\u0631 \u0627\u0644\u0632\u0631 \u0627\u0644\u062A\u0627\u0644\u064A. \u0628\u0639\u062F \u0627\u0644\u062A\u0648\u062B\u064A\u0642 \u0644\u0646 \u062A\u0638\u0647\u0631 \u0644\u0643 \u0647\u0630\u0647 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649.`;
 }
+function hasadStartGateText() {
+  return [
+    "\u{1F510} \u064A\u0644\u0632\u0645 \u062A\u0648\u062B\u064A\u0642 \u0632\u064A\u0627\u0631\u0629 \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0642\u0628\u0644 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0628\u0648\u062A \u0627\u0644\u0646\u0627\u0635\u0631.",
+    "\u0627\u0636\u063A\u0637 \u0627\u0644\u0632\u0631 \u0627\u0644\u062A\u0627\u0644\u064A \u0644\u0641\u062A\u062D \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0648\u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0632\u064A\u0627\u0631\u0629. \u0628\u0639\u062F \u0627\u0643\u062A\u0645\u0627\u0644 \u0627\u0644\u062A\u0648\u062B\u064A\u0642\u060C \u0623\u0631\u0633\u0644 /start \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0644\u0644\u0645\u062A\u0627\u0628\u0639\u0629."
+  ].join("\n\n");
+}
 var REQUIRED_CHANNELS = [
   { title: "\u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A\u0629", handle: "@muen2025", url: "https://t.me/muen2025" },
   { title: "\u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0625\u062E\u0628\u0627\u0631\u064A", handle: "@hasadalyoum", url: "https://t.me/hasadalyoum" }
@@ -6324,6 +6330,13 @@ ${referralHistoryText(history)}`, referralMenu());
       await sender.sendMessage(chatId, aboutText());
     }
     await promptAccessRequirements(chatId, sender, requirements);
+    return;
+  }
+  if (isPrivateChat(chatType) && isStartMessage && !await store.hasConfirmedHasadAccess(telegramUserId)) {
+    if (isFirstPrivateUse) {
+      await sender.sendMessage(chatId, aboutText());
+    }
+    await sender.sendMessage(chatId, hasadStartGateText(), hasadAccessMenu());
     return;
   }
   if (isPrivateChat(chatType)) {

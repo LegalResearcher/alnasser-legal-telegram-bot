@@ -629,6 +629,13 @@ function hasadAccessGateText(data: string): string {
   return `🔐 للوصول المجاني إلى ${hasadProtectedSectionName(data)}، يلزم توثيق زيارة واحدة لموقع حصاد اليوم عبر الزر التالي. بعد التوثيق لن تظهر لك هذه البوابة مرة أخرى.`;
 }
 
+function hasadStartGateText(): string {
+  return [
+    "🔐 يلزم توثيق زيارة حصاد اليوم قبل استخدام بوت الناصر.",
+    "اضغط الزر التالي لفتح حصاد اليوم وتوثيق الزيارة. بعد اكتمال التوثيق، أرسل /start مرة أخرى للمتابعة."
+  ].join("\n\n");
+}
+
 const REQUIRED_CHANNELS: TelegramRequiredChannel[] = [
   { title: "منصة الناصر القانونية", handle: "@muen2025", url: "https://t.me/muen2025" },
   { title: "حصاد اليوم الإخباري", handle: "@hasadalyoum", url: "https://t.me/hasadalyoum" },
@@ -3957,6 +3964,13 @@ export async function handleTelegramUpdate(
       await sender.sendMessage(chatId, aboutText());
     }
     await promptAccessRequirements(chatId, sender, requirements);
+    return;
+  }
+  if (isPrivateChat(chatType) && isStartMessage && !(await store.hasConfirmedHasadAccess(telegramUserId))) {
+    if (isFirstPrivateUse) {
+      await sender.sendMessage(chatId, aboutText());
+    }
+    await sender.sendMessage(chatId, hasadStartGateText(), hasadAccessMenu());
     return;
   }
   if (isPrivateChat(chatType)) {

@@ -723,6 +723,26 @@ describe("Telegram library conversation", () => {
     expect(documentFilename({ title: "مذكرة.docx", url: "/manus-storage/telegram-library/upload_123.docx" }, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBe("مذكرة.docx");
   });
 
+  it("يفرض توثيق زيارة حصاد اليوم عند بدء المستخدم غير الموثق", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, { hasadConfirmed: false });
+    await handleTelegramUpdate({ message: { chat: { id: 12, type: "private" }, text: "/start" } }, store, sender);
+
+    expect(messages.map(message => message.text).join("\n")).toContain("يلزم توثيق زيارة حصاد اليوم");
+    expect(messages.at(-1)?.text).toContain("أرسل /start مرة أخرى");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("telegram-hasad-visit.html");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).not.toContain("menu:exams");
+  });
+
+  it("يمرر المستخدم الموثق إلى القائمة الحالية عند بدء البوت", async () => {
+    const { sender, messages } = createSender();
+    const store = createStore(true, false, { hasadConfirmed: true });
+    await handleTelegramUpdate({ message: { chat: { id: 13, type: "private" }, text: "/start" } }, store, sender);
+
+    expect(messages.at(-1)?.text).toContain("منصة معرفية وتعليمية بإشراف أ. معين الناصر");
+    expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("menu:exams");
+  });
+
   it("يعرض رسالة البداية والقائمة العربية", async () => {
     const { sender, messages } = createSender();
     const store = createStore();
