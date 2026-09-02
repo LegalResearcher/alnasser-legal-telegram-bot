@@ -54,6 +54,7 @@ export type TelegramSender = {
   sendPhotoByFileId: (chatId: number, fileId: string, caption?: string) => Promise<void>;
   sendQuizPoll: (chatId: number, poll: TelegramQuizPoll) => Promise<{ pollId: string }>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
+  deleteMessage?: (chatId: number, messageId: number) => Promise<void>;
   editMessageText?: (chatId: number, messageId: number, text: string, replyMarkup?: TelegramInlineKeyboard) => Promise<void>;
   isChatAdministrator: (chatId: number, telegramUserId: string) => Promise<boolean>;
 };
@@ -343,6 +344,7 @@ function adaptReplyMarkupForTelegramContext(replyMarkup: TelegramInlineKeyboard 
 
 export type TelegramUpdate = {
   message?: {
+    message_id?: number;
     from?: { id?: number; username?: string; first_name?: string; last_name?: string };
     chat?: { id?: number; type?: string };
     message_thread_id?: number;
@@ -2812,7 +2814,11 @@ export async function handleTelegramUpdate(
     }
     if (data === "hasad:verify") {
       if (await store.hasConfirmedHasadAccess(telegramUserId)) {
-        await sender.sendMessage(chatId, "✅ تم توثيق زيارة حصاد اليوم بنجاح. يمكنك الآن استخدام القسم الذي فتحته مجانًا.", mainMenu());
+        const verificationMessageId = callbackQuery?.message?.message_id;
+        if (verificationMessageId && sender.deleteMessage) {
+          await sender.deleteMessage(chatId, verificationMessageId).catch(() => undefined);
+        }
+        await sender.sendMessage(chatId, welcomeText(), mainMenu());
       } else {
         await sender.sendMessage(chatId, "لم يكتمل توثيق الزيارة بعد. افتح حصاد اليوم من زر التحقق داخل البوت، ثم ارجع واضغط «تحقّق من زيارة حصاد اليوم».", hasadAccessMenu());
       }
@@ -3933,6 +3939,19 @@ export async function handleTelegramUpdate(
   if (!chatId) return;
 
   const telegramUserId = getTelegramUserId(update, chatId);
+  const webAppData = update.message?.web_app_data?.data;
+  if (webAppData === "hasad_verified") {
+    if (await store.hasConfirmedHasadAccess(telegramUserId)) {
+      const verificationMessageId = update.message?.message_id;
+      if (verificationMessageId && sender.deleteMessage) {
+        await sender.deleteMessage(chatId, verificationMessageId).catch(() => undefined);
+      }
+      await sender.sendMessage(chatId, welcomeText(), mainMenu());
+    } else {
+      await sender.sendMessage(chatId, "لم يكتمل توثيق الزيارة بعد. افتح حصاد اليوم من زر التحقق داخل البوت، ثم حاول مرة أخرى.", hasadAccessMenu());
+    }
+    return;
+  }
   const chatType = update.message?.chat?.type;
   const incomingText = update.message?.text?.trim() ?? "";
   const isStartMessage = incomingText === "/start" || incomingText.startsWith("/start ");
@@ -4321,6 +4340,12 @@ export function createTelegramSender(token: string, replyContext: TelegramReplyC
       await telegramRequest(token, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
         ...(text ? { text, show_alert: true } : {}),
+      });
+    },
+    async deleteMessage(chatId, messageId) {
+      await telegramRequest(token, "deleteMessage", {
+        chat_id: chatId,
+        message_id: messageId,
       });
     },
     async editMessageText(chatId, messageId, text, replyMarkup) {

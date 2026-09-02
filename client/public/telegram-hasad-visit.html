@@ -13,7 +13,6 @@
       p { margin: 0 0 24px; line-height: 1.9; color: #cbd5e1; }
       .ok { color: #5eead4; }
       .error { color: #fda4af; }
-      a { display: inline-block; padding: 13px 22px; border-radius: 999px; background: #1684e8; color: white; text-decoration: none; font-weight: 700; }
       [hidden] { display: none; }
     </style>
   </head>
@@ -21,12 +20,10 @@
     <main>
       <h1>توثيق زيارة حصاد اليوم</h1>
       <p id="status">جارٍ التحقق من الزيارة…</p>
-      <a id="open-site" href="https://hasad-alyoum.com/" hidden>فتح حصاد اليوم</a>
     </main>
     <script>
       (() => {
         const status = document.getElementById('status');
-        const openSite = document.getElementById('open-site');
         const webApp = window.Telegram && window.Telegram.WebApp;
         const setStatus = (text, className) => {
           status.textContent = text;
@@ -44,9 +41,13 @@
         })
           .then(response => {
             if (!response.ok) throw new Error('verification-failed');
-            setStatus('تم توثيق زيارتك بنجاح. يمكنك الآن فتح حصاد اليوم.', 'ok');
-            openSite.hidden = false;
-            setTimeout(() => { window.location.href = 'https://hasad-alyoum.com/'; }, 900);
+            setStatus('تم توثيق زيارتك بنجاح. جارٍ فتح الصفحة الرئيسية لبوت الناصر…', 'ok');
+            if (typeof webApp.sendData === 'function') {
+              webApp.sendData('hasad_verified');
+            } else {
+              webApp.close();
+            }
+            setTimeout(() => webApp.close(), 400);
           })
           .catch(() => setStatus('تعذر توثيق الزيارة. أغلق الصفحة وافتحها من زر التحقق داخل البوت مرة أخرى.', 'error'));
       })();

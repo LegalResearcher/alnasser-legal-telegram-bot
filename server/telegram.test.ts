@@ -647,6 +647,7 @@ function createSender() {
   const fileIdPhotos: Array<{ chatId: number; fileId: string; caption?: string }> = [];
   const polls: Array<{ chatId: number; question: string; options: string[]; explanation: string; openPeriodSeconds: number; replyMarkup?: unknown }> = [];
   const callbacks: string[] = [];
+  const deletedMessages: Array<{ chatId: number; messageId: number }> = [];
   const sender: TelegramSender = {
     sendMessage: async (chatId, text, replyMarkup) => {
       messages.push({ chatId, text, replyMarkup });
@@ -667,12 +668,15 @@ function createSender() {
     answerCallbackQuery: async callbackQueryId => {
       callbacks.push(callbackQueryId);
     },
+    deleteMessage: async (chatId, messageId) => {
+      deletedMessages.push({ chatId, messageId });
+    },
     editMessageText: async (chatId, messageId, text, replyMarkup) => {
       editedMessages.push({ chatId, messageId, text, replyMarkup });
     },
     isChatAdministrator: async () => false,
   };
-  return { sender, messages, editedMessages, documents, fileIdDocuments, fileIdPhotos, polls, callbacks };
+  return { sender, messages, editedMessages, documents, fileIdDocuments, fileIdPhotos, polls, callbacks, deletedMessages };
 }
 
 function createDocumentProvider() {
@@ -741,6 +745,25 @@ describe("Telegram library conversation", () => {
 
     expect(messages.at(-1)?.text).toContain("منصة معرفية وتعليمية بإشراف أ. معين الناصر");
     expect(JSON.stringify(messages.at(-1)?.replyMarkup)).toContain("menu:exams");
+  });
+
+  it("يحذف رسالة بوابة حصاد اليوم ويعرض القائمة الرئيسية فقط بعد نجاح التوثيق", async () => {
+    const { sender, messages, deletedMessages } = createSender();
+    const store = createStore(true, false, { hasadConfirmed: true });
+    await handleTelegramUpdate({
+      message: {
+        message_id: 77,
+        from: { id: 12 },
+        chat: { id: 12, type: "private" },
+        web_app_data: { data: "hasad_verified" },
+      },
+    }, store, sender);
+
+    expect(deletedMessages).toEqual([{ chatId: 12, messageId: 77 }]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toContain("مرحباً بك في بوت الناصر القانوني");
+    expect(messages[0]?.text).not.toContain("تم توثيق زيارة حصاد اليوم");
+    expect(JSON.stringify(messages[0]?.replyMarkup)).toContain("menu:exams");
   });
 
   it("يعرض رسالة البداية والقائمة العربية", async () => {

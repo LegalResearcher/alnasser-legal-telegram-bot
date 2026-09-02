@@ -5164,7 +5164,11 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data === "hasad:verify") {
       if (await store.hasConfirmedHasadAccess(telegramUserId2)) {
-        await sender.sendMessage(chatId2, "\u2705 \u062A\u0645 \u062A\u0648\u062B\u064A\u0642 \u0632\u064A\u0627\u0631\u0629 \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0628\u0646\u062C\u0627\u062D. \u064A\u0645\u0643\u0646\u0643 \u0627\u0644\u0622\u0646 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0630\u064A \u0641\u062A\u062D\u062A\u0647 \u0645\u062C\u0627\u0646\u064B\u0627.", mainMenu());
+        const verificationMessageId = callbackQuery?.message?.message_id;
+        if (verificationMessageId && sender.deleteMessage) {
+          await sender.deleteMessage(chatId2, verificationMessageId).catch(() => void 0);
+        }
+        await sender.sendMessage(chatId2, welcomeText(), mainMenu());
       } else {
         await sender.sendMessage(chatId2, "\u0644\u0645 \u064A\u0643\u062A\u0645\u0644 \u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0628\u0639\u062F. \u0627\u0641\u062A\u062D \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0645\u0646 \u0632\u0631 \u0627\u0644\u062A\u062D\u0642\u0642 \u062F\u0627\u062E\u0644 \u0627\u0644\u0628\u0648\u062A\u060C \u062B\u0645 \u0627\u0631\u062C\u0639 \u0648\u0627\u0636\u063A\u0637 \xAB\u062A\u062D\u0642\u0651\u0642 \u0645\u0646 \u0632\u064A\u0627\u0631\u0629 \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645\xBB.", hasadAccessMenu());
       }
@@ -6299,6 +6303,19 @@ ${referralHistoryText(history)}`, referralMenu());
   const chatId = update.message?.chat?.id;
   if (!chatId) return;
   const telegramUserId = getTelegramUserId(update, chatId);
+  const webAppData = update.message?.web_app_data?.data;
+  if (webAppData === "hasad_verified") {
+    if (await store.hasConfirmedHasadAccess(telegramUserId)) {
+      const verificationMessageId = update.message?.message_id;
+      if (verificationMessageId && sender.deleteMessage) {
+        await sender.deleteMessage(chatId, verificationMessageId).catch(() => void 0);
+      }
+      await sender.sendMessage(chatId, welcomeText(), mainMenu());
+    } else {
+      await sender.sendMessage(chatId, "\u0644\u0645 \u064A\u0643\u062A\u0645\u0644 \u062A\u0648\u062B\u064A\u0642 \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0628\u0639\u062F. \u0627\u0641\u062A\u062D \u062D\u0635\u0627\u062F \u0627\u0644\u064A\u0648\u0645 \u0645\u0646 \u0632\u0631 \u0627\u0644\u062A\u062D\u0642\u0642 \u062F\u0627\u062E\u0644 \u0627\u0644\u0628\u0648\u062A\u060C \u062B\u0645 \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649.", hasadAccessMenu());
+    }
+    return;
+  }
   const chatType = update.message?.chat?.type;
   const incomingText = update.message?.text?.trim() ?? "";
   const isStartMessage = incomingText === "/start" || incomingText.startsWith("/start ");
@@ -6691,6 +6708,12 @@ function createTelegramSender(token, replyContext = {}) {
       await telegramRequest(token, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
         ...text2 ? { text: text2, show_alert: true } : {}
+      });
+    },
+    async deleteMessage(chatId, messageId) {
+      await telegramRequest(token, "deleteMessage", {
+        chat_id: chatId,
+        message_id: messageId
       });
     },
     async editMessageText(chatId, messageId, text2, replyMarkup) {
