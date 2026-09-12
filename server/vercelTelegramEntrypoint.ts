@@ -2,7 +2,7 @@ import express from "express";
 import { registerTelegramWebhook } from "./telegramWebhook.ts";
 import { synchronizeTelegramConfiguration } from "./telegram.ts";
 
-const VERCEL_PRODUCTION_WEBHOOK_URL = "https://alnasser-legal-telegram-bot-supabase-hasadalyoum.vercel.app/api/telegram/webhook";
+const VERCEL_PRODUCTION_WEBHOOK_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/api/telegram/webhook";
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));

@@ -9337,7 +9337,7 @@ function registerTelegramWebhook(app2) {
 }
 
 // server/vercelTelegramEntrypoint.ts
-var VERCEL_PRODUCTION_WEBHOOK_URL = "https://alnasser-legal-telegram-bot-supabase-hasadalyoum.vercel.app/api/telegram/webhook";
+var VERCEL_PRODUCTION_WEBHOOK_URL = "https://alnasser-legal-telegram-bot-supabase-git-sup-f04e08-hasadalyoum.vercel.app/api/telegram/webhook";
 var app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
