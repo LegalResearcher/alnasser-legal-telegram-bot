@@ -189,6 +189,19 @@ export function registerTelegramWebhook(app: Express) {
     res.setHeader("Vary", "Origin");
   };
 
+  const setSubscriptionBridgeCors = (req: { get: (name: string) => string | undefined }, res: { setHeader: (name: string, value: string) => void }) => {
+    const origin = req.get("origin");
+    if (origin && PLATFORM_ADMIN_ORIGINS.has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Subscription-Bridge-Secret");
+    res.setHeader("Vary", "Origin");
+  };
+
+  app.options("/api/public/telegram/send-subscription", (req, res) => {
+    setSubscriptionBridgeCors(req, res);
+    res.status(204).end();
+  });
+
   app.options("/api/telegram/admin/*", (req, res) => {
     setPlatformAdminCors(req, res);
     res.status(204).end();
@@ -957,6 +970,7 @@ export function registerTelegramWebhook(app: Express) {
   });
 
   app.post("/api/public/telegram/send-subscription", async (req, res) => {
+    setSubscriptionBridgeCors(req, res);
     const expectedBridgeSecret = process.env.SUBSCRIPTION_BRIDGE_SECRET || "alnaseer-subscription-bridge-2026-v1";
     const receivedBridgeSecret = req.get("x-subscription-bridge-secret");
     if (!isValidTelegramWebhookSecret(receivedBridgeSecret, expectedBridgeSecret)) {
