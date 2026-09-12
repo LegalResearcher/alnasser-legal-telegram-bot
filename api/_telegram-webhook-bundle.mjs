@@ -9215,6 +9215,28 @@ function registerTelegramWebhook(app2) {
       res.status(400).json({ ok: false });
     }
   });
+  app2.post("/api/public/telegram/send-subscription", async (req, res) => {
+    const expectedBridgeSecret = process.env.SUBSCRIPTION_BRIDGE_SECRET || "alnaseer-subscription-bridge-2026-v1";
+    const receivedBridgeSecret = req.get("x-subscription-bridge-secret");
+    if (!isValidTelegramWebhookSecret(receivedBridgeSecret, expectedBridgeSecret)) {
+      res.status(401).json({ ok: false });
+      return;
+    }
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = typeof req.body?.chat_id === "string" || typeof req.body?.chat_id === "number" ? Number(req.body.chat_id) : NaN;
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    if (!token || !Number.isSafeInteger(chatId) || !message || message.length > 4e3) {
+      res.status(400).json({ ok: false });
+      return;
+    }
+    try {
+      await createTelegramSender(token).sendMessage(chatId, message);
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error("[Telegram] Subscription message delivery failed:", error instanceof Error ? error.message : "unknown error");
+      res.status(502).json({ ok: false });
+    }
+  });
   app2.post("/api/telegram/webhook", async (req, res) => {
     const receivedSecret = req.get(TELEGRAM_SECRET_HEADER);
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
