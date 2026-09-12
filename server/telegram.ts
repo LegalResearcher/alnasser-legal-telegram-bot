@@ -3983,6 +3983,18 @@ export async function handleTelegramUpdate(
     }
     return;
   }
+  const manualLinkToken = isPrivateChat(chatType) && incomingText.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9]{6,32})$/i)?.[1];
+  if (manualLinkToken) {
+    const linkResult = await store.linkPlatformSubscriptionRequest?.(manualLinkToken, String(chatId));
+    if (linkResult === "linked") {
+      await sender.sendMessage(chatId, "تم ربط حسابك بطلب الاشتراك بنجاح ✅\n\nستصلك رسالة تلقائيًا هنا تحتوي على كود التفعيل فور اعتماد الطلب من الإدارة.", mainMenu());
+    } else if (linkResult === "invalid") {
+      await sender.sendMessage(chatId, "رمز الربط غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا من منصة الناصر.");
+    } else {
+      await sender.sendMessage(chatId, "تعذر ربط طلب الاشتراك حاليًا. حاول مرة أخرى بعد قليل.");
+    }
+    return;
+  }
   const requirements = await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
   if (!areChannelsSubscribed(requirements)) {
     if (isStartMessage && isFirstPrivateUse) {

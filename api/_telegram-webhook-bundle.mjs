@@ -6346,6 +6346,18 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     return;
   }
+  const manualLinkToken = isPrivateChat(chatType) && incomingText.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9]{6,32})$/i)?.[1];
+  if (manualLinkToken) {
+    const linkResult = await store.linkPlatformSubscriptionRequest?.(manualLinkToken, String(chatId));
+    if (linkResult === "linked") {
+      await sender.sendMessage(chatId, "\u062A\u0645 \u0631\u0628\u0637 \u062D\u0633\u0627\u0628\u0643 \u0628\u0637\u0644\u0628 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0628\u0646\u062C\u0627\u062D \u2705\n\n\u0633\u062A\u0635\u0644\u0643 \u0631\u0633\u0627\u0644\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0647\u0646\u0627 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0643\u0648\u062F \u0627\u0644\u062A\u0641\u0639\u064A\u0644 \u0641\u0648\u0631 \u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u0637\u0644\u0628 \u0645\u0646 \u0627\u0644\u0625\u062F\u0627\u0631\u0629.", mainMenu());
+    } else if (linkResult === "invalid") {
+      await sender.sendMessage(chatId, "\u0631\u0645\u0632 \u0627\u0644\u0631\u0628\u0637 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0623\u0648 \u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u062A\u0647. \u0627\u0637\u0644\u0628 \u0631\u0645\u0632\u064B\u0627 \u062C\u062F\u064A\u062F\u064B\u0627 \u0645\u0646 \u0645\u0646\u0635\u0629 \u0627\u0644\u0646\u0627\u0635\u0631.");
+    } else {
+      await sender.sendMessage(chatId, "\u062A\u0639\u0630\u0631 \u0631\u0628\u0637 \u0637\u0644\u0628 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0628\u0639\u062F \u0642\u0644\u064A\u0644.");
+    }
+    return;
+  }
   const requirements = await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
   if (!areChannelsSubscribed(requirements)) {
     if (isStartMessage && isFirstPrivateUse) {
