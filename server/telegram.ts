@@ -224,6 +224,7 @@ export type TelegramLibraryStore = {
     telegramUserId: string,
     profile?: { telegramUsername?: string | null; telegramFirstName?: string | null; telegramLastName?: string | null }
   ) => Promise<boolean>;
+  linkPlatformSubscriptionRequest?: (token: string, chatId: string) => Promise<"linked" | "invalid" | "error">;
   listSubscriberChatIds: () => Promise<string[]>;
   createBroadcastDraft: (input: { ownerTelegramUserId: string; kind: "message" | "document"; message?: string; fileId?: string; fileName?: string; caption?: string }) => Promise<TelegramBroadcastDraft | undefined>;
   getBroadcastDraft: (id: number, ownerTelegramUserId: string) => Promise<TelegramBroadcastDraft | undefined>;
@@ -2814,7 +2815,7 @@ export async function handleTelegramUpdate(
     }
     if (data === "hasad:verify") {
       if (await store.hasConfirmedHasadAccess(telegramUserId)) {
-        const verificationMessageId = callbackQuery?.message?.message_id;
+        const verificationMessageId = callback.message?.message_id;
         if (verificationMessageId && sender.deleteMessage) {
           await sender.deleteMessage(chatId, verificationMessageId).catch(() => undefined);
         }
@@ -3969,6 +3970,18 @@ export async function handleTelegramUpdate(
     else if (referrerTelegramUserId && !isFirstPrivateUse) referralRegistration = "existing_user";
     else if (referrerTelegramUserId) referralRegistration = await store.createReferral(referrerTelegramUserId, telegramUserId, String(chatId));
     if (referralRegistration) await sender.sendMessage(chatId, referralRegistrationText(referralRegistration));
+  }
+  const linkToken = isStartMessage && incomingText.match(/^\/start\s+link_([A-Za-z0-9_-]{20,})$/)?.[1];
+  if (linkToken && isPrivateChat(chatType)) {
+    const linkResult = await store.linkPlatformSubscriptionRequest?.(linkToken, String(chatId));
+    if (linkResult === "linked") {
+      await sender.sendMessage(chatId, "تم ربط حسابك بطلب الاشتراك بنجاح ✅\n\nستصلك رسالة تلقائيًا هنا تحتوي على كود التفعيل فور اعتماد الطلب من الإدارة.", mainMenu());
+    } else if (linkResult === "invalid") {
+      await sender.sendMessage(chatId, "رابط الربط غير صالح أو انتهت صلاحيته. أرسل طلب الاشتراك من المنصة مرة أخرى ثم افتح الرابط الجديد.");
+    } else {
+      await sender.sendMessage(chatId, "تعذر ربط طلب الاشتراك حاليًا. حاول مرة أخرى بعد قليل.");
+    }
+    return;
   }
   const requirements = await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
   if (!areChannelsSubscribed(requirements)) {

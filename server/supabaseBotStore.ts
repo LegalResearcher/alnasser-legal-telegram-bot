@@ -453,6 +453,21 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     getContentStatistics,
     listNewSupportRequests: async () => { const { data, error } = await getClient().from("bot_support_requests").select("id,message,created_at").eq("status", "new").order("created_at", { ascending: true }).limit(20); throwIfError(error, "list support requests"); return ((data ?? []) as Array<{ id: number; message: string; created_at: string }>).map(row => ({ id: Number(row.id), message: row.message, createdAt: dateValue(row.created_at) })); },
     registerSubscriber: async (chatId, telegramUserId, profile) => { const { error } = await getClient().from("bot_subscribers").upsert({ chat_id: chatId, telegram_user_id: telegramUserId, telegram_username: profile?.telegramUsername ?? null, telegram_first_name: profile?.telegramFirstName ?? null, telegram_last_name: profile?.telegramLastName ?? null, last_seen_at: new Date().toISOString() }, { onConflict: "chat_id" }); throwIfError(error, "register subscriber"); return true; },
+    linkPlatformSubscriptionRequest: async (token, chatId) => {
+      const client = getClient();
+      const request = await client.from("payment_requests").select("id").eq("telegram_link_token", token).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (request.error) {
+        console.error("[Supabase] Platform subscription link lookup failed:", request.error.message);
+        return "error" as const;
+      }
+      if (!request.data) return "invalid" as const;
+      const { error } = await client.from("payment_requests").update({ telegram_chat_id: chatId, telegram_linked_at: new Date().toISOString() }).eq("id", (request.data as any).id).eq("status", "pending");
+      if (error) {
+        console.error("[Supabase] Platform subscription link update failed:", error.message);
+        return "error" as const;
+      }
+      return "linked" as const;
+    },
     listSubscriberChatIds: async () => { const rows = await readAll<{ chat_id: string }>("bot_subscribers", "chat_id", query => query.order("chat_id", { ascending: true }).limit(10000)); return rows.map(row => row.chat_id); },
     createBroadcastDraft: async input => { const subscriberIds = await store.listSubscriberChatIds(); const { data, error } = await getClient().from("bot_broadcasts").insert({ owner_telegram_user_id: input.ownerTelegramUserId, kind: input.kind, message: input.message?.trim().slice(0, 4000) ?? null, file_id: input.fileId ?? null, file_name: input.fileName?.slice(0, 255) ?? null, caption: input.caption?.trim().slice(0, 1000) ?? null, recipient_count: subscriberIds.length }).select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").limit(1).maybeSingle(); throwIfError(error, "create broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count), scheduledFor: (data as any).scheduled_for ? dateValue((data as any).scheduled_for) : null } : undefined; },
     getBroadcastDraft: async (id, ownerTelegramUserId) => { const { data, error } = await getClient().from("bot_broadcasts").select("id,owner_telegram_user_id,kind,message,file_id,file_name,caption,status,recipient_count,scheduled_for").eq("id", id).eq("owner_telegram_user_id", ownerTelegramUserId).limit(1).maybeSingle(); throwIfError(error, "get broadcast"); return data ? { id: Number((data as any).id), ownerTelegramUserId: (data as any).owner_telegram_user_id, kind: (data as any).kind, message: (data as any).message, fileId: (data as any).file_id, fileName: (data as any).file_name, caption: (data as any).caption, status: (data as any).status, recipientCount: Number((data as any).recipient_count), scheduledFor: (data as any).scheduled_for ? dateValue((data as any).scheduled_for) : null } : undefined; },
