@@ -5164,7 +5164,7 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data === "hasad:verify") {
       if (await store.hasConfirmedHasadAccess(telegramUserId2)) {
-        const verificationMessageId = callbackQuery?.message?.message_id;
+        const verificationMessageId = callback.message?.message_id;
         if (verificationMessageId && sender.deleteMessage) {
           await sender.deleteMessage(chatId2, verificationMessageId).catch(() => void 0);
         }
@@ -6333,6 +6333,18 @@ ${referralHistoryText(history)}`, referralMenu());
     else if (referrerTelegramUserId && !isFirstPrivateUse) referralRegistration = "existing_user";
     else if (referrerTelegramUserId) referralRegistration = await store.createReferral(referrerTelegramUserId, telegramUserId, String(chatId));
     if (referralRegistration) await sender.sendMessage(chatId, referralRegistrationText(referralRegistration));
+  }
+  const linkToken = isStartMessage && incomingText.match(/^\/start\s+link_([A-Za-z0-9_-]{20,})$/)?.[1];
+  if (linkToken && isPrivateChat(chatType)) {
+    const linkResult = await store.linkPlatformSubscriptionRequest?.(linkToken, String(chatId));
+    if (linkResult === "linked") {
+      await sender.sendMessage(chatId, "\u062A\u0645 \u0631\u0628\u0637 \u062D\u0633\u0627\u0628\u0643 \u0628\u0637\u0644\u0628 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0628\u0646\u062C\u0627\u062D \u2705\n\n\u0633\u062A\u0635\u0644\u0643 \u0631\u0633\u0627\u0644\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u064B\u0627 \u0647\u0646\u0627 \u062A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u0643\u0648\u062F \u0627\u0644\u062A\u0641\u0639\u064A\u0644 \u0641\u0648\u0631 \u0627\u0639\u062A\u0645\u0627\u062F \u0627\u0644\u0637\u0644\u0628 \u0645\u0646 \u0627\u0644\u0625\u062F\u0627\u0631\u0629.", mainMenu());
+    } else if (linkResult === "invalid") {
+      await sender.sendMessage(chatId, "\u0631\u0627\u0628\u0637 \u0627\u0644\u0631\u0628\u0637 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0623\u0648 \u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u062A\u0647. \u0623\u0631\u0633\u0644 \u0637\u0644\u0628 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0645\u0646 \u0627\u0644\u0645\u0646\u0635\u0629 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u062B\u0645 \u0627\u0641\u062A\u062D \u0627\u0644\u0631\u0627\u0628\u0637 \u0627\u0644\u062C\u062F\u064A\u062F.");
+    } else {
+      await sender.sendMessage(chatId, "\u062A\u0639\u0630\u0631 \u0631\u0628\u0637 \u0637\u0644\u0628 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u062D\u0627\u0644\u064A\u064B\u0627. \u062D\u0627\u0648\u0644 \u0645\u0631\u0629 \u0623\u062E\u0631\u0649 \u0628\u0639\u062F \u0642\u0644\u064A\u0644.");
+    }
+    return;
   }
   const requirements = await getAccessRequirementStatus(telegramUserId, store, membershipChecker);
   if (!areChannelsSubscribed(requirements)) {
@@ -7820,6 +7832,21 @@ function createSupabaseBotStore() {
       const { error } = await getClient().from("bot_subscribers").upsert({ chat_id: chatId, telegram_user_id: telegramUserId, telegram_username: profile?.telegramUsername ?? null, telegram_first_name: profile?.telegramFirstName ?? null, telegram_last_name: profile?.telegramLastName ?? null, last_seen_at: (/* @__PURE__ */ new Date()).toISOString() }, { onConflict: "chat_id" });
       throwIfError(error, "register subscriber");
       return true;
+    },
+    linkPlatformSubscriptionRequest: async (token, chatId) => {
+      const client = getClient();
+      const request = await client.from("payment_requests").select("id").eq("telegram_link_token", token).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (request.error) {
+        console.error("[Supabase] Platform subscription link lookup failed:", request.error.message);
+        return "error";
+      }
+      if (!request.data) return "invalid";
+      const { error } = await client.from("payment_requests").update({ telegram_chat_id: chatId, telegram_linked_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", request.data.id).eq("status", "pending");
+      if (error) {
+        console.error("[Supabase] Platform subscription link update failed:", error.message);
+        return "error";
+      }
+      return "linked";
     },
     listSubscriberChatIds: async () => {
       const rows = await readAll("bot_subscribers", "chat_id", (query) => query.order("chat_id", { ascending: true }).limit(1e4));
