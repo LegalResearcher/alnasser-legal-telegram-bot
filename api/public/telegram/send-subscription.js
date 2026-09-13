@@ -19,7 +19,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  const expectedSecret = process.env.SUBSCRIPTION_BRIDGE_SECRET || "alnaseer-subscription-bridge-2026-v1";
+  const expectedSecret = process.env.SUBSCRIPTION_BRIDGE_SECRET;
+  if (!expectedSecret) {
+    res.status(500).json({ ok: false });
+    return;
+  }
   if (req.headers["x-subscription-bridge-secret"] !== expectedSecret) {
     res.status(401).json({ ok: false });
     return;
