@@ -9228,7 +9228,11 @@ function registerTelegramWebhook(app2) {
   });
   app2.post("/api/public/telegram/send-subscription", async (req, res) => {
     setSubscriptionBridgeCors(req, res);
-    const expectedBridgeSecret = process.env.SUBSCRIPTION_BRIDGE_SECRET || "alnaseer-subscription-bridge-2026-v1";
+    const expectedBridgeSecret = process.env.SUBSCRIPTION_BRIDGE_SECRET;
+    if (!expectedBridgeSecret) {
+      res.status(500).json({ ok: false });
+      return;
+    }
     const receivedBridgeSecret = req.get("x-subscription-bridge-secret");
     if (!isValidTelegramWebhookSecret(receivedBridgeSecret, expectedBridgeSecret)) {
       res.status(401).json({ ok: false });
