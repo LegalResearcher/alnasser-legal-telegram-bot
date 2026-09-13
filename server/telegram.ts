@@ -1816,7 +1816,13 @@ async function requireExamAccess(
   const message = access.mode === "disabled"
     ? (access.disabledMessage || "هذا النطاق غير متاح مؤقتًا.")
     : "🔐 يلزم اشتراك صالح للوصول إلى هذه الباقة. افتح خيار الاشتراك من القائمة ثم أعد المحاولة.";
-  await sender.sendMessage(chatId, message, { inline_keyboard: [[{ text: "رجوع إلى الباقات", callback_data: "exam:levels" }], [{ text: "القائمة الرئيسة", callback_data: "menu" }]] });
+  const subscriptionScope = accessScope === "secondary_literary" || accessScope === "secondary_scientific"
+    ? "secondary_exams"
+    : "sharia_exams";
+  const keyboard = access.mode === "disabled"
+    ? { inline_keyboard: [[{ text: "رجوع إلى الباقات", callback_data: "exam:levels" }], [{ text: "القائمة الرئيسة", callback_data: "menu" }]] }
+    : { inline_keyboard: [[{ text: "💳 طلب الاشتراك", callback_data: `premium:request:${subscriptionScope}` }], [{ text: "🎁 وصول مجاني بالإحالة", callback_data: "premium:referral" }], [{ text: "رجوع إلى الباقات", callback_data: "exam:levels" }], [{ text: "القائمة الرئيسة", callback_data: "menu" }]] };
+  await sender.sendMessage(chatId, message, keyboard);
   return false;
 }
 
