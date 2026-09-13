@@ -18,6 +18,8 @@ const importantYemeniLawsPaymentMethods = {
 type ImportantYemeniLawsPaymentMethod = keyof typeof importantYemeniLawsPaymentMethods;
 type TelegramPaidAccessScope = "sharia_exams" | "secondary_exams";
 type TelegramSubscriptionAccessScope = "important_laws" | TelegramPaidAccessScope;
+export type TelegramExamAccessScope = "level_1" | "level_2" | "level_3" | "level_4" | "secondary_literary" | "secondary_scientific";
+export type TelegramExamAccessMode = "free" | "premium" | "disabled";
 
 export const categoryLabels: Record<LegalCategory, string> = {
   fiqh: "📕 الفقه وأصوله والشريعة الإسلامية",
@@ -192,6 +194,7 @@ type TelegramReferralRegistrationResult = "created" | "self_referral" | "referre
 export type TelegramLibraryStore = {
   hasConfirmedPlatformAccess: (telegramUserId: string) => Promise<boolean>;
   hasConfirmedHasadAccess: (telegramUserId: string) => Promise<boolean>;
+  getExamAccess?: (telegramUserId: string, accessScope: TelegramExamAccessScope) => Promise<{ mode: TelegramExamAccessMode; allowed: boolean; disabledMessage?: string | null }>;
   listManagedMenuItems?: () => Promise<TelegramManagedMenuItemRecord[]>;
   listManagedSections?: () => Promise<TelegramManagedSectionRecord[]>;
   listManagedMessages?: () => Promise<TelegramManagedMessageRecord[]>;
@@ -1789,6 +1792,34 @@ function getTelegramUserId(update: TelegramUpdate, chatId: number) {
   return String(update.callback_query?.from?.id ?? update.message?.from?.id ?? chatId);
 }
 
+export function examAccessScopeForLevel(levelKey: string): TelegramExamAccessScope | undefined {
+  if (levelKey === "l1") return "level_1";
+  if (levelKey === "l2") return "level_2";
+  if (levelKey === "l3") return "level_3";
+  if (levelKey === "l4") return "level_4";
+  if (levelKey === "secondary-literary") return "secondary_literary";
+  if (levelKey === "secondary-scientific") return "secondary_scientific";
+  return undefined;
+}
+
+async function requireExamAccess(
+  chatId: number,
+  telegramUserId: string,
+  levelKey: string,
+  store: TelegramLibraryStore,
+  sender: TelegramSender,
+): Promise<boolean> {
+  const accessScope = examAccessScopeForLevel(levelKey);
+  if (!accessScope || !store.getExamAccess) return true;
+  const access = await store.getExamAccess(telegramUserId, accessScope);
+  if (access.allowed) return true;
+  const message = access.mode === "disabled"
+    ? (access.disabledMessage || "هذا النطاق غير متاح مؤقتًا.")
+    : "🔐 يلزم اشتراك صالح للوصول إلى هذه الباقة. افتح خيار الاشتراك من القائمة ثم أعد المحاولة.";
+  await sender.sendMessage(chatId, message, { inline_keyboard: [[{ text: "رجوع إلى الباقات", callback_data: "exam:levels" }], [{ text: "القائمة الرئيسة", callback_data: "menu" }]] });
+  return false;
+}
+
 async function getAccessRequirementStatus(
   telegramUserId: string,
   store: Pick<TelegramLibraryStore, "hasConfirmedPlatformAccess">,
@@ -3200,6 +3231,7 @@ export async function handleTelegramUpdate(
     if (data === "exam:noop") return;
     if (data.startsWith("exam:level:")) {
       const [, , levelKey, requestedPage] = data.split(":");
+      if (!(await requireExamAccess(chatId, telegramUserId, levelKey, store, pageSender))) return;
       const level = getTelegramExamCatalogLevel(levelKey);
       if (!level) {
         await sender.sendMessage(chatId, "تعذر العثور على هذا المستوى. اختر مستوى من القائمة.", civilLawExamMenu());
@@ -3223,6 +3255,7 @@ export async function handleTelegramUpdate(
     }
     if (data.startsWith("exam:subject:")) {
       const [, , levelKey, subjectKey, requestedPage] = data.split(":");
+      if (!(await requireExamAccess(chatId, telegramUserId, levelKey, store, pageSender))) return;
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!subject) {
         await sender.sendMessage(chatId, "تعذر العثور على هذه المادة. اختر مادة من القائمة.", civilLawExamMenu());
@@ -3250,6 +3283,7 @@ export async function handleTelegramUpdate(
     }
     if (data.startsWith("exam:forms:")) {
       const [, , levelKey, subjectKey, requestedPage] = data.split(":");
+      if (!(await requireExamAccess(chatId, telegramUserId, levelKey, store, pageSender))) return;
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject) return;
@@ -3259,6 +3293,7 @@ export async function handleTelegramUpdate(
     }
     if (data.startsWith("exam:training:")) {
       const [, , levelKey, subjectKey] = data.split(":");
+      if (!(await requireExamAccess(chatId, telegramUserId, levelKey, store, pageSender))) return;
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!subject) return;
       await pageSender.sendMessage(
@@ -3275,6 +3310,7 @@ export async function handleTelegramUpdate(
     }
     if (data.startsWith("exam:form:")) {
       const [, , levelKey, subjectKey, formKeyOrSortOrder, requestedPage] = data.split(":");
+      if (!(await requireExamAccess(chatId, telegramUserId, levelKey, store, pageSender))) return;
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject || !formKeyOrSortOrder) return;
@@ -3321,6 +3357,7 @@ export async function handleTelegramUpdate(
       const location = getImportedExamCatalogLocation(subjectKey);
       const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
       if (!location || !subject || !formKeyOrSortOrder || ![15, 30, 60, 300].includes(timeLimitSeconds)) return;
+      if (!(await requireExamAccess(chatId, telegramUserId, location.levelKey, store, pageSender))) return;
       const forms = await store.listExamForms(subjectKey);
       const form = forms.find(item => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
