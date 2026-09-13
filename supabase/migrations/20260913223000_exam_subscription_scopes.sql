@@ -26,6 +26,12 @@ on public.bot_exam_subscription_scopes
 for all to service_role
 using (true) with check (true);
 
+create policy "admins manage exam subscription scopes"
+on public.bot_exam_subscription_scopes
+for all to authenticated
+using (public.has_role(auth.uid(), 'admin'::app_role))
+with check (public.has_role(auth.uid(), 'admin'::app_role));
+
 create index if not exists bot_user_access_exam_scope_idx
   on public.bot_user_access (telegram_user_id, access_scope, expires_at);
 
