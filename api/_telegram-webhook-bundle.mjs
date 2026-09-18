@@ -4323,8 +4323,42 @@ function normalizeCommand(text2) {
   const command = rawCommand.toLowerCase().replace(/@[^\s]+$/, "");
   return { command, query: rest.join(" ").trim() };
 }
+function extractTelegramSubscriptionLinkToken(text2) {
+  const value = text2.trim();
+  const tokenPattern = "([A-Za-z0-9_-]{6,128})";
+  const direct = value.match(new RegExp(`^/start(?:@[^\\s]+)?\\s+link_${tokenPattern}$`, "i")) ?? value.match(new RegExp(`^/link(?:@[^\\s]+)?\\s+${tokenPattern}$`, "i"));
+  if (direct?.[1]) return direct[1];
+  try {
+    const url = new URL(value);
+    const start = url.searchParams.get("start") ?? url.searchParams.get("startapp");
+    const token = start?.match(new RegExp(`^link_${tokenPattern}$`, "i"))?.[1];
+    return token;
+  } catch {
+    return void 0;
+  }
+}
 function getTelegramUserId(update, chatId) {
   return String(update.callback_query?.from?.id ?? update.message?.from?.id ?? chatId);
+}
+function examAccessScopeForLevel(levelKey) {
+  if (levelKey === "l1") return "level_1";
+  if (levelKey === "l2") return "level_2";
+  if (levelKey === "l3") return "level_3";
+  if (levelKey === "l4") return "level_4";
+  if (levelKey === "secondary-literary") return "secondary_literary";
+  if (levelKey === "secondary-scientific") return "secondary_scientific";
+  return void 0;
+}
+async function requireExamAccess(chatId, telegramUserId, levelKey, store, sender) {
+  const accessScope = examAccessScopeForLevel(levelKey);
+  if (!accessScope || !store.getExamAccess) return true;
+  const access = await store.getExamAccess(telegramUserId, accessScope);
+  if (access.allowed) return true;
+  const message = access.mode === "disabled" ? access.disabledMessage || "\u0647\u0630\u0627 \u0627\u0644\u0646\u0637\u0627\u0642 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0645\u0624\u0642\u062A\u064B\u0627." : "\u{1F510} \u064A\u0644\u0632\u0645 \u0627\u0634\u062A\u0631\u0627\u0643 \u0635\u0627\u0644\u062D \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 \u0647\u0630\u0647 \u0627\u0644\u0628\u0627\u0642\u0629. \u0627\u0641\u062A\u062D \u062E\u064A\u0627\u0631 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u062B\u0645 \u0623\u0639\u062F \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629.";
+  const subscriptionScope = accessScope === "secondary_literary" || accessScope === "secondary_scientific" ? "secondary_exams" : "sharia_exams";
+  const keyboard = access.mode === "disabled" ? { inline_keyboard: [[{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0628\u0627\u0642\u0627\u062A", callback_data: "exam:levels" }], [{ text: "\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u0629", callback_data: "menu" }]] } : { inline_keyboard: [[{ text: "\u{1F4B3} \u0637\u0644\u0628 \u0627\u0644\u0627\u0634\u062A\u0631\u0627\u0643", callback_data: `premium:request:${subscriptionScope}` }], [{ text: "\u{1F381} \u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A \u0628\u0627\u0644\u0625\u062D\u0627\u0644\u0629", callback_data: "premium:referral" }], [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0628\u0627\u0642\u0627\u062A", callback_data: "exam:levels" }], [{ text: "\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u0629", callback_data: "menu" }]] };
+  await sender.sendMessage(chatId, message, keyboard);
+  return false;
 }
 async function getAccessRequirementStatus(telegramUserId, store, membershipChecker) {
   const channels = await Promise.all(REQUIRED_CHANNELS.map(async (channel) => ({
@@ -5561,6 +5595,7 @@ ${referralHistoryText(history)}`, referralMenu());
     if (data === "exam:noop") return;
     if (data.startsWith("exam:level:")) {
       const [, , levelKey, requestedPage] = data.split(":");
+      if (!await requireExamAccess(chatId2, telegramUserId2, levelKey, store, pageSender)) return;
       const level = getTelegramExamCatalogLevel(levelKey);
       if (!level) {
         await sender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u062A\u0648\u0649. \u0627\u062E\u062A\u0631 \u0645\u0633\u062A\u0648\u0649 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.", civilLawExamMenu());
@@ -5588,6 +5623,7 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data.startsWith("exam:subject:")) {
       const [, , levelKey, subjectKey, requestedPage] = data.split(":");
+      if (!await requireExamAccess(chatId2, telegramUserId2, levelKey, store, pageSender)) return;
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!subject) {
         await sender.sendMessage(chatId2, "\u062A\u0639\u0630\u0631 \u0627\u0644\u0639\u062B\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0647 \u0627\u0644\u0645\u0627\u062F\u0629. \u0627\u062E\u062A\u0631 \u0645\u0627\u062F\u0629 \u0645\u0646 \u0627\u0644\u0642\u0627\u0626\u0645\u0629.", civilLawExamMenu());
@@ -5617,6 +5653,7 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data.startsWith("exam:forms:")) {
       const [, , levelKey, subjectKey, requestedPage] = data.split(":");
+      if (!await requireExamAccess(chatId2, telegramUserId2, levelKey, store, pageSender)) return;
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject) return;
@@ -5628,6 +5665,7 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data.startsWith("exam:training:")) {
       const [, , levelKey, subjectKey] = data.split(":");
+      if (!await requireExamAccess(chatId2, telegramUserId2, levelKey, store, pageSender)) return;
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!subject) return;
       await pageSender.sendMessage(
@@ -5646,6 +5684,7 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     if (data.startsWith("exam:form:")) {
       const [, , levelKey, subjectKey, formKeyOrSortOrder, requestedPage] = data.split(":");
+      if (!await requireExamAccess(chatId2, telegramUserId2, levelKey, store, pageSender)) return;
       const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
       if (!importedSubjectKey || !subject || !formKeyOrSortOrder) return;
@@ -5686,6 +5725,7 @@ ${referralHistoryText(history)}`, referralMenu());
       const location = getImportedExamCatalogLocation(subjectKey);
       const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : void 0;
       if (!location || !subject || !formKeyOrSortOrder || ![15, 30, 60, 300].includes(timeLimitSeconds)) return;
+      if (!await requireExamAccess(chatId2, telegramUserId2, location.levelKey, store, pageSender)) return;
       const forms = await store.listExamForms(subjectKey);
       const form = forms.find((item) => item.formKey === formKeyOrSortOrder || String(item.sortOrder) === formKeyOrSortOrder);
       if (!form) {
@@ -6334,7 +6374,7 @@ ${referralHistoryText(history)}`, referralMenu());
     else if (referrerTelegramUserId) referralRegistration = await store.createReferral(referrerTelegramUserId, telegramUserId, String(chatId));
     if (referralRegistration) await sender.sendMessage(chatId, referralRegistrationText(referralRegistration));
   }
-  const linkToken = isStartMessage && incomingText.match(/^\/start\s+link_([A-Za-z0-9_-]{20,})$/)?.[1];
+  const linkToken = extractTelegramSubscriptionLinkToken(incomingText);
   if (linkToken && isPrivateChat(chatType)) {
     const linkResult = await store.linkPlatformSubscriptionRequest?.(linkToken, String(chatId));
     if (linkResult === "linked") {
@@ -6346,7 +6386,7 @@ ${referralHistoryText(history)}`, referralMenu());
     }
     return;
   }
-  const manualLinkToken = isPrivateChat(chatType) && incomingText.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9]{6,32})$/i)?.[1];
+  const manualLinkToken = isPrivateChat(chatType) && !linkToken && !isStartMessage ? extractTelegramSubscriptionLinkToken(incomingText) : void 0;
   if (manualLinkToken) {
     const linkResult = await store.linkPlatformSubscriptionRequest?.(manualLinkToken, String(chatId));
     if (linkResult === "linked") {
@@ -7724,6 +7764,19 @@ async function hasScopedAccess(telegramUserId, accessScope, managedMenuItemId) {
   const now = Date.now();
   return (data ?? []).some((row) => (managedMenuItemId === void 0 || Number(row.managed_menu_item_id) === managedMenuItemId) && (!row.expires_at || new Date(row.expires_at).getTime() > now));
 }
+async function getExamAccess(telegramUserId, accessScope) {
+  const client = getClient();
+  const { data: setting, error: settingError } = await client.from("bot_exam_subscription_scopes").select("access_mode,disabled_message").eq("access_scope", accessScope).limit(1).maybeSingle();
+  throwIfError(settingError, "read exam subscription scope");
+  const mode = setting?.access_mode === "free" || setting?.access_mode === "disabled" ? setting.access_mode : "premium";
+  if (mode === "free") return { mode, allowed: true, disabledMessage: setting?.disabled_message ?? null };
+  if (mode === "disabled") return { mode, allowed: false, disabledMessage: setting?.disabled_message ?? null };
+  const { data, error } = await client.from("bot_user_access").select("managed_menu_item_id,expires_at").eq("telegram_user_id", telegramUserId).eq("access_scope", accessScope).is("managed_menu_item_id", null).limit(10);
+  throwIfError(error, "check exam subscription access");
+  const now = Date.now();
+  const allowed = (data ?? []).some((row) => !row.expires_at || new Date(row.expires_at).getTime() > now);
+  return { mode, allowed, disabledMessage: setting?.disabled_message ?? null };
+}
 function mapRound(row) {
   return { id: Number(row.id), chatId: String(row.chat_id), creatorTelegramUserId: row.creator_telegram_user_id, subjectKey: row.subject_key, sectionKey: row.section_key, status: row.status, questionIndex: Number(row.question_index), timeLimitSeconds: Number(row.time_limit_seconds), activePollId: row.active_poll_id, startedAt: row.started_at ? dateValue(row.started_at) : null };
 }
@@ -7736,6 +7789,7 @@ function createSupabaseBotStore() {
   const store = {
     hasConfirmedPlatformAccess: (telegramUserId) => hasAccess("bot_platform_access", telegramUserId),
     hasConfirmedHasadAccess: (telegramUserId) => hasAccess("bot_hasad_access", telegramUserId),
+    getExamAccess,
     listManagedMenuItems: async () => [],
     listManagedSections: async () => [],
     listManagedMessages: async () => [],

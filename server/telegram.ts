@@ -1788,6 +1788,23 @@ function normalizeCommand(text: string) {
   return { command, query: rest.join(" ").trim() };
 }
 
+/** يقبل أمر الربط كما تنسخه المنصة، أو رابط deep-link كامل من تيليغرام. */
+export function extractTelegramSubscriptionLinkToken(text: string): string | undefined {
+  const value = text.trim();
+  const tokenPattern = "([A-Za-z0-9_-]{6,128})";
+  const direct = value.match(new RegExp(`^/start(?:@[^\\s]+)?\\s+link_${tokenPattern}$`, "i"))
+    ?? value.match(new RegExp(`^/link(?:@[^\\s]+)?\\s+${tokenPattern}$`, "i"));
+  if (direct?.[1]) return direct[1];
+  try {
+    const url = new URL(value);
+    const start = url.searchParams.get("start") ?? url.searchParams.get("startapp");
+    const token = start?.match(new RegExp(`^link_${tokenPattern}$`, "i"))?.[1];
+    return token;
+  } catch {
+    return undefined;
+  }
+}
+
 function getTelegramUserId(update: TelegramUpdate, chatId: number) {
   return String(update.callback_query?.from?.id ?? update.message?.from?.id ?? chatId);
 }
@@ -4014,7 +4031,7 @@ export async function handleTelegramUpdate(
     else if (referrerTelegramUserId) referralRegistration = await store.createReferral(referrerTelegramUserId, telegramUserId, String(chatId));
     if (referralRegistration) await sender.sendMessage(chatId, referralRegistrationText(referralRegistration));
   }
-  const linkToken = isStartMessage && incomingText.match(/^\/start\s+link_([A-Za-z0-9_-]{20,})$/)?.[1];
+  const linkToken = extractTelegramSubscriptionLinkToken(incomingText);
   if (linkToken && isPrivateChat(chatType)) {
     const linkResult = await store.linkPlatformSubscriptionRequest?.(linkToken, String(chatId));
     if (linkResult === "linked") {
@@ -4026,7 +4043,7 @@ export async function handleTelegramUpdate(
     }
     return;
   }
-  const manualLinkToken = isPrivateChat(chatType) && incomingText.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9]{6,32})$/i)?.[1];
+  const manualLinkToken = isPrivateChat(chatType) && !linkToken && !isStartMessage ? extractTelegramSubscriptionLinkToken(incomingText) : undefined;
   if (manualLinkToken) {
     const linkResult = await store.linkPlatformSubscriptionRequest?.(manualLinkToken, String(chatId));
     if (linkResult === "linked") {
