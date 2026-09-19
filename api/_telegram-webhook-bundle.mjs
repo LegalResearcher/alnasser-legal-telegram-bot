@@ -7901,13 +7901,17 @@ function createSupabaseBotStore() {
     },
     linkPlatformSubscriptionRequest: async (token, chatId) => {
       const client = getClient();
-      const request = await client.from("payment_requests").select("id").eq("telegram_link_token", token).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const request = await client.from("payment_requests").select("id,phone_number").eq("telegram_link_token", token).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (request.error) {
         console.error("[Supabase] Platform subscription link lookup failed:", request.error.message);
         return "error";
       }
       if (!request.data) return "invalid";
-      const { error } = await client.from("payment_requests").update({ telegram_chat_id: chatId, telegram_linked_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", request.data.id).eq("status", "pending");
+      const linkedAt = (/* @__PURE__ */ new Date()).toISOString();
+      let update = client.from("payment_requests").update({ telegram_chat_id: chatId, telegram_linked_at: linkedAt }).eq("status", "pending");
+      if (request.data.phone_number) update = update.eq("phone_number", request.data.phone_number);
+      else update = update.eq("id", request.data.id);
+      const { error } = await update;
       if (error) {
         console.error("[Supabase] Platform subscription link update failed:", error.message);
         return "error";

@@ -483,13 +483,17 @@ export function createSupabaseBotStore(): TelegramLibraryStore {
     registerSubscriber: async (chatId, telegramUserId, profile) => { const { error } = await getClient().from("bot_subscribers").upsert({ chat_id: chatId, telegram_user_id: telegramUserId, telegram_username: profile?.telegramUsername ?? null, telegram_first_name: profile?.telegramFirstName ?? null, telegram_last_name: profile?.telegramLastName ?? null, last_seen_at: new Date().toISOString() }, { onConflict: "chat_id" }); throwIfError(error, "register subscriber"); return true; },
     linkPlatformSubscriptionRequest: async (token, chatId) => {
       const client = getClient();
-      const request = await client.from("payment_requests").select("id").eq("telegram_link_token", token).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const request = await client.from("payment_requests").select("id,phone_number").eq("telegram_link_token", token).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (request.error) {
         console.error("[Supabase] Platform subscription link lookup failed:", request.error.message);
         return "error" as const;
       }
       if (!request.data) return "invalid" as const;
-      const { error } = await client.from("payment_requests").update({ telegram_chat_id: chatId, telegram_linked_at: new Date().toISOString() }).eq("id", (request.data as any).id).eq("status", "pending");
+      const linkedAt = new Date().toISOString();
+      let update = client.from("payment_requests").update({ telegram_chat_id: chatId, telegram_linked_at: linkedAt }).eq("status", "pending");
+      if ((request.data as any).phone_number) update = update.eq("phone_number", (request.data as any).phone_number);
+      else update = update.eq("id", (request.data as any).id);
+      const { error } = await update;
       if (error) {
         console.error("[Supabase] Platform subscription link update failed:", error.message);
         return "error" as const;
