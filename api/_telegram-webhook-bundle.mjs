@@ -2764,6 +2764,7 @@ function getImportedExamSubjectKey(levelKey, catalogSubjectKey) {
   const level = getTelegramExamCatalogLevel(levelKey);
   const subject = getTelegramExamCatalogSubject(levelKey, catalogSubjectKey);
   if (!level || level.comingSoon || !subject) return void 0;
+  if (/^l[1-4]$/.test(levelKey)) return catalogSubjectKey;
   return `exam_${levelKey}_${catalogSubjectKey.replace(/[^a-z0-9]+/gi, "_")}`;
 }
 function getImportedExamCatalogLocation(subjectKey) {
