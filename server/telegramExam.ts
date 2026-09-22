@@ -302,7 +302,7 @@ function isOfficialAnnualExamForm(form: ExamFormMenuItem): boolean {
   const identity = examFormIdentity(form);
   if (!identity) return false;
   if (identity.kind === "secondary") return true;
-  if (identity.kind === "mixed") return false;
+  if (identity.kind === "mixed") return identity.year >= 2022 && identity.year <= 2025;
   // هذا هو ترتيب النماذج الرسمية المطلوب في مواد الشريعة والقانون.
   if (identity.year < 2022 || identity.year > 2025) return false;
   if (identity.year <= 2023 && identity.kind !== "general") return false;
@@ -369,8 +369,11 @@ function annualFormDisplayName(form: ExamFormMenuItem): string {
   const year = form.formName.match(/20\d{2}/)?.[0];
   const translatedName = arabicExamFormName(form);
   if (!year) return translatedName;
+  const identity = examFormIdentity(form);
+  if (identity?.kind === "mixed") return "نموذج مختلط";
+  if (identity?.kind === "secondary") return translatedName;
   const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
-  return `${year} ${type}`.trim();
+  return Number(year) <= 2023 ? `نموذج ${year}م` : `نموذج ${year} ${type}`.trim();
 }
 
 function pagedFormsMenu(
@@ -398,7 +401,7 @@ function pagedFormsMenu(
       ...(page < totalPages ? [{ text: "التالي", callback_data: `${navigationPrefix}:${levelKey}:${subjectKey}:${page + 1}` }] : []),
     ]);
   }
-  if (includeTrainingButton) rows.push([{ text: "🧪 أسئلة تجريبية", callback_data: `exam:training:${levelKey}:${subjectKey}:1` }]);
+  if (includeTrainingButton) rows.push([{ text: "🧪 أسئلة تجريبية لكامل المقرر", callback_data: `exam:training:${levelKey}:${subjectKey}:1` }]);
   rows.push([{ text: "رجوع إلى المواد", callback_data: `exam:level:${levelKey}` }]);
   return { inline_keyboard: rows };
 }

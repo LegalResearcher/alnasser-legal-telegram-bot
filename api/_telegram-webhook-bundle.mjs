@@ -2981,7 +2981,7 @@ function isOfficialAnnualExamForm(form) {
   const identity = examFormIdentity(form);
   if (!identity) return false;
   if (identity.kind === "secondary") return true;
-  if (identity.kind === "mixed") return false;
+  if (identity.kind === "mixed") return identity.year >= 2022 && identity.year <= 2025;
   if (identity.year < 2022 || identity.year > 2025) return false;
   if (identity.year <= 2023 && identity.kind !== "general") return false;
   return true;
@@ -3033,8 +3033,11 @@ function annualFormDisplayName(form) {
   const year = form.formName.match(/20\d{2}/)?.[0];
   const translatedName = arabicExamFormName(form);
   if (!year) return translatedName;
+  const identity = examFormIdentity(form);
+  if (identity?.kind === "mixed") return "نموذج مختلط";
+  if (identity?.kind === "secondary") return translatedName;
   const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
-  return `${year} ${type}`.trim();
+  return Number(year) <= 2023 ? `نموذج ${year}م` : `نموذج ${year} ${type}`.trim();
 }
 function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPrefix, includeTrainingButton) {
   const pageSize = 7;
@@ -3054,7 +3057,7 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
       ...page < totalPages ? [{ text: "\u0627\u0644\u062A\u0627\u0644\u064A", callback_data: `${navigationPrefix}:${levelKey}:${subjectKey}:${page + 1}` }] : []
     ]);
   }
-  if (includeTrainingButton) rows.push([{ text: "\u{1F9EA} \u0623\u0633\u0626\u0644\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629", callback_data: `exam:training:${levelKey}:${subjectKey}:1` }]);
+  if (includeTrainingButton) rows.push([{ text: "\u{1F9EA} \u0623\u0633\u0626\u0644\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0644\u0643\u0627\u0645\u0644 \u0627\u0644\u0645\u0642\u0631\u0631", callback_data: `exam:training:${levelKey}:${subjectKey}:1` }]);
   rows.push([{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0645\u0648\u0627\u062F", callback_data: `exam:level:${levelKey}` }]);
   return { inline_keyboard: rows };
 }
