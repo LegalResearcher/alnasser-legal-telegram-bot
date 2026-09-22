@@ -2893,7 +2893,7 @@ export async function handleTelegramUpdate(
       return;
     }
     const examSectionKey = data === "secondary-exams" ? "secondary-exams" : "exams";
-    const isFreeExamSection = callbackSectionMode === "free";
+    const isExamSection = callbackSectionKey === "exams" || callbackSectionKey === "secondary-exams";
     const hasImportantLawsSectionAccess = async () => {
       const mode = managedSectionAccessMode(managedSections, "important-laws");
       if (mode === "free") return true;
@@ -2901,7 +2901,7 @@ export async function handleTelegramUpdate(
       if (mode === "referral") return store.hasReferralPremiumAccess(telegramUserId, "sharia_exams");
       return store.hasImportantYemeniLawsAccess(telegramUserId);
     };
-    if (isReferralProtectedCallback(data) && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !isFreeExamSection && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
+    if (isReferralProtectedCallback(data) && !isExamSection && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !(await store.hasReferralPremiumAccess(telegramUserId, examAccessScope(data)))) {
       const scope = examAccessScope(data);
       await sender.sendMessage(chatId, callbackSectionMode === "referral" ? `🎁 للوصول إلى هذا القسم، أكمل 5 إحالات مؤهلة للحصول على وصول مجاني.` : optionalExamSupportText(scope), callbackSectionMode === "referral" ? referralMenu() : optionalExamSupportMenu(scope));
       return;

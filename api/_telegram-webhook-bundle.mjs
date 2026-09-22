@@ -5220,7 +5220,7 @@ ${referralHistoryText(history)}`, referralMenu());
       return;
     }
     const examSectionKey = data === "secondary-exams" ? "secondary-exams" : "exams";
-    const isFreeExamSection = callbackSectionMode === "free";
+    const isExamSection = callbackSectionKey === "exams" || callbackSectionKey === "secondary-exams";
     const hasImportantLawsSectionAccess = async () => {
       const mode = managedSectionAccessMode(managedSections, "important-laws");
       if (mode === "free") return true;
@@ -5228,7 +5228,7 @@ ${referralHistoryText(history)}`, referralMenu());
       if (mode === "referral") return store.hasReferralPremiumAccess(telegramUserId2, "sharia_exams");
       return store.hasImportantYemeniLawsAccess(telegramUserId2);
     };
-    if (isReferralProtectedCallback(data) && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !isFreeExamSection && !await store.hasReferralPremiumAccess(telegramUserId2, examAccessScope(data))) {
+    if (isReferralProtectedCallback(data) && !isExamSection && (callbackSectionMode === "premium" || callbackSectionMode === "referral") && !await store.hasReferralPremiumAccess(telegramUserId2, examAccessScope(data))) {
       const scope = examAccessScope(data);
       await sender.sendMessage(chatId2, callbackSectionMode === "referral" ? `\u{1F381} \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0642\u0633\u0645\u060C \u0623\u0643\u0645\u0644 5 \u0625\u062D\u0627\u0644\u0627\u062A \u0645\u0624\u0647\u0644\u0629 \u0644\u0644\u062D\u0635\u0648\u0644 \u0639\u0644\u0649 \u0648\u0635\u0648\u0644 \u0645\u062C\u0627\u0646\u064A.` : optionalExamSupportText(scope), callbackSectionMode === "referral" ? referralMenu() : optionalExamSupportMenu(scope));
       return;
@@ -7765,17 +7765,7 @@ async function hasScopedAccess(telegramUserId, accessScope, managedMenuItemId) {
   return (data ?? []).some((row) => (managedMenuItemId === void 0 || Number(row.managed_menu_item_id) === managedMenuItemId) && (!row.expires_at || new Date(row.expires_at).getTime() > now));
 }
 async function getExamAccess(telegramUserId, accessScope) {
-  const client = getClient();
-  const { data: setting, error: settingError } = await client.from("bot_exam_subscription_scopes").select("access_mode,disabled_message").eq("access_scope", accessScope).limit(1).maybeSingle();
-  throwIfError(settingError, "read exam subscription scope");
-  const mode = setting?.access_mode === "free" || setting?.access_mode === "disabled" ? setting.access_mode : "premium";
-  if (mode === "free") return { mode, allowed: true, disabledMessage: setting?.disabled_message ?? null };
-  if (mode === "disabled") return { mode, allowed: false, disabledMessage: setting?.disabled_message ?? null };
-  const { data, error } = await client.from("bot_user_access").select("managed_menu_item_id,expires_at").eq("telegram_user_id", telegramUserId).eq("access_scope", accessScope).is("managed_menu_item_id", null).limit(10);
-  throwIfError(error, "check exam subscription access");
-  const now = Date.now();
-  const allowed = (data ?? []).some((row) => !row.expires_at || new Date(row.expires_at).getTime() > now);
-  return { mode, allowed, disabledMessage: setting?.disabled_message ?? null };
+  return { mode: "free", allowed: true, disabledMessage: null };
 }
 function mapRound(row) {
   return { id: Number(row.id), chatId: String(row.chat_id), creatorTelegramUserId: row.creator_telegram_user_id, subjectKey: row.subject_key, sectionKey: row.section_key, status: row.status, questionIndex: Number(row.question_index), timeLimitSeconds: Number(row.time_limit_seconds), activePollId: row.active_poll_id, startedAt: row.started_at ? dateValue(row.started_at) : null };

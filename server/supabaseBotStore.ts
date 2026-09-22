@@ -372,28 +372,7 @@ async function hasScopedAccess(telegramUserId: string, accessScope: UserAccessSc
 }
 
 async function getExamAccess(telegramUserId: string, accessScope: TelegramExamAccessScope): Promise<{ mode: TelegramExamAccessMode; allowed: boolean; disabledMessage?: string | null }> {
-  const client = getClient();
-  const { data: setting, error: settingError } = await client
-    .from("bot_exam_subscription_scopes")
-    .select("access_mode,disabled_message")
-    .eq("access_scope", accessScope)
-    .limit(1)
-    .maybeSingle();
-  throwIfError(settingError, "read exam subscription scope");
-  const mode = (setting?.access_mode === "free" || setting?.access_mode === "disabled" ? setting.access_mode : "premium") as TelegramExamAccessMode;
-  if (mode === "free") return { mode, allowed: true, disabledMessage: setting?.disabled_message ?? null };
-  if (mode === "disabled") return { mode, allowed: false, disabledMessage: setting?.disabled_message ?? null };
-  const { data, error } = await client
-    .from("bot_user_access")
-    .select("managed_menu_item_id,expires_at")
-    .eq("telegram_user_id", telegramUserId)
-    .eq("access_scope", accessScope)
-    .is("managed_menu_item_id", null)
-    .limit(10);
-  throwIfError(error, "check exam subscription access");
-  const now = Date.now();
-  const allowed = ((data ?? []) as Array<{ managed_menu_item_id: number | null; expires_at: string | null }>).some(row => !row.expires_at || new Date(row.expires_at).getTime() > now);
-  return { mode, allowed, disabledMessage: setting?.disabled_message ?? null };
+  return { mode: "free", allowed: true, disabledMessage: null };
 }
 async function upsertScopedAccess(telegramUserId: string, accessScope: UserAccessScope, approvedBy: string, managedMenuItemId: number | null = null): Promise<void> {
   const { error } = await getClient().from("bot_user_access").upsert({ telegram_user_id: telegramUserId, access_scope: accessScope, managed_menu_item_id: managedMenuItemId, approved_by: approvedBy, expires_at: null, updated_at: new Date().toISOString() }, { onConflict: "telegram_user_id,access_scope,managed_menu_item_id" });
