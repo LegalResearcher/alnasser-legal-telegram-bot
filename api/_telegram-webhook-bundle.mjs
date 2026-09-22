@@ -5664,21 +5664,16 @@ ${referralHistoryText(history)}`, referralMenu());
       return;
     }
     if (data.startsWith("exam:training:")) {
-      const [, , levelKey, subjectKey] = data.split(":");
+      const [, , levelKey, subjectKey, requestedPage] = data.split(":");
       if (!await requireExamAccess(chatId2, telegramUserId2, levelKey, store, pageSender)) return;
+      const importedSubjectKey = getImportedExamSubjectKey(levelKey, subjectKey);
       const subject = getTelegramExamCatalogSubject(levelKey, subjectKey);
-      if (!subject) return;
+      if (!importedSubjectKey || !subject) return;
+      const forms = await store.listExamForms(importedSubjectKey);
       await pageSender.sendMessage(
         chatId2,
-        `\u{1F9EA} ${subject.name}
-
-\u0627\u0644\u0623\u0633\u0626\u0644\u0629 \u0627\u0644\u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0633\u062A\u0643\u0648\u0646 \u0645\u062A\u0627\u062D\u0629 \u0642\u0631\u064A\u0628\u064B\u0627.`,
-        {
-          inline_keyboard: [
-            [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0646\u0645\u0627\u0630\u062C \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629", callback_data: `exam:subject:${levelKey}:${subjectKey}:1` }],
-            [{ text: "\u0631\u062C\u0648\u0639 \u0625\u0644\u0649 \u0627\u0644\u0645\u0648\u0627\u062F", callback_data: `exam:level:${levelKey}` }]
-          ]
-        }
+        `\u{1F9EA} ${subject.name}\n\n\u0627\u062e\u062a\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u062a\u062c\u0631\u064a\u0628\u064a \u0627\u0644\u0645\u0637\u0644\u0648\u0628.`,
+        examTrainingFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1)
       );
       return;
     }
