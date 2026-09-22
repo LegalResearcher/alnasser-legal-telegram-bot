@@ -3053,6 +3053,16 @@ function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
   const availableForms = filteredForms.length > 0 ? filteredForms : forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
+function examTrainingFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
+  return pagedFormsMenu(
+    levelKey,
+    subjectKey,
+    experimentalForms(forms).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
+    requestedPage,
+    "exam:training",
+    false
+  );
+}
 function civilLawExamSectionMenu() {
   return {
     inline_keyboard: [
