@@ -390,9 +390,12 @@ function pagedFormsMenu(
 
 export function examFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {
   // نماذج الثانوية الأساسية هي كل النماذج النشطة المستوردة؛ لا نربط ظهورها بصيغة الاسم.
-  const availableForms = levelKey.startsWith("secondary-")
+  const filteredForms = levelKey.startsWith("secondary-")
     ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
     : officialAnnualForms(forms);
+  const availableForms = filteredForms.length > 0
+    ? filteredForms
+    : forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 

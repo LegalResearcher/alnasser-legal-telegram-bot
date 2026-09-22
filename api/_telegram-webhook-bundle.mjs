@@ -3049,7 +3049,8 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
   return { inline_keyboard: rows };
 }
 function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
-  const availableForms = levelKey.startsWith("secondary-") ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) : officialAnnualForms(forms);
+  const filteredForms = levelKey.startsWith("secondary-") ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) : officialAnnualForms(forms);
+  const availableForms = filteredForms.length > 0 ? filteredForms : forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 function civilLawExamSectionMenu() {
