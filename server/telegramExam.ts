@@ -352,10 +352,24 @@ function annualFormSort(left: ExamFormMenuItem, right: ExamFormMenuItem): number
   return priority(left.formName) - priority(right.formName) || left.formName.localeCompare(right.formName, "ar");
 }
 
+function arabicExamFormName(form: ExamFormMenuItem): string {
+  const modelNumber = Number(form.formKey.match(/^Model[_\s-]*(\d+)$/i)?.[1] ?? form.formName.match(/^Model[_\s-]*(\d+)$/i)?.[1] ?? 0);
+  if (modelNumber > 0) {
+    const ordinals = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر", "الثالث عشر", "الرابع عشر", "الخامس عشر", "السادس عشر", "السابع عشر", "الثامن عشر", "التاسع عشر", "العشرون"];
+    return `القسم ${ordinals[modelNumber] ?? `رقم ${modelNumber}`}`;
+  }
+  return form.formName.trim()
+    .replace(/\bGeneral\b/gi, "العام")
+    .replace(/\bParallel\b/gi, "الموازي")
+    .replace(/\bMixed\b/gi, "المختلط")
+    .replace(/\bTrial\b/gi, "تجريبي");
+}
+
 function annualFormDisplayName(form: ExamFormMenuItem): string {
   const year = form.formName.match(/20\d{2}/)?.[0];
-  if (!year) return form.formName;
-  const type = form.formName.includes("العام") ? "العام" : form.formName.includes("الموازي") ? "الموازي" : form.formName.includes("المختلط") ? "المختلط" : form.formName.replace(year, "").trim();
+  const translatedName = arabicExamFormName(form);
+  if (!year) return translatedName;
+  const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
   return `${year} ${type}`.trim();
 }
 
@@ -373,7 +387,7 @@ function pagedFormsMenu(
   const pageForms = forms.slice((page - 1) * pageSize, page * pageSize);
   const rows: TelegramInlineKeyboard["inline_keyboard"] = pageForms.map(form => [
     {
-      text: `${isOfficialAnnualExamForm(form) ? annualFormDisplayName(form) : form.formName}${form.questionCount === 0 ? " ⏳" : ""}`,
+      text: `${isOfficialAnnualExamForm(form) ? annualFormDisplayName(form) : arabicExamFormName(form)}${form.questionCount === 0 ? " ⏳" : ""}`,
       callback_data: `exam:form:${levelKey}:${subjectKey}:${form.sortOrder ?? form.formKey}:${page}`,
     },
   ]);
