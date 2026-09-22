@@ -289,8 +289,10 @@ function examFormIdentity(form: ExamFormMenuItem): AnnualFormIdentity | undefine
     const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
     return { year, kind: "secondary" };
   }
-  const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? form.formKey.match(/(?:general|parallel|mixed)_(20\d{2})/i)?.[1] ?? 0);
+  const canonicalKey = form.formKey.match(/^(general|parallel|mixed)_(20\d{2})$/i);
+  const year = Number(canonicalKey?.[2] ?? form.formName.match(/20\d{2}/)?.[0] ?? 0);
   if (!year) return undefined;
+  if (canonicalKey) return { year, kind: canonicalKey[1].toLowerCase() as Exclude<AnnualFormKind, "secondary"> };
   const value = `${form.formKey} ${form.formName}`;
   if (/general|العام/i.test(value)) return { year, kind: "general" };
   if (/parallel|الموازي/i.test(value)) return { year, kind: "parallel" };
@@ -345,8 +347,8 @@ function annualFormSort(left: ExamFormMenuItem, right: ExamFormMenuItem): number
   if (isSecondaryExamForm(left) || isSecondaryExamForm(right)) {
     return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
   }
-  const leftYear = Number(left.formName.match(/20\d{2}/)?.[0] ?? 9999);
-  const rightYear = Number(right.formName.match(/20\d{2}/)?.[0] ?? 9999);
+  const leftYear = examFormIdentity(left)?.year ?? 9999;
+  const rightYear = examFormIdentity(right)?.year ?? 9999;
   if (leftYear !== rightYear) return leftYear - rightYear;
   const priority = (name: string) => name.includes("العام") ? 1 : name.includes("الموازي") ? 2 : name.includes("المختلط") ? 3 : 4;
   return priority(left.formName) - priority(right.formName) || left.formName.localeCompare(right.formName, "ar");
@@ -366,10 +368,10 @@ function arabicExamFormName(form: ExamFormMenuItem): string {
 }
 
 function annualFormDisplayName(form: ExamFormMenuItem): string {
-  const year = form.formName.match(/20\d{2}/)?.[0];
+  const identity = examFormIdentity(form);
+  const year = identity?.year ? String(identity.year) : form.formName.match(/20\d{2}/)?.[0];
   const translatedName = arabicExamFormName(form);
   if (!year) return translatedName;
-  const identity = examFormIdentity(form);
   if (identity?.kind === "mixed") return "نموذج مختلط";
   if (identity?.kind === "secondary") return translatedName;
   const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
@@ -407,13 +409,10 @@ function pagedFormsMenu(
 }
 
 export function examFormsMenu(levelKey: string, subjectKey: string, forms: ExamFormMenuItem[], requestedPage = 1): TelegramInlineKeyboard {
-  // نماذج الثانوية الأساسية هي كل النماذج النشطة المستوردة؛ لا نربط ظهورها بصيغة الاسم.
-  const filteredForms = levelKey.startsWith("secondary-")
+  // الثانوية تعرض نماذجها المستوردة كما هي، أما المستويات الجامعية فتستخدم القائمة السنوية الموحدة فقط.
+  const availableForms = levelKey.startsWith("secondary-")
     ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
     : officialAnnualForms(forms);
-  const availableForms = filteredForms.length > 0
-    ? filteredForms
-    : forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 

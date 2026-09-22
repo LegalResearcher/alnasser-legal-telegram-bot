@@ -2966,11 +2966,13 @@ function isSecondaryExamForm(form) {
 }
 function examFormIdentity(form) {
   if (isSecondaryExamForm(form)) {
-    const year2 = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
-    return { year: year2, kind: "secondary" };
+    const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
+    return { year, kind: "secondary" };
   }
-  const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? form.formKey.match(/(?:general|parallel|mixed)_(20\d{2})/i)?.[1] ?? 0);
+  const canonicalKey = form.formKey.match(/^(general|parallel|mixed)_(20\d{2})$/i);
+  const year = Number(canonicalKey?.[2] ?? form.formName.match(/20\d{2}/)?.[0] ?? 0);
   if (!year) return void 0;
+  if (canonicalKey) return { year, kind: canonicalKey[1].toLowerCase() };
   const value = `${form.formKey} ${form.formName}`;
   if (/general|العام/i.test(value)) return { year, kind: "general" };
   if (/parallel|الموازي/i.test(value)) return { year, kind: "parallel" };
@@ -3015,8 +3017,8 @@ function annualFormSort(left, right) {
   if (isSecondaryExamForm(left) || isSecondaryExamForm(right)) {
     return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
   }
-  const leftYear = Number(left.formName.match(/20\d{2}/)?.[0] ?? 9999);
-  const rightYear = Number(right.formName.match(/20\d{2}/)?.[0] ?? 9999);
+  const leftYear = examFormIdentity(left)?.year ?? 9999;
+  const rightYear = examFormIdentity(right)?.year ?? 9999;
   if (leftYear !== rightYear) return leftYear - rightYear;
   const priority = (name) => name.includes("\u0627\u0644\u0639\u0627\u0645") ? 1 : name.includes("\u0627\u0644\u0645\u0648\u0627\u0632\u064A") ? 2 : name.includes("\u0627\u0644\u0645\u062E\u062A\u0644\u0637") ? 3 : 4;
   return priority(left.formName) - priority(right.formName) || left.formName.localeCompare(right.formName, "ar");
@@ -3030,10 +3032,10 @@ function arabicExamFormName(form) {
   return form.formName.trim().replace(/\bGeneral\b/gi, "العام").replace(/\bParallel\b/gi, "الموازي").replace(/\bMixed\b/gi, "المختلط").replace(/\bTrial\b/gi, "تجريبي");
 }
 function annualFormDisplayName(form) {
-  const year = form.formName.match(/20\d{2}/)?.[0];
+  const identity = examFormIdentity(form);
+  const year = identity?.year ? String(identity.year) : form.formName.match(/20\d{2}/)?.[0];
   const translatedName = arabicExamFormName(form);
   if (!year) return translatedName;
-  const identity = examFormIdentity(form);
   if (identity?.kind === "mixed") return "نموذج مختلط";
   if (identity?.kind === "secondary") return translatedName;
   const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
@@ -3062,8 +3064,7 @@ function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPr
   return { inline_keyboard: rows };
 }
 function examFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
-  const filteredForms = levelKey.startsWith("secondary-") ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) : officialAnnualForms(forms);
-  const availableForms = filteredForms.length > 0 ? filteredForms : forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
+  const availableForms = levelKey.startsWith("secondary-") ? forms.filter(hasExamQuestions).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)) : officialAnnualForms(forms);
   return pagedFormsMenu(levelKey, subjectKey, availableForms, requestedPage, "exam:forms", experimentalForms(forms).length > 0);
 }
 function examTrainingFormsMenu(levelKey, subjectKey, forms, requestedPage = 1) {
