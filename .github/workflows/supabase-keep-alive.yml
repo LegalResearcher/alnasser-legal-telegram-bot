@@ -12,16 +12,14 @@ jobs:
     steps:
       - name: Ping Supabase database
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$SUPABASE_URL"
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
           PINGED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           curl --fail-with-body --silent --show-error \
             --request PATCH \
-            --url "${SUPABASE_URL}/rest/v1/_keep_alive?id=eq.1" \
+            --url "https://kakulsmmodkrljmqfzxc.supabase.co/rest/v1/_keep_alive?id=eq.1" \
             --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             --header "Content-Type: application/json" \
