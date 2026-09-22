@@ -1,0 +1,30 @@
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "0 0 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Supabase database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          PINGED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "${SUPABASE_URL}/rest/v1/_keep_alive?id=eq.1" \
+            --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header "Content-Type: application/json" \
+            --header "Prefer: return=minimal" \
+            --data "{\"pinged_at\":\"${PINGED_AT}\"}"
+          echo "Supabase keep-alive completed successfully."
