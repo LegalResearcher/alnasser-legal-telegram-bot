@@ -3407,7 +3407,7 @@ function groupExamReadyMenu(roundId, participantCount) {
 function individualExamResultMenu(options = {}) {
   const isImportedExam = Boolean(options.subjectKey && options.formKey && options.levelKey && options.catalogSubjectKey);
   const sharedText = `\u062C\u0631\u0651\u0628 ${options.examTitle ?? CIVIL_LAW_GENERAL_2025_TITLE} \u0639\u0628\u0631 \u0628\u0648\u062A \u0627\u0644\u0646\u0627\u0635\u0631 \u0627\u0644\u0642\u0627\u0646\u0648\u0646\u064A.`;
-  const retryCallback = isImportedExam ? `exam:retry:${encodeURIComponent(options.subjectKey)}:${encodeURIComponent(options.formKey)}` : "exam:retry";
+  const retryCallback = isImportedExam && options.sessionId ? `exam:retry-session:${options.sessionId}` : isImportedExam ? `exam:retry:${encodeURIComponent(options.subjectKey)}:${encodeURIComponent(options.formKey)}` : "exam:retry";
   const modelCallback = isImportedExam ? `exam:forms:${options.levelKey}:${options.catalogSubjectKey}:1` : "exam:civil";
   const subjectCallback = isImportedExam ? `exam:level:${options.levelKey}` : "exam:levels";
   return {
@@ -5016,6 +5016,7 @@ async function sendNativeExamCompletionResult(chatId, session, result, store, se
       examTitle,
       subjectKey: subject ? session.subjectKey : void 0,
       formKey: subject ? session.sectionKey : void 0,
+      sessionId: subject ? session.id : void 0,
       levelKey: location?.levelKey,
       catalogSubjectKey: location?.catalogSubjectKey
     })
@@ -5342,6 +5343,29 @@ ${referralHistoryText(history)}`, referralMenu());
       const cancelled = await store.cancelGroupExamRound(roundId);
       if (cancelled && round.activePollId) clearGroupExamTimeout(round.activePollId);
       await sender.sendMessage(chatId2, cancelled ? "\u23F9 \u062A\u0645 \u0625\u0646\u0647\u0627\u0621 \u0627\u0644\u062C\u0648\u0644\u0629 \u0627\u0644\u062C\u0645\u0627\u0639\u064A\u0629. \u0644\u0627 \u062A\u064F\u062D\u062A\u0633\u0628 \u0623\u064A \u0625\u062C\u0627\u0628\u0627\u062A \u0644\u0627\u062D\u0642\u0629." : "\u0644\u0627 \u062A\u0648\u062C\u062F \u062C\u0648\u0644\u0629 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u0625\u0646\u0647\u0627\u0621 \u062D\u0627\u0644\u064A\u064B\u0627.");
+      return;
+    }
+    if (data.startsWith("exam:retry-session:")) {
+      if (!isPrivateChat(chat?.type)) {
+        await sender.sendMessage(chatId2, "\u064A\u0645\u0643\u0646 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0645\u0646 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0627\u0644\u062E\u0627\u0635\u0629 \u0645\u0639 \u0627\u0644\u0628\u0648\u062A \u0641\u0642\u0637.", mainMenu());
+        return;
+      }
+      const sessionId = Number(data.slice("exam:retry-session:".length));
+      if (!Number.isInteger(sessionId) || sessionId < 1) return;
+      const completedSession = await store.getExamSession(sessionId, telegramUserId2);
+      const location = completedSession ? getImportedExamCatalogLocation(completedSession.subjectKey) : void 0;
+      const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : void 0;
+      if (!completedSession || !location || !subject) return;
+      const forms = await store.listExamForms(completedSession.subjectKey);
+      const form = forms.find((item) => item.formKey === completedSession.sectionKey);
+      if (!form) return;
+      await pageSender.sendMessage(
+        chatId2,
+        `\u{1F501} \u0625\u0639\u0627\u062F\u0629 \u0627\u062E\u062A\u0628\u0627\u0631 ${subject.name} \u2014 ${form.formName}
+
+\u0627\u062E\u062A\u0631 \u0627\u0644\u0645\u062F\u0629 \u0627\u0644\u0645\u062E\u0635\u0635\u0629 \u0644\u0643\u0644 \u0633\u0624\u0627\u0644 \u0642\u0628\u0644 \u0628\u062F\u0621 \u0645\u062D\u0627\u0648\u0644\u0629 \u062C\u062F\u064A\u062F\u0629.`,
+        examTimeMenu(completedSession.subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`)
+      );
       return;
     }
     if (data === "exam:retry" || data.startsWith("exam:retry:")) {
@@ -6727,6 +6751,7 @@ function createTelegramSender(token, replyContext = {}) {
     ...Number.isInteger(replyContext.messageThreadId) ? { message_thread_id: replyContext.messageThreadId } : {},
     ...Number.isInteger(replyContext.directMessagesTopicId) ? { direct_messages_topic_id: replyContext.directMessagesTopicId } : {}
   };
+  const telegramPollText = (value, maxLength) => value.length > maxLength ? `${value.slice(0, maxLength - 1)}\u2026` : value;
   return {
     async sendMessage(chatId, text2, replyMarkup) {
       await telegramRequest(token, "sendMessage", {
@@ -6767,8 +6792,8 @@ function createTelegramSender(token, replyContext = {}) {
       const result = await telegramRequest(token, "sendPoll", {
         chat_id: chatId,
         ...topicPayload,
-        question: poll.question,
-        options: poll.options,
+        question: telegramPollText(poll.question, 300),
+        options: poll.options.map((option) => telegramPollText(option, 100)),
         type: "quiz",
         is_anonymous: false,
         correct_option_id: poll.correctOptionIndex,

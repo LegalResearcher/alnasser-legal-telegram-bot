@@ -552,6 +552,7 @@ type IndividualExamResultMenuOptions = {
   examTitle?: string;
   subjectKey?: string;
   formKey?: string;
+  sessionId?: number;
   levelKey?: string;
   catalogSubjectKey?: string;
 };
@@ -559,7 +560,9 @@ type IndividualExamResultMenuOptions = {
 function individualExamResultMenu(options: IndividualExamResultMenuOptions = {}): TelegramInlineKeyboard {
   const isImportedExam = Boolean(options.subjectKey && options.formKey && options.levelKey && options.catalogSubjectKey);
   const sharedText = `جرّب ${options.examTitle ?? CIVIL_LAW_GENERAL_2025_TITLE} عبر بوت الناصر القانوني.`;
-  const retryCallback = isImportedExam
+  const retryCallback = isImportedExam && options.sessionId
+    ? `exam:retry-session:${options.sessionId}`
+    : isImportedExam
     ? `exam:retry:${encodeURIComponent(options.subjectKey!)}:${encodeURIComponent(options.formKey!)}`
     : "exam:retry";
   const modelCallback = isImportedExam
@@ -2655,6 +2658,7 @@ async function sendNativeExamCompletionResult(
       examTitle,
       subjectKey: subject ? session.subjectKey : undefined,
       formKey: subject ? session.sectionKey : undefined,
+      sessionId: subject ? session.id : undefined,
       levelKey: location?.levelKey,
       catalogSubjectKey: location?.catalogSubjectKey,
     })
@@ -2985,6 +2989,27 @@ export async function handleTelegramUpdate(
       const cancelled = await store.cancelGroupExamRound(roundId);
       if (cancelled && round.activePollId) clearGroupExamTimeout(round.activePollId);
       await sender.sendMessage(chatId, cancelled ? "⏹ تم إنهاء الجولة الجماعية. لا تُحتسب أي إجابات لاحقة." : "لا توجد جولة قابلة للإنهاء حاليًا.");
+      return;
+    }
+    if (data.startsWith("exam:retry-session:")) {
+      if (!isPrivateChat(chat?.type)) {
+        await sender.sendMessage(chatId, "يمكن إعادة الاختبار من المحادثة الخاصة مع البوت فقط.", mainMenu());
+        return;
+      }
+      const sessionId = Number(data.slice("exam:retry-session:".length));
+      if (!Number.isInteger(sessionId) || sessionId < 1) return;
+      const completedSession = await store.getExamSession(sessionId, telegramUserId);
+      const location = completedSession ? getImportedExamCatalogLocation(completedSession.subjectKey) : undefined;
+      const subject = location ? getTelegramExamCatalogSubject(location.levelKey, location.catalogSubjectKey) : undefined;
+      if (!completedSession || !location || !subject) return;
+      const forms = await store.listExamForms(completedSession.subjectKey);
+      const form = forms.find(item => item.formKey === completedSession.sectionKey);
+      if (!form) return;
+      await pageSender.sendMessage(
+        chatId,
+        `🔁 إعادة اختبار ${subject.name} — ${form.formName}\n\nاختر المدة المخصصة لكل سؤال قبل بدء محاولة جديدة.`,
+        examTimeMenu(completedSession.subjectKey, form.sortOrder, `exam:forms:${location.levelKey}:${location.catalogSubjectKey}:1`)
+      );
       return;
     }
     if (data === "exam:retry" || data.startsWith("exam:retry:")) {
@@ -4365,6 +4390,7 @@ export function createTelegramSender(token: string, replyContext: TelegramReplyC
     ...(Number.isInteger(replyContext.messageThreadId) ? { message_thread_id: replyContext.messageThreadId } : {}),
     ...(Number.isInteger(replyContext.directMessagesTopicId) ? { direct_messages_topic_id: replyContext.directMessagesTopicId } : {}),
   };
+  const telegramPollText = (value: string, maxLength: number) => value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
   return {
     async sendMessage(chatId, text, replyMarkup) {
       await telegramRequest(token, "sendMessage", {
@@ -4405,8 +4431,8 @@ export function createTelegramSender(token: string, replyContext: TelegramReplyC
       const result = await telegramRequest(token, "sendPoll", {
         chat_id: chatId,
         ...topicPayload,
-        question: poll.question,
-        options: poll.options,
+        question: telegramPollText(poll.question, 300),
+        options: poll.options.map(option => telegramPollText(option, 100)),
         type: "quiz",
         is_anonymous: false,
         correct_option_id: poll.correctOptionIndex,
