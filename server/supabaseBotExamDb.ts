@@ -63,18 +63,26 @@ function getSupabase(): SupabaseClient {
 function assertNoSupabaseError(error: { message?: string } | null, operation: string): void {
   if (error) throw new Error(`Supabase ${operation} failed: ${error.message ?? "unknown error"}`);
 }
-
+const PDF_WATERMARK_PATTERNS = [
+  /desnecil t[’']nsi taht noitacilppa na yb detaerc saw tnemucod sihT\.eciton siht tuohtiw selif FDP etareneg ot esnecil a esahcruP/gi,
+  /FDPavon esu ot/gi,
+];
+function cleanExamText(value: string | null | undefined): string {
+  return PDF_WATERMARK_PATTERNS.reduce((text, pattern) => text.replace(pattern, ""), value ?? "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 function mapQuestion(row: BotExamQuestionRow): TelegramExamQuestionForSession {
   return {
     id: Number(row.id),
-    questionText: row.question_text,
-    optionA: row.option_a,
-    optionB: row.option_b,
-    optionC: row.option_c,
-    optionD: row.option_d,
+    questionText: cleanExamText(row.question_text),
+    optionA: cleanExamText(row.option_a),
+    optionB: cleanExamText(row.option_b),
+    optionC: cleanExamText(row.option_c),
+    optionD: cleanExamText(row.option_d),
     correctOption: row.correct_option,
-    explanation: row.explanation ?? "",
-    hint: row.hint,
+    explanation: cleanExamText(row.explanation),
+    hint: row.hint ? cleanExamText(row.hint) : null,
     sortOrder: Number(row.sort_order),
   };
 }
