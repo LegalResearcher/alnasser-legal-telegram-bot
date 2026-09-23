@@ -2966,8 +2966,8 @@ function isSecondaryExamForm(form) {
 }
 function examFormIdentity(form) {
   if (isSecondaryExamForm(form)) {
-    const year = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
-    return { year, kind: "secondary" };
+    const year2 = Number(form.formName.match(/20\d{2}/)?.[0] ?? 2026);
+    return { year: year2, kind: "secondary" };
   }
   const canonicalKey = form.formKey.match(/^(general|parallel|mixed)_(20\d{2})$/i);
   const year = Number(canonicalKey?.[2] ?? form.formName.match(/20\d{2}/)?.[0] ?? 0);
@@ -3008,38 +3008,28 @@ function officialAnnualForms(forms) {
     const currentIsCanonicalKey = current ? /^(?:general|parallel)_20\d{2}$/i.test(current.formKey) : false;
     if (!current || isCanonicalKey && !currentIsCanonicalKey) selected.set(identityKey, form);
   }
-  return Array.from(selected.values()).sort(annualFormSort);
+  return Array.from(selected.values());
 }
 function experimentalForms(forms) {
   return forms.filter((form) => hasExamQuestions(form) && isExperimentalExamForm(form));
 }
-function annualFormSort(left, right) {
-  if (isSecondaryExamForm(left) || isSecondaryExamForm(right)) {
-    return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
-  }
-  const leftYear = examFormIdentity(left)?.year ?? 9999;
-  const rightYear = examFormIdentity(right)?.year ?? 9999;
-  if (leftYear !== rightYear) return leftYear - rightYear;
-  const priority = (name) => name.includes("\u0627\u0644\u0639\u0627\u0645") ? 1 : name.includes("\u0627\u0644\u0645\u0648\u0627\u0632\u064A") ? 2 : name.includes("\u0627\u0644\u0645\u062E\u062A\u0644\u0637") ? 3 : 4;
-  return priority(left.formName) - priority(right.formName) || left.formName.localeCompare(right.formName, "ar");
-}
 function arabicExamFormName(form) {
   const modelNumber = Number(form.formKey.match(/^Model[_\s-]*(\d+)$/i)?.[1] ?? form.formName.match(/^Model[_\s-]*(\d+)$/i)?.[1] ?? 0);
   if (modelNumber > 0) {
-    const ordinals = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر", "الثالث عشر", "الرابع عشر", "الخامس عشر", "السادس عشر", "السابع عشر", "الثامن عشر", "التاسع عشر", "العشرون"];
-    return `القسم ${ordinals[modelNumber] ?? `رقم ${modelNumber}`}`;
+    const ordinals = ["", "\u0627\u0644\u0623\u0648\u0644", "\u0627\u0644\u062B\u0627\u0646\u064A", "\u0627\u0644\u062B\u0627\u0644\u062B", "\u0627\u0644\u0631\u0627\u0628\u0639", "\u0627\u0644\u062E\u0627\u0645\u0633", "\u0627\u0644\u0633\u0627\u062F\u0633", "\u0627\u0644\u0633\u0627\u0628\u0639", "\u0627\u0644\u062B\u0627\u0645\u0646", "\u0627\u0644\u062A\u0627\u0633\u0639", "\u0627\u0644\u0639\u0627\u0634\u0631", "\u0627\u0644\u062D\u0627\u062F\u064A \u0639\u0634\u0631", "\u0627\u0644\u062B\u0627\u0646\u064A \u0639\u0634\u0631", "\u0627\u0644\u062B\u0627\u0644\u062B \u0639\u0634\u0631", "\u0627\u0644\u0631\u0627\u0628\u0639 \u0639\u0634\u0631", "\u0627\u0644\u062E\u0627\u0645\u0633 \u0639\u0634\u0631", "\u0627\u0644\u0633\u0627\u062F\u0633 \u0639\u0634\u0631", "\u0627\u0644\u0633\u0627\u0628\u0639 \u0639\u0634\u0631", "\u0627\u0644\u062B\u0627\u0645\u0646 \u0639\u0634\u0631", "\u0627\u0644\u062A\u0627\u0633\u0639 \u0639\u0634\u0631", "\u0627\u0644\u0639\u0634\u0631\u0648\u0646"];
+    return `\u0627\u0644\u0642\u0633\u0645 ${ordinals[modelNumber] ?? `\u0631\u0642\u0645 ${modelNumber}`}`;
   }
-  return form.formName.trim().replace(/\bGeneral\b/gi, "العام").replace(/\bParallel\b/gi, "الموازي").replace(/\bMixed\b/gi, "المختلط").replace(/\bTrial\b/gi, "تجريبي");
+  return form.formName.trim().replace(/\bGeneral\b/gi, "\u0627\u0644\u0639\u0627\u0645").replace(/\bParallel\b/gi, "\u0627\u0644\u0645\u0648\u0627\u0632\u064A").replace(/\bMixed\b/gi, "\u0627\u0644\u0645\u062E\u062A\u0644\u0637").replace(/\bTrial\b/gi, "\u062A\u062C\u0631\u064A\u0628\u064A");
 }
 function annualFormDisplayName(form) {
   const identity = examFormIdentity(form);
   const year = identity?.year ? String(identity.year) : form.formName.match(/20\d{2}/)?.[0];
   const translatedName = arabicExamFormName(form);
   if (!year) return translatedName;
-  if (identity?.kind === "mixed") return "نموذج مختلط";
+  if (identity?.kind === "mixed") return "\u0646\u0645\u0648\u0630\u062C \u0645\u062E\u062A\u0644\u0637";
   if (identity?.kind === "secondary") return translatedName;
-  const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
-  return Number(year) <= 2023 ? `نموذج ${year}م` : `نموذج ${year} ${type}`.trim();
+  const type = translatedName.includes("\u0627\u0644\u0639\u0627\u0645") ? "\u0627\u0644\u0639\u0627\u0645" : translatedName.includes("\u0627\u0644\u0645\u0648\u0627\u0632\u064A") ? "\u0627\u0644\u0645\u0648\u0627\u0632\u064A" : translatedName.includes("\u0627\u0644\u0645\u062E\u062A\u0644\u0637") ? "\u0627\u0644\u0645\u062E\u062A\u0644\u0637" : "\u0627\u0644\u0639\u0627\u0645";
+  return `\u0646\u0645\u0648\u0630\u062C ${year} ${type}`;
 }
 function pagedFormsMenu(levelKey, subjectKey, forms, requestedPage, navigationPrefix, includeTrainingButton) {
   const pageSize = 7;
@@ -5697,7 +5687,9 @@ ${referralHistoryText(history)}`, referralMenu());
       const forms = await store.listExamForms(importedSubjectKey);
       await pageSender.sendMessage(
         chatId2,
-        `\u{1F9EA} ${subject.name}\n\n\u0627\u062e\u062a\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u062a\u062c\u0631\u064a\u0628\u064a \u0627\u0644\u0645\u0637\u0644\u0648\u0628.`,
+        `\u{1F9EA} ${subject.name}
+
+\u0627\u062E\u062A\u0631 \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u062A\u062C\u0631\u064A\u0628\u064A \u0627\u0644\u0645\u0637\u0644\u0648\u0628.`,
         examTrainingFormsMenu(levelKey, subjectKey, forms, Number(requestedPage) || 1)
       );
       return;

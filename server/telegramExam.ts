@@ -336,7 +336,9 @@ function officialAnnualForms(forms: ExamFormMenuItem[]): ExamFormMenuItem[] {
     const currentIsCanonicalKey = current ? /^(?:general|parallel)_20\d{2}$/i.test(current.formKey) : false;
     if (!current || (isCanonicalKey && !currentIsCanonicalKey)) selected.set(identityKey, form);
   }
-  return Array.from(selected.values()).sort(annualFormSort);
+  // listTelegramExamForms يعيد السجلات بترتيب sort_order ثم id؛ نحافظ على
+  // ترتيب أول ظهور بدل إعادة ترتيبها حسب الاسم حتى يطابق البوت قاعدة البيانات حرفيًا.
+  return Array.from(selected.values());
 }
 
 function experimentalForms(forms: ExamFormMenuItem[]): ExamFormMenuItem[] {
@@ -374,8 +376,14 @@ function annualFormDisplayName(form: ExamFormMenuItem): string {
   if (!year) return translatedName;
   if (identity?.kind === "mixed") return "نموذج مختلط";
   if (identity?.kind === "secondary") return translatedName;
-  const type = translatedName.includes("العام") ? "العام" : translatedName.includes("الموازي") ? "الموازي" : translatedName.includes("المختلط") ? "المختلط" : translatedName.replace(year, "").trim();
-  return Number(year) <= 2023 ? `نموذج ${year}م` : `نموذج ${year} ${type}`.trim();
+  const type = translatedName.includes("العام")
+    ? "العام"
+    : translatedName.includes("الموازي")
+      ? "الموازي"
+      : translatedName.includes("المختلط")
+        ? "المختلط"
+        : "العام";
+  return `نموذج ${year} ${type}`;
 }
 
 function pagedFormsMenu(
